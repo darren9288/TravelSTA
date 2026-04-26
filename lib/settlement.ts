@@ -27,7 +27,7 @@ export function calculateSettlement(
 
     const owed = expenses
       .flatMap((e) => e.splits ?? [])
-      .filter((s) => s.traveler_id === t.id)
+      .filter((s) => s.traveler_id === t.id && !s.is_settled)
       .reduce((s, sp) => s + Number(sp.amount), 0);
 
     return { traveler: t, paid, owed, net: paid - owed };

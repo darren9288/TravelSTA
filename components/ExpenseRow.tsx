@@ -1,5 +1,5 @@
 "use client";
-import { Expense, Traveler } from "@/lib/supabase";
+import { Expense, Traveler, ExpenseSplit } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
 import { Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
@@ -24,27 +24,45 @@ type Props = {
 
 export default function ExpenseRow({ expense, travelers, foreignCurrency, onDelete, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
+  const [toggling, setToggling] = useState<string | null>(null);
+
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
-  // Don't show notes if they duplicate the category name
+
+  const hasUnsettled = splits.some((s) => !s.is_settled);
   const displayNotes = expense.notes && expense.notes.trim().toLowerCase() !== expense.category.trim().toLowerCase()
     ? expense.notes : null;
-  const splitsTotal = (expense.splits ?? []).reduce((s, x) => s + Number(x.amount), 0);
-  const splitsMismatch = expense.splits && expense.splits.length > 0 &&
-    Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
+  const splitsTotal = splits.reduce((s, x) => s + Number(x.amount), 0);
+  const splitsMismatch = splits.length > 0 && Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
+
+  async function toggleSettle(split: ExpenseSplit) {
+    setToggling(split.id);
+    const newVal = !split.is_settled;
+    // Optimistic update
+    setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: newVal } : s));
+    const res = await fetch("/api/splits", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: split.id, is_settled: newVal }),
+    });
+    if (!res.ok) {
+      // Revert on failure
+      setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
+    }
+    setToggling(null);
+  }
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
-      <div
-        className="flex items-center gap-3 px-3 py-3 cursor-pointer"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+    <div className={`border rounded-xl overflow-hidden transition-colors ${hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
+      <div className="flex items-center gap-3 px-3 py-3 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
+        <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: hasUnsettled ? "#f59e0b" : color }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-white truncate">{expense.category}</span>
             {displayNotes && <span className="text-xs text-slate-500 truncate hidden sm:block">{displayNotes}</span>}
             {splitsMismatch && <span className="text-xs text-red-400 flex-shrink-0">⚠ split</span>}
+            {hasUnsettled && <span className="text-xs text-amber-500 flex-shrink-0">unsettled</span>}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {paidBy && <TravelerBadge traveler={paidBy} />}
@@ -71,20 +89,35 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
               ⚠ Splits total RM {splitsTotal.toFixed(2)} ≠ expense total RM {Number(expense.myr_amount).toFixed(2)} — use Edit to fix
             </p>
           )}
-          <div className="flex flex-wrap gap-2 mb-2">
-            {(expense.splits ?? []).map((s) => {
+
+          {/* Splits with settle checkboxes */}
+          <div className="flex flex-col gap-1.5 mb-3">
+            {splits.map((s) => {
               const t = travelers.find((x) => x.id === s.traveler_id);
               if (!t) return null;
               return (
-                <div key={s.id} className="flex items-center gap-1.5 text-xs">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
-                  <span className="text-slate-400">{t.name}</span>
-                  <span className="text-white font-medium">RM {Number(s.amount).toFixed(2)}</span>
-                  {s.is_settled && <span className="text-emerald-400">✓</span>}
+                <div key={s.id} className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleSettle(s); }}
+                    disabled={toggling === s.id}
+                    className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                      s.is_settled
+                        ? "bg-emerald-500 border-emerald-500"
+                        : "border-slate-500 hover:border-amber-400"
+                    } ${toggling === s.id ? "opacity-50" : ""}`}
+                  >
+                    {s.is_settled && <span className="text-white text-xs leading-none">✓</span>}
+                  </button>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                  <span className={`text-xs flex-1 ${s.is_settled ? "text-slate-500 line-through" : "text-slate-300"}`}>{t.name}</span>
+                  <span className={`text-xs font-medium ${s.is_settled ? "text-slate-500" : "text-white"}`}>
+                    RM {Number(s.amount).toFixed(2)}
+                  </span>
                 </div>
               );
             })}
           </div>
+
           <div className="flex gap-3">
             {onEdit && (
               <button
