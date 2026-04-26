@@ -20,15 +20,23 @@ export function calculateSettlement(
   // Only real travelers (not pools) participate in settlement
   const realTravelers = travelers.filter((t) => !t.is_pool);
 
-  const balances: NetBalance[] = realTravelers.map((t) => {
-    const paid = expenses
-      .filter((e) => e.paid_by_id === t.id && !travelers.find(x => x.id === t.id)?.is_pool)
-      .reduce((s, e) => s + Number(e.myr_amount), 0);
+  // Flatten all splits with their parent expense's paid_by_id attached
+  const allUnsettled = expenses.flatMap((e) =>
+    (e.splits ?? [])
+      .filter((s) => !s.is_settled)
+      .map((s) => ({ ...s, paid_by_id: e.paid_by_id }))
+  );
 
-    const owed = expenses
-      .flatMap((e) => e.splits ?? [])
-      .filter((s) => s.traveler_id === t.id && !s.is_settled)
-      .reduce((s, sp) => s + Number(sp.amount), 0);
+  const balances: NetBalance[] = realTravelers.map((t) => {
+    // Credit: unsettled split amounts on expenses this traveler paid
+    const paid = allUnsettled
+      .filter((s) => s.paid_by_id === t.id)
+      .reduce((sum, s) => sum + Number(s.amount), 0);
+
+    // Debit: this traveler's own unsettled splits
+    const owed = allUnsettled
+      .filter((s) => s.traveler_id === t.id)
+      .reduce((sum, s) => sum + Number(s.amount), 0);
 
     return { traveler: t, paid, owed, net: paid - owed };
   });
