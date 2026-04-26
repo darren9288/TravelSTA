@@ -13,6 +13,7 @@ export default function SettlementPage() {
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState<string | null>(null);
+  const [apiError, setApiError] = useState("");
 
   useEffect(() => { load(); }, [id]);
 
@@ -23,8 +24,12 @@ export default function SettlementPage() {
       fetch(`/api/settlement?trip_id=${id}`).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
-    setBalances(settleRes.balances ?? []);
-    setInstructions(settleRes.instructions ?? []);
+    if (settleRes.error) {
+      setApiError(settleRes.error);
+    } else {
+      setBalances(settleRes.balances ?? []);
+      setInstructions(settleRes.instructions ?? []);
+    }
     setLoading(false);
   }
 
@@ -49,6 +54,13 @@ export default function SettlementPage() {
             <p className="text-xs text-slate-500">Based on unsettled splits only</p>
           </div>
 
+          {apiError && (
+            <div className="bg-red-900/30 border border-red-800/50 rounded-xl px-4 py-3">
+              <p className="text-sm text-red-400 font-medium">API Error</p>
+              <p className="text-xs text-red-300 mt-1">{apiError}</p>
+              <p className="text-xs text-slate-500 mt-1">Check the Dev tab for details.</p>
+            </div>
+          )}
           {loading ? (
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-slate-800 rounded-xl animate-pulse" />)}

@@ -13,13 +13,34 @@ export async function GET(req: NextRequest) {
   if (!tripId) return NextResponse.json({ error: "trip_id required" }, { status: 400 });
 
   const supabase = db();
-  const [{ data: travelers }, { data: expenses }] = await Promise.all([
+
+  const [travelerRes, expenseRes] = await Promise.all([
     supabase.from("travelers").select("*").eq("trip_id", tripId),
-    supabase.from("expenses").select("*, splits:expense_splits(*)").eq("trip_id", tripId),
+    // Use the same explicit join syntax as the expenses tab — avoids ambiguous FK issues
+    supabase
+      .from("expenses")
+      .select("*, paid_by:travelers!paid_by_id(*), splits:expense_splits(*)")
+      .eq("trip_id", tripId),
   ]);
 
-  if (!travelers || !expenses) return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
+  if (travelerRes.error) {
+    return NextResponse.json({ error: travelerRes.error.message, _debug: { stage: "travelers" } }, { status: 500 });
+  }
+  if (expenseRes.error) {
+    return NextResponse.json({ error: expenseRes.error.message, _debug: { stage: "expenses" } }, { status: 500 });
+  }
+
+  const travelers = travelerRes.data ?? [];
+  const expenses = expenseRes.data ?? [];
 
   const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
-  return NextResponse.json(result);
+
+  return NextResponse.json({
+    ...result,
+    _debug: {
+      traveler_count: travelers.length,
+      expense_count: expenses.length,
+      split_count: expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []).length,
+    },
+  });
 }
