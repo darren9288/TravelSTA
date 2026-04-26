@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
@@ -17,22 +17,26 @@ export default function TripDashboard() {
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      const [tripRes, travelerRes, expenseRes] = await Promise.all([
-        fetch(`/api/trips/${id}`).then((r) => r.json()),
-        fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
-        fetch(`/api/expenses?trip_id=${id}&limit=5`).then((r) => r.json()),
-      ]);
-      if (tripRes.error) { router.push("/"); return; }
-      setTrip(tripRes);
-      setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
-      setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
-      setMyId(getIdentity(id));
-      setLoading(false);
-    }
-    load();
+  const load = useCallback(async () => {
+    const [tripRes, travelerRes, expenseRes] = await Promise.all([
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/expenses?trip_id=${id}&limit=5`, { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    if (tripRes.error) { router.push("/"); return; }
+    setTrip(tripRes);
+    setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
+    setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
+    setMyId(getIdentity(id));
+    setLoading(false);
   }, [id, router]);
+
+  useEffect(() => {
+    load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
 
   if (loading) return (
     <>

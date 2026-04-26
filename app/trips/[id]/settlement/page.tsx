@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, CheckCheck } from "lucide-react";
+import { ArrowRight, CheckCheck, RefreshCw } from "lucide-react";
 
 export default function SettlementPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,13 +15,12 @@ export default function SettlementPage() {
   const [settling, setSettling] = useState<string | null>(null);
   const [apiError, setApiError] = useState("");
 
-  useEffect(() => { load(); }, [id]);
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
+    setApiError("");
     const [tripRes, settleRes] = await Promise.all([
-      fetch(`/api/trips/${id}`).then((r) => r.json()),
-      fetch(`/api/settlement?trip_id=${id}`).then((r) => r.json()),
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/settlement?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
@@ -31,7 +30,14 @@ export default function SettlementPage() {
       setInstructions(settleRes.instructions ?? []);
     }
     setLoading(false);
-  }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
 
   async function markSettled(travelerId: string) {
     setSettling(travelerId);
@@ -51,7 +57,13 @@ export default function SettlementPage() {
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Settlement</h1>
-            <p className="text-xs text-slate-500">Based on unsettled splits only</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-slate-500">Unsettled splits only</p>
+              <button onClick={load} disabled={loading}
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
           </div>
 
           {apiError && (

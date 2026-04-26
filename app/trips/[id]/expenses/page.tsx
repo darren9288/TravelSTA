@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { X } from "lucide-react";
+import { X, RefreshCw } from "lucide-react";
 
 type EditState = {
   id: string;
@@ -31,21 +31,25 @@ export default function ExpensesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  useEffect(() => {
-    load();
-  }, [id]);
-
-  async function load() {
+  const load = useCallback(async () => {
+    setLoading(true);
     const [tripRes, travelerRes, expenseRes] = await Promise.all([
-      fetch(`/api/trips/${id}`).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
-      fetch(`/api/expenses?trip_id=${id}`).then((r) => r.json()),
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/expenses?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
     setLoading(false);
-  }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
 
   async function handleDelete(expenseId: string) {
     await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
@@ -139,7 +143,13 @@ export default function ExpensesPage() {
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Expenses</h1>
-            <span className="text-sm text-slate-400">RM {total.toFixed(2)}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-400">RM {total.toFixed(2)}</span>
+              <button onClick={load} disabled={loading}
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2 flex-wrap">

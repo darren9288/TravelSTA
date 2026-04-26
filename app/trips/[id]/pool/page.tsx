@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup } from "@/lib/supabase";
 import { getIdentity } from "@/lib/identity";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 
 export default function PoolPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,15 +27,12 @@ export default function PoolPage() {
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, [id]);
-
-  async function load() {
+  const load = useCallback(async () => {
+    setLoading(true);
     const [tripRes, travelerRes, poolRes] = await Promise.all([
-      fetch(`/api/trips/${id}`).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
-      fetch(`/api/pool?trip_id=${id}`).then((r) => r.json()),
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/pool?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     const allTravelers: Traveler[] = Array.isArray(travelerRes) ? travelerRes : [];
@@ -49,7 +46,14 @@ export default function PoolPage() {
     setContributorId(me ?? allTravelers.filter((t) => !t.is_pool)[0]?.id ?? "");
     setPoolId(poolList[0]?.id ?? "");
     setLoading(false);
-  }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
 
   async function handleTopup() {
     if (!myrAmount || !poolId || !contributorId) { setError("Fill in all fields."); return; }
@@ -85,10 +89,16 @@ export default function PoolPage() {
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Pool</h1>
-            <button onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
-              <Plus size={14} /> Top Up
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={load} disabled={loading}
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+              <button onClick={() => setShowForm((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
+                <Plus size={14} /> Top Up
+              </button>
+            </div>
           </div>
 
           {/* Pool balances */}
