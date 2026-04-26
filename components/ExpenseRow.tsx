@@ -26,6 +26,12 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
   const [expanded, setExpanded] = useState(false);
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
+  // Don't show notes if they duplicate the category name
+  const displayNotes = expense.notes && expense.notes.trim().toLowerCase() !== expense.category.trim().toLowerCase()
+    ? expense.notes : null;
+  const splitsTotal = (expense.splits ?? []).reduce((s, x) => s + Number(x.amount), 0);
+  const splitsMismatch = expense.splits && expense.splits.length > 0 &&
+    Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
 
   return (
     <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
@@ -37,7 +43,8 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-white truncate">{expense.category}</span>
-            {expense.notes && <span className="text-xs text-slate-500 truncate hidden sm:block">{expense.notes}</span>}
+            {displayNotes && <span className="text-xs text-slate-500 truncate hidden sm:block">{displayNotes}</span>}
+            {splitsMismatch && <span className="text-xs text-red-400 flex-shrink-0">⚠ split</span>}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {paidBy && <TravelerBadge traveler={paidBy} />}
@@ -58,7 +65,12 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
 
       {expanded && (
         <div className="border-t border-slate-700/50 px-4 py-3 bg-slate-900/30">
-          {expense.notes && <p className="text-xs text-slate-400 mb-2">📝 {expense.notes}</p>}
+          {displayNotes && <p className="text-xs text-slate-400 mb-2">📝 {displayNotes}</p>}
+          {splitsMismatch && (
+            <p className="text-xs text-red-400 mb-2">
+              ⚠ Splits total RM {splitsTotal.toFixed(2)} ≠ expense total RM {Number(expense.myr_amount).toFixed(2)} — use Edit to fix
+            </p>
+          )}
           <div className="flex flex-wrap gap-2 mb-2">
             {(expense.splits ?? []).map((s) => {
               const t = travelers.find((x) => x.id === s.traveler_id);

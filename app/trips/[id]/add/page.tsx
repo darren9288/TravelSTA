@@ -76,6 +76,14 @@ export default function AddExpensePage() {
 
   async function handleSave() {
     if (!myrAmount || !paidById) { setError("Fill in amount and who paid."); return; }
+    if (splitType === "individual") {
+      const total = parseFloat(myrAmount);
+      const splitsSum = splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+      if (Math.abs(splitsSum - total) > 0.01) {
+        setError(`Individual splits (RM ${splitsSum.toFixed(2)}) must equal total (RM ${total.toFixed(2)})`);
+        return;
+      }
+    }
     setSaving(true); setError("");
     try {
       const total = parseFloat(myrAmount);
@@ -126,6 +134,13 @@ export default function AddExpensePage() {
 
   async function handleAiSave() {
     if (!aiParsed || !aiPaidBy) return;
+    if (aiSplitType === "individual") {
+      const splitsSum = aiSplits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+      if (Math.abs(splitsSum - aiTotal) > 0.01) {
+        setError(`Individual splits (RM ${splitsSum.toFixed(2)}) must equal total (RM ${aiTotal.toFixed(2)})`);
+        return;
+      }
+    }
     setSaving(true); setError("");
     try {
       for (const entry of aiParsed) {

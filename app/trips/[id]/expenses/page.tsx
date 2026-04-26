@@ -74,6 +74,14 @@ export default function ExpensesPage() {
 
   async function handleEditSave() {
     if (!editState) return;
+    if (editState.split_type === "individual") {
+      const myr = parseFloat(editState.myr_amount);
+      const splitsSum = editState.splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+      if (Math.abs(splitsSum - myr) > 0.01) {
+        setEditError(`Splits (RM ${splitsSum.toFixed(2)}) must equal total (RM ${myr.toFixed(2)})`);
+        return;
+      }
+    }
     setEditSaving(true); setEditError("");
     try {
       const realTravelers = travelers.filter((t) => !t.is_pool);
