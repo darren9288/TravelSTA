@@ -7,6 +7,7 @@ import { getIdentity } from "@/lib/identity";
 import { Sparkles, ClipboardList } from "lucide-react";
 
 type SplitEntry = { traveler_id: string; amount: string };
+type ParsedEntry = { description: string; category: string; foreign_amount?: number; myr_amount?: number };
 
 export default function AddExpensePage() {
   const { id } = useParams<{ id: string }>();
@@ -31,9 +32,11 @@ export default function AddExpensePage() {
 
   // AI tab
   const [aiText, setAiText] = useState("");
-  const [aiParsed, setAiParsed] = useState<{ description: string; category: string; foreign_amount?: number; myr_amount?: number }[] | null>(null);
+  const [aiParsed, setAiParsed] = useState<ParsedEntry[] | null>(null);
   const [aiPaidBy, setAiPaidBy] = useState("");
   const [aiPayType, setAiPayType] = useState("Cash");
+  const [aiSplitType, setAiSplitType] = useState<"even" | "individual">("even");
+  const [aiSplits, setAiSplits] = useState<SplitEntry[]>([]); // per-traveler share of TOTAL
   const [aiParsing, setAiParsing] = useState(false);
 
   useEffect(() => {
@@ -43,20 +46,21 @@ export default function AddExpensePage() {
         fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
       ]);
       setTrip(tripRes.error ? null : tripRes);
-      const real = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
-      setTravelers(real);
+      const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
+      setTravelers(all);
       const me = getIdentity(id);
       setMyId(me);
-      const allPayers = real; // include pools
-      const defaultPayer = me ?? (allPayers[0]?.id ?? "");
+      const defaultPayer = me ?? (all[0]?.id ?? "");
       setPaidById(defaultPayer);
       setAiPaidBy(defaultPayer);
-      setSplits(real.filter((t) => !t.is_pool).map((t) => ({ traveler_id: t.id, amount: "" })));
+      const real = all.filter((t) => !t.is_pool);
+      setSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
+      setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
     }
     load();
   }, [id]);
 
-  // Auto-convert foreign to MYR
+  // Auto-convert foreign → MYR for form tab
   useEffect(() => {
     if (!trip || !foreignAmount) return;
     const rate = paymentType === "Wise" ? trip.wise_rate : trip.cash_rate;
@@ -64,49 +68,40 @@ export default function AddExpensePage() {
     if (!isNaN(myr)) setMyrAmount(myr.toFixed(2));
   }, [foreignAmount, paymentType, trip]);
 
-  function evenSplitAmount() {
-    const real = travelers.filter((t) => !t.is_pool);
-    const amt = parseFloat(myrAmount) || 0;
-    return real.length > 0 ? (amt / real.length).toFixed(2) : "0.00";
+  const realTravelers = travelers.filter((t) => !t.is_pool);
+
+  function evenSplitAmount(total: number) {
+    return realTravelers.length > 0 ? total / realTravelers.length : 0;
   }
 
   async function handleSave() {
     if (!myrAmount || !paidById) { setError("Fill in amount and who paid."); return; }
-    setSaving(true);
-    setError("");
+    setSaving(true); setError("");
     try {
-      const realTravelers = travelers.filter((t) => !t.is_pool);
-      const splitData: SplitEntry[] = splitType === "even"
-        ? realTravelers.map((t) => ({ traveler_id: t.id, amount: evenSplitAmount() }))
-        : splits;
+      const total = parseFloat(myrAmount);
+      const splitData = splitType === "even"
+        ? realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(total).toFixed(2)) }))
+        : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
 
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trip_id: id,
-          date, category, split_type: splitType,
+          trip_id: id, date, category, split_type: splitType,
           paid_by_id: paidById, payment_type: paymentType,
           foreign_amount: parseFloat(foreignAmount) || null,
-          myr_amount: parseFloat(myrAmount),
-          notes: notes || null,
-          created_by_id: myId,
-          splits: splitData.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 })),
+          myr_amount: total, notes: notes || null, created_by_id: myId, splits: splitData,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       router.push(`/trips/${id}/expenses`);
-    } catch (e) {
-      setError((e as Error).message);
-      setSaving(false);
-    }
+    } catch (e) { setError((e as Error).message); setSaving(false); }
   }
 
   async function handleAiParse() {
     if (!aiText.trim()) return;
-    setAiParsing(true);
-    setError("");
+    setAiParsing(true); setError("");
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
@@ -116,43 +111,58 @@ export default function AddExpensePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setAiParsed(data.entries ?? []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setAiParsing(false);
+    } catch (e) { setError((e as Error).message); }
+    finally { setAiParsing(false); }
+  }
+
+  function calcMyr(entry: ParsedEntry) {
+    if (entry.myr_amount) return entry.myr_amount;
+    if (entry.foreign_amount && trip) {
+      const rate = aiPayType === "Wise" ? trip.wise_rate : trip.cash_rate;
+      return entry.foreign_amount / rate;
     }
+    return 0;
   }
 
   async function handleAiSave() {
     if (!aiParsed || !aiPaidBy) return;
-    setSaving(true);
-    setError("");
-    const realTravelers = travelers.filter((t) => !t.is_pool);
+    setSaving(true); setError("");
     try {
       for (const entry of aiParsed) {
-        const myr = entry.myr_amount ?? (entry.foreign_amount && trip ? entry.foreign_amount / (aiPayType === "Wise" ? trip.wise_rate : trip.cash_rate) : 0);
-        const perPerson = myr / (realTravelers.length || 1);
+        const myr = calcMyr(entry);
+        let splitData;
+        if (aiSplitType === "even") {
+          splitData = realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(myr).toFixed(2)) }));
+        } else {
+          // Individual: aiSplits holds per-traveler amounts for the TOTAL of all entries
+          // For each entry, distribute proportionally by myr value
+          const totalAllParsed = aiParsed.reduce((s, e) => s + calcMyr(e), 0);
+          const ratio = totalAllParsed > 0 ? myr / totalAllParsed : 0;
+          splitData = aiSplits.map((s) => ({
+            traveler_id: s.traveler_id,
+            amount: parseFloat(((parseFloat(s.amount) || 0) * ratio).toFixed(2)),
+          }));
+        }
         await fetch("/api/expenses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             trip_id: id, date: new Date().toISOString().slice(0, 10),
-            category: entry.category, split_type: "even",
+            category: entry.category, split_type: aiSplitType,
             paid_by_id: aiPaidBy, payment_type: aiPayType,
             foreign_amount: entry.foreign_amount ?? null,
-            myr_amount: myr, notes: entry.description, created_by_id: myId,
-            splits: realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(perPerson.toFixed(2)) })),
+            myr_amount: myr, notes: entry.description, created_by_id: myId, splits: splitData,
           }),
         });
       }
       router.push(`/trips/${id}/expenses`);
-    } catch (e) {
-      setError((e as Error).message);
-      setSaving(false);
-    }
+    } catch (e) { setError((e as Error).message); setSaving(false); }
   }
 
   if (!trip) return null;
+
+  const aiTotal = aiParsed ? aiParsed.reduce((s, e) => s + calcMyr(e), 0) : 0;
+  const aiSplitsTotal = aiSplits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
 
   return (
     <>
@@ -161,7 +171,6 @@ export default function AddExpensePage() {
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-4">
           <h1 className="text-xl font-bold text-white">Add Expense</h1>
 
-          {/* Tabs */}
           <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
             <button onClick={() => setTab("form")}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "form" ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
@@ -185,13 +194,11 @@ export default function AddExpensePage() {
                     {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                   </select></div>
               </div>
-
               <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
                 <select value={paidById} onChange={(e) => setPaidById(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                 </select></div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
                   <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)}
@@ -205,22 +212,17 @@ export default function AddExpensePage() {
                     <option value="individual">Individual</option>
                   </select></div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">{trip.foreign_currency} Amount</label>
-                  <input type="number" value={foreignAmount} onChange={(e) => setForeignAmount(e.target.value)}
-                    placeholder="e.g. 1200" step="1"
+                  <input type="number" value={foreignAmount} onChange={(e) => setForeignAmount(e.target.value)} placeholder="e.g. 1200" step="1"
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
                 <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
-                  <input type="number" value={myrAmount} onChange={(e) => setMyrAmount(e.target.value)}
-                    placeholder="e.g. 35.80" step="0.01"
+                  <input type="number" value={myrAmount} onChange={(e) => setMyrAmount(e.target.value)} placeholder="e.g. 35.80" step="0.01"
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               </div>
-
               {splitType === "even" && myrAmount && (
-                <p className="text-xs text-slate-500">Each person pays RM {evenSplitAmount()}</p>
+                <p className="text-xs text-slate-500">Each person pays RM {evenSplitAmount(parseFloat(myrAmount)).toFixed(2)}</p>
               )}
-
               {splitType === "individual" && (
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-slate-400">Individual Splits (MYR)</label>
@@ -236,18 +238,17 @@ export default function AddExpensePage() {
                       </div>
                     );
                   })}
-                  {myrAmount && (
-                    <p className={`text-xs ${Math.abs(splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0) - parseFloat(myrAmount)) > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
+                  {myrAmount && (() => {
+                    const diff = Math.abs(splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0) - parseFloat(myrAmount));
+                    return <p className={`text-xs ${diff > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
                       Splits: RM {splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0).toFixed(2)} / Total: RM {parseFloat(myrAmount).toFixed(2)}
-                    </p>
-                  )}
+                    </p>;
+                  })()}
                 </div>
               )}
-
               <div><label className="text-xs text-slate-400 mb-1 block">Notes</label>
                 <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
-
               {error && <p className="text-sm text-red-400">{error}</p>}
               <button onClick={handleSave} disabled={saving}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
@@ -260,7 +261,7 @@ export default function AddExpensePage() {
             <div className="flex flex-col gap-3">
               <p className="text-xs text-slate-500">Type expenses in plain text. AI will parse them into individual entries.</p>
               <textarea value={aiText} onChange={(e) => setAiText(e.target.value)}
-                placeholder={`e.g. Lunch 1200 yen, Transport 450 yen, Konbini 300 yen`}
+                placeholder="e.g. Lunch 1200 yen, Transport 450 yen, Konbini 300 yen"
                 rows={4}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none" />
               <button onClick={handleAiParse} disabled={aiParsing || !aiText.trim()}
@@ -270,6 +271,7 @@ export default function AddExpensePage() {
 
               {aiParsed && aiParsed.length > 0 && (
                 <>
+                  {/* Parsed entries */}
                   <div className="flex flex-col gap-2">
                     {aiParsed.map((e, i) => (
                       <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 flex items-center justify-between">
@@ -279,24 +281,61 @@ export default function AddExpensePage() {
                         </div>
                         <div className="text-right">
                           {e.foreign_amount && <p className="text-xs text-slate-400">{trip.foreign_currency} {e.foreign_amount.toLocaleString()}</p>}
-                          {e.myr_amount && <p className="text-sm font-bold text-white">RM {e.myr_amount.toFixed(2)}</p>}
+                          <p className="text-sm font-bold text-white">RM {calcMyr(e).toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
+                    <div className="flex justify-between px-1">
+                      <span className="text-xs text-slate-500">Total</span>
+                      <span className="text-xs font-bold text-emerald-400">RM {aiTotal.toFixed(2)}</span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Options */}
+                  <div className="grid grid-cols-3 gap-3">
                     <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
                       <select value={aiPaidBy} onChange={(e) => setAiPaidBy(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
                         {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                       </select></div>
-                    <div><label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
+                    <div><label className="text-xs text-slate-400 mb-1 block">Payment</label>
                       <select value={aiPayType} onChange={(e) => setAiPayType(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
                         {PAYMENT_TYPES.map((p) => <option key={p}>{p}</option>)}
                       </select></div>
+                    <div><label className="text-xs text-slate-400 mb-1 block">Split</label>
+                      <select value={aiSplitType} onChange={(e) => setAiSplitType(e.target.value as "even" | "individual")}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                        <option value="even">Even</option>
+                        <option value="individual">Individual</option>
+                      </select></div>
                   </div>
+
+                  {/* Individual splits for AI — enter total amounts per traveler */}
+                  {aiSplitType === "individual" && (
+                    <div className="flex flex-col gap-2 bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Enter each person's share of the total (RM {aiTotal.toFixed(2)})</p>
+                      {aiSplits.map((s, i) => {
+                        const t = realTravelers.find((x) => x.id === s.traveler_id);
+                        return (
+                          <div key={s.traveler_id} className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                            <span className="text-sm text-slate-300 flex-1">{t?.name}</span>
+                            <input type="number" value={s.amount} step="0.01" placeholder="0.00"
+                              onChange={(e) => setAiSplits(aiSplits.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))}
+                              className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                          </div>
+                        );
+                      })}
+                      <p className={`text-xs ${Math.abs(aiSplitsTotal - aiTotal) > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
+                        Splits: RM {aiSplitsTotal.toFixed(2)} / Total: RM {aiTotal.toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+
+                  {aiSplitType === "even" && (
+                    <p className="text-xs text-slate-500">Each of {realTravelers.length} travelers pays RM {evenSplitAmount(aiTotal).toFixed(2)} per entry</p>
+                  )}
 
                   {error && <p className="text-sm text-red-400">{error}</p>}
                   <button onClick={handleAiSave} disabled={saving || !aiPaidBy}
@@ -305,6 +344,7 @@ export default function AddExpensePage() {
                   </button>
                 </>
               )}
+              {error && !aiParsed && <p className="text-sm text-red-400">{error}</p>}
             </div>
           )}
         </div>

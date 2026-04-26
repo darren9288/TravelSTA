@@ -8,14 +8,35 @@ function db() {
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
-  let q = db()
+  const supabase = db();
+
+  let q = supabase
     .from("pool_topups")
     .select("*, pool:travelers!pool_id(*), contributed_by:travelers!contributed_by_id(*)")
     .order("date", { ascending: false });
   if (tripId) q = q.eq("trip_id", tripId);
-  const { data, error } = await q;
+  const { data: topups, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // Calculate balance per pool: topups contributed - expenses paid by pool
+  const balances: Record<string, number> = {};
+  for (const t of topups ?? []) {
+    const pid = t.pool_id;
+    balances[pid] = (balances[pid] ?? 0) + Number(t.myr_amount);
+  }
+  if (tripId) {
+    const { data: poolExpenses } = await supabase
+      .from("expenses")
+      .select("paid_by_id, myr_amount")
+      .eq("trip_id", tripId);
+    for (const e of poolExpenses ?? []) {
+      if (balances[e.paid_by_id] !== undefined) {
+        balances[e.paid_by_id] -= Number(e.myr_amount);
+      }
+    }
+  }
+
+  return NextResponse.json({ topups: topups ?? [], balances });
 }
 
 export async function POST(req: NextRequest) {

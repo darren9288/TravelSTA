@@ -1,7 +1,7 @@
 "use client";
 import { Expense, Traveler } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
-import { Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
 const CAT_COLORS: Record<string, string> = {
@@ -19,9 +19,10 @@ type Props = {
   travelers: Traveler[];
   foreignCurrency: string;
   onDelete?: (id: string) => void;
+  onEdit?: (expense: Expense) => void;
 };
 
-export default function ExpenseRow({ expense, travelers, foreignCurrency, onDelete }: Props) {
+export default function ExpenseRow({ expense, travelers, foreignCurrency, onDelete, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
@@ -72,14 +73,24 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
               );
             })}
           </div>
-          {onDelete && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(expense.id); }}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
-            >
-              <Trash2 size={12} /> Delete
-            </button>
-          )}
+          <div className="flex gap-3">
+            {onEdit && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(expense); }}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-400 transition-colors"
+              >
+                <Pencil size={12} /> Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(expense.id); }}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
