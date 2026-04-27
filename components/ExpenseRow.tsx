@@ -26,6 +26,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
   const [expanded, setExpanded] = useState(false);
   const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState("");
 
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
@@ -38,17 +39,23 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
 
   async function toggleSettle(split: ExpenseSplit) {
     setToggling(split.id);
+    setToggleError("");
     const newVal = !split.is_settled;
-    // Optimistic update
     setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: newVal } : s));
-    const res = await fetch("/api/splits", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: split.id, is_settled: newVal }),
-    });
-    if (!res.ok) {
-      // Revert on failure
+    try {
+      const res = await fetch("/api/splits", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: split.id, is_settled: newVal }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
+        setToggleError(data.error ?? `Save failed (${res.status})`);
+      }
+    } catch (e) {
       setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
+      setToggleError("Network error — could not save");
     }
     setToggling(null);
   }
@@ -83,6 +90,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
 
       {expanded && (
         <div className="border-t border-slate-700/50 px-4 py-3 bg-slate-900/30">
+          {toggleError && <p className="text-xs text-red-400 mb-2">⚠ {toggleError}</p>}
           {displayNotes && <p className="text-xs text-slate-400 mb-2">📝 {displayNotes}</p>}
           {splitsMismatch && (
             <p className="text-xs text-red-400 mb-2">
