@@ -50,13 +50,16 @@ export async function GET(req: NextRequest) {
 
   const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
 
-  return NextResponse.json({
-    ...result,
-    _debug: {
-      traveler_count: travelers.length,
-      expense_count: expenses.length,
-      split_count: splits.length,
-      unsettled_count: splits.filter((s) => !s.is_settled).length,
+  return NextResponse.json(
+    {
+      ...result,
+      _debug: {
+        traveler_count: travelers.length,
+        expense_count: expenses.length,
+        split_count: splits.length,
+        unsettled_count: splits.filter((s) => !s.is_settled).length,
+      },
     },
-  });
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate" } }
+  );
 }

@@ -20,7 +20,7 @@ export default function SettlementPage() {
     setApiError("");
     const [tripRes, settleRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/settlement?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/settlement?trip_id=${id}&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
