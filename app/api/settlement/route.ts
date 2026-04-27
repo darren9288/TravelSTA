@@ -16,11 +16,7 @@ export async function GET(req: NextRequest) {
 
   const [travelerRes, expenseRes] = await Promise.all([
     supabase.from("travelers").select("*").eq("trip_id", tripId),
-    // Use the same explicit join syntax as the expenses tab — avoids ambiguous FK issues
-    supabase
-      .from("expenses")
-      .select("*, paid_by:travelers!paid_by_id(*), splits:expense_splits(*)")
-      .eq("trip_id", tripId),
+    supabase.from("expenses").select("*").eq("trip_id", tripId),
   ]);
 
   if (travelerRes.error) {
@@ -31,27 +27,36 @@ export async function GET(req: NextRequest) {
   }
 
   const travelers = travelerRes.data ?? [];
-  const expenses = expenseRes.data ?? [];
+  const expensesRaw = expenseRes.data ?? [];
+  const expenseIds = expensesRaw.map((e) => e.id);
+
+  // Fetch splits directly — avoids PostgREST nested join returning stale is_settled values
+  const { data: splitsRaw, error: splitError } = await supabase
+    .from("expense_splits")
+    .select("*")
+    .in("expense_id", expenseIds.length ? expenseIds : ["__none__"]);
+
+  if (splitError) {
+    return NextResponse.json({ error: splitError.message, _debug: { stage: "splits" } }, { status: 500 });
+  }
+
+  const splits = splitsRaw ?? [];
+
+  // Attach splits to expenses
+  const expenses = expensesRaw.map((e) => ({
+    ...e,
+    splits: splits.filter((s) => s.expense_id === e.id),
+  }));
 
   const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
-
-  const allSplits = expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []) as { id: string; is_settled: unknown; traveler_id: string; amount: number }[];
-
-  // Also directly query expense_splits to compare
-  const { data: directSplits } = await supabase
-    .from("expense_splits")
-    .select("id, is_settled, traveler_id, amount")
-    .in("expense_id", expenses.map((e) => e.id));
 
   return NextResponse.json({
     ...result,
     _debug: {
       traveler_count: travelers.length,
       expense_count: expenses.length,
-      split_count: allSplits.length,
-      unsettled_count: allSplits.filter((s) => !s.is_settled).length,
-      direct_unsettled_count: (directSplits ?? []).filter((s) => !s.is_settled).length,
-      splits_is_settled: allSplits.map((s) => ({ id: s.id, is_settled: s.is_settled })),
+      split_count: splits.length,
+      unsettled_count: splits.filter((s) => !s.is_settled).length,
     },
   });
 }
