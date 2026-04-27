@@ -1,8 +1,8 @@
 "use client";
 import { Expense, Traveler, ExpenseSplit } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
-import { Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Trash2, Pencil, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
 const CAT_COLORS: Record<string, string> = {
   "Breakfast": "#f97316", "Lunch": "#f97316", "Dinner": "#f97316", "Small Eat": "#f97316",
@@ -22,26 +22,64 @@ type Props = {
   onEdit?: (expense: Expense) => void;
 };
 
+// Returns true if this split should be auto-settled and locked from manual toggling
+function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Traveler[]): boolean {
+  const payer = travelers.find((t) => t.id === expense.paid_by_id);
+  // Rule 3: paid by a pool — pool already covers it, all splits auto-settled
+  if (payer?.is_pool) return true;
+  // Rule 1: this person is the one who paid — they don't owe themselves
+  if (split.traveler_id === expense.paid_by_id) return true;
+  // Rule 2: individual split with RM 0 — they weren't involved
+  if (expense.split_type === "individual" && Number(split.amount) === 0) return true;
+  return false;
+}
+
 export default function ExpenseRow({ expense, travelers, foreignCurrency, onDelete, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState("");
+  const autoSavedIds = useRef<Set<string>>(new Set());
 
+  // Sync splits when parent re-fetches fresh data
   useEffect(() => {
     if (!toggling) setSplits(expense.splits ?? []);
   }, [expense.splits]);
-  const [toggleError, setToggleError] = useState("");
+
+  // Auto-settle splits that should be locked — fix DB if they're wrongly unsettled
+  useEffect(() => {
+    const toFix = (expense.splits ?? []).filter(
+      (s) => isAutoSettled(s, expense, travelers) && !s.is_settled && !autoSavedIds.current.has(s.id)
+    );
+    if (toFix.length === 0) return;
+
+    toFix.forEach((s) => {
+      autoSavedIds.current.add(s.id);
+      fetch("/api/splits", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: s.id, is_settled: true }),
+      });
+    });
+
+    setSplits((prev) =>
+      prev.map((s) => toFix.some((f) => f.id === s.id) ? { ...s, is_settled: true } : s)
+    );
+  }, [expense.splits]);
 
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
+  const paidByPool = travelers.find((t) => t.id === expense.paid_by_id)?.is_pool ?? false;
 
-  const hasUnsettled = splits.some((s) => !s.is_settled);
+  // Only count manually-settleable splits for the "unsettled" indicator
+  const hasUnsettled = splits.some((s) => !s.is_settled && !isAutoSettled(s, expense, travelers));
   const displayNotes = expense.notes && expense.notes.trim().toLowerCase() !== expense.category.trim().toLowerCase()
     ? expense.notes : null;
   const splitsTotal = splits.reduce((s, x) => s + Number(x.amount), 0);
   const splitsMismatch = splits.length > 0 && Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
 
   async function toggleSettle(split: ExpenseSplit) {
+    if (isAutoSettled(split, expense, travelers)) return;
     setToggling(split.id);
     setToggleError("");
     const newVal = !split.is_settled;
@@ -57,7 +95,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
         setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
         setToggleError(data.error ?? `Save failed (${res.status})`);
       }
-    } catch (e) {
+    } catch {
       setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
       setToggleError("Network error — could not save");
     }
@@ -73,6 +111,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
             <span className="text-sm font-medium text-white truncate">{expense.category}</span>
             {displayNotes && <span className="text-xs text-slate-500 truncate hidden sm:block">{displayNotes}</span>}
             {splitsMismatch && <span className="text-xs text-red-400 flex-shrink-0">⚠ split</span>}
+            {paidByPool && <span className="text-xs text-blue-400 flex-shrink-0">pool</span>}
             {hasUnsettled && <span className="text-xs text-amber-500 flex-shrink-0">unsettled</span>}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -102,27 +141,47 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
             </p>
           )}
 
-          {/* Splits with settle checkboxes */}
           <div className="flex flex-col gap-1.5 mb-3">
             {splits.map((s) => {
               const t = travelers.find((x) => x.id === s.traveler_id);
               if (!t) return null;
+              const locked = isAutoSettled(s, expense, travelers);
+
+              // Reason label for locked splits
+              const lockReason = paidByPool
+                ? "pool"
+                : s.traveler_id === expense.paid_by_id
+                  ? "payer"
+                  : "RM 0";
+
               return (
                 <div key={s.id} className="flex items-center gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleSettle(s); }}
-                    disabled={toggling === s.id}
+                    disabled={locked || toggling === s.id}
+                    title={locked ? `Auto-settled (${lockReason})` : undefined}
                     className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                      s.is_settled
-                        ? "bg-emerald-500 border-emerald-500"
-                        : "border-slate-500 hover:border-amber-400"
+                      locked
+                        ? "bg-slate-600 border-slate-600 cursor-not-allowed"
+                        : s.is_settled
+                          ? "bg-emerald-500 border-emerald-500 cursor-pointer"
+                          : "border-slate-500 hover:border-amber-400 cursor-pointer"
                     } ${toggling === s.id ? "opacity-50" : ""}`}
                   >
-                    {s.is_settled && <span className="text-white text-xs leading-none">✓</span>}
+                    {(s.is_settled || locked) && (
+                      locked
+                        ? <Lock size={8} className="text-slate-400" />
+                        : <span className="text-white text-xs leading-none">✓</span>
+                    )}
                   </button>
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-                  <span className={`text-xs flex-1 ${s.is_settled ? "text-slate-500 line-through" : "text-slate-300"}`}>{t.name}</span>
-                  <span className={`text-xs font-medium ${s.is_settled ? "text-slate-500" : "text-white"}`}>
+                  <span className={`text-xs flex-1 ${(s.is_settled || locked) ? "text-slate-500 line-through" : "text-slate-300"}`}>
+                    {t.name}
+                  </span>
+                  {locked && (
+                    <span className="text-xs text-slate-600 italic">{lockReason}</span>
+                  )}
+                  <span className={`text-xs font-medium ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
                     RM {Number(s.amount).toFixed(2)}
                   </span>
                 </div>
