@@ -35,7 +35,14 @@ export async function GET(req: NextRequest) {
 
   const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
 
-  const allSplits = expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []) as { is_settled: unknown }[];
+  const allSplits = expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []) as { id: string; is_settled: unknown; traveler_id: string; amount: number }[];
+
+  const supabase = db();
+  // Also directly query expense_splits to compare
+  const { data: directSplits } = await supabase
+    .from("expense_splits")
+    .select("id, is_settled, traveler_id, amount")
+    .in("expense_id", expenses.map((e) => e.id));
 
   return NextResponse.json({
     ...result,
@@ -44,7 +51,8 @@ export async function GET(req: NextRequest) {
       expense_count: expenses.length,
       split_count: allSplits.length,
       unsettled_count: allSplits.filter((s) => !s.is_settled).length,
-      sample_split: allSplits[0] ?? null,
+      direct_unsettled_count: (directSplits ?? []).filter((s) => !s.is_settled).length,
+      splits_is_settled: allSplits.map((s) => ({ id: s.id, is_settled: s.is_settled })),
     },
   });
 }
