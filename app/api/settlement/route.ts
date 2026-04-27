@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
         expense_count: expenses.length,
         split_count: splits.length,
         unsettled_count: splits.filter((s) => !s.is_settled).length,
+        server_time: new Date().toISOString(),
+        splits_raw: splits.map((s) => ({ id: s.id, traveler_id: s.traveler_id, is_settled: s.is_settled })),
       },
     },
     { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate" } }
