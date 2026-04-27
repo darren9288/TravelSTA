@@ -35,12 +35,16 @@ export async function GET(req: NextRequest) {
 
   const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
 
+  const allSplits = expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []) as { is_settled: unknown }[];
+
   return NextResponse.json({
     ...result,
     _debug: {
       traveler_count: travelers.length,
       expense_count: expenses.length,
-      split_count: expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []).length,
+      split_count: allSplits.length,
+      unsettled_count: allSplits.filter((s) => !s.is_settled).length,
+      sample_split: allSplits[0] ?? null,
     },
   });
 }
