@@ -19,19 +19,21 @@ export async function GET(req: NextRequest) {
     const pid = t.pool_id;
     balances[pid] = (balances[pid] ?? 0) + Number(t.myr_amount);
   }
+  let expenses: unknown[] = [];
   if (tripId) {
     const { data: poolExpenses } = await supabase
       .from("expenses")
-      .select("paid_by_id, myr_amount")
+      .select("id, paid_by_id, myr_amount, foreign_amount, date, category, notes")
       .eq("trip_id", tripId);
     for (const e of poolExpenses ?? []) {
       if (balances[e.paid_by_id] !== undefined) {
         balances[e.paid_by_id] -= Number(e.myr_amount);
+        expenses.push(e);
       }
     }
   }
 
-  return NextResponse.json({ topups: topups ?? [], balances });
+  return NextResponse.json({ topups: topups ?? [], balances, expenses });
 }
 
 export async function POST(req: NextRequest) {

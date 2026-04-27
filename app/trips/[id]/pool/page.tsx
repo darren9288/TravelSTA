@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
-import { Trip, Traveler, PoolTopup } from "@/lib/supabase";
+import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
 import { getIdentity } from "@/lib/identity";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 
 export default function PoolPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +12,7 @@ export default function PoolPage() {
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [pools, setPools] = useState<Traveler[]>([]);
   const [topups, setTopups] = useState<PoolTopup[]>([]);
+  const [poolExpenses, setPoolExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,6 +41,7 @@ export default function PoolPage() {
     const poolList = allTravelers.filter((t) => t.is_pool);
     setPools(poolList);
     setTopups(Array.isArray(poolRes.topups) ? poolRes.topups : []);
+    setPoolExpenses(Array.isArray(poolRes.expenses) ? poolRes.expenses : []);
     setBalances(poolRes.balances ?? {});
     const me = getIdentity(id);
     setMyId(me);
@@ -165,35 +167,67 @@ export default function PoolPage() {
             </div>
           )}
 
-          {/* Top-up history */}
+          {/* Unified history: top-ups (IN) + pool expenses (OUT) */}
           <div>
             <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">History</h2>
             {loading ? (
               <div className="flex flex-col gap-2">
                 {[1, 2].map((i) => <div key={i} className="h-12 bg-slate-800 rounded-xl animate-pulse" />)}
               </div>
-            ) : topups.length === 0 ? (
-              <p className="text-center py-6 text-slate-600 text-sm">No top-ups yet</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {topups.map((t) => {
-                  const pool = pools.find((p) => p.id === t.pool_id) ?? t.pool;
-                  const contributor = travelers.find((x) => x.id === t.contributed_by_id) ?? t.contributed_by;
-                  return (
-                    <div key={t.id} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white font-medium">{contributor?.name ?? "Unknown"} → {pool?.name ?? "Pool"}</p>
-                        <p className="text-xs text-slate-500">{new Date(t.date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short" })}{t.notes ? ` · ${t.notes}` : ""}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-emerald-400">+RM {Number(t.myr_amount).toFixed(2)}</p>
-                        {t.foreign_amount && <p className="text-xs text-slate-600">{trip?.foreign_currency} {Number(t.foreign_amount).toLocaleString()}</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            ) : topups.length === 0 && poolExpenses.length === 0 ? (
+              <p className="text-center py-6 text-slate-600 text-sm">No history yet</p>
+            ) : (() => {
+              type Entry =
+                | { kind: "topup"; date: string; key: string; topup: PoolTopup }
+                | { kind: "expense"; date: string; key: string; expense: Expense };
+
+              const entries: Entry[] = [
+                ...topups.map((t) => ({ kind: "topup" as const, date: t.date, key: `t-${t.id}`, topup: t })),
+                ...poolExpenses.map((e) => ({ kind: "expense" as const, date: e.date, key: `e-${e.id}`, expense: e })),
+              ].sort((a, b) => b.date.localeCompare(a.date));
+
+              return (
+                <div className="flex flex-col gap-2">
+                  {entries.map((entry) => {
+                    const dateStr = new Date(entry.date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+                    if (entry.kind === "topup") {
+                      const t = entry.topup;
+                      const pool = pools.find((p) => p.id === t.pool_id) ?? t.pool;
+                      const contributor = travelers.find((x) => x.id === t.contributed_by_id) ?? t.contributed_by;
+                      return (
+                        <div key={entry.key} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3">
+                          <TrendingUp size={14} className="text-emerald-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-medium">{contributor?.name ?? "Unknown"} → {pool?.name ?? "Pool"}</p>
+                            <p className="text-xs text-slate-500">{dateStr}{t.notes ? ` · ${t.notes}` : ""}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-emerald-400">+RM {Number(t.myr_amount).toFixed(2)}</p>
+                            {t.foreign_amount && <p className="text-xs text-slate-600">{trip?.foreign_currency} {Number(t.foreign_amount).toLocaleString()}</p>}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const e = entry.expense;
+                      const pool = pools.find((p) => p.id === e.paid_by_id);
+                      return (
+                        <div key={entry.key} className="flex items-center gap-3 bg-red-950/20 border border-red-900/30 rounded-xl px-4 py-3">
+                          <TrendingDown size={14} className="text-red-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-medium">{pool?.name ?? "Pool"} → {e.category}</p>
+                            <p className="text-xs text-slate-500">{dateStr}{e.notes && e.notes !== e.category ? ` · ${e.notes}` : ""}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-red-400">-RM {Number(e.myr_amount).toFixed(2)}</p>
+                            {e.foreign_amount && <p className="text-xs text-slate-600">{trip?.foreign_currency} {Number(e.foreign_amount).toLocaleString()}</p>}
+                          </div>
+                        </div>
+                      );
+                    }
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </main>
