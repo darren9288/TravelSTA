@@ -2,7 +2,7 @@
 import { Expense, Traveler, ExpenseSplit } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
 import { Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const CAT_COLORS: Record<string, string> = {
   "Breakfast": "#f97316", "Lunch": "#f97316", "Dinner": "#f97316", "Small Eat": "#f97316",
@@ -26,6 +26,10 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, onDele
   const [expanded, setExpanded] = useState(false);
   const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
   const [toggling, setToggling] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toggling) setSplits(expense.splits ?? []);
+  }, [expense.splits]);
   const [toggleError, setToggleError] = useState("");
 
   const color = CAT_COLORS[expense.category] ?? "#94a3b8";

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
@@ -21,6 +21,7 @@ type EditState = {
 
 export default function ExpensesPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -45,11 +46,12 @@ export default function ExpensesPage() {
   }, [id]);
 
   useEffect(() => {
+    router.refresh();
     load();
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
+  }, [load, router]);
 
   async function handleDelete(expenseId: string) {
     await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
