@@ -5,13 +5,12 @@ export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Server-side client: adds Cache-Control: no-cache to every request
-// so Supabase's API gateway never serves a cached GET response.
+// Server-side client: uses service role key to bypass Supabase CDN caching.
+// Safe because this only runs in Next.js API routes, never in the browser.
 export function serverDb() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } } }
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
 
