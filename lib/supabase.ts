@@ -5,6 +5,16 @@ export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Server-side client: adds Cache-Control: no-cache to every request
+// so Supabase's API gateway never serves a cached GET response.
+export function serverDb() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } } }
+  );
+}
+
 export type Trip = {
   id: string;
   name: string;

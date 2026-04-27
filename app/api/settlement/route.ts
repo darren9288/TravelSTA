@@ -1,18 +1,14 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { serverDb } from "@/lib/supabase";
 import { calculateSettlement } from "@/lib/settlement";
 import { Expense, Traveler } from "@/lib/supabase";
-
-function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-}
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
   if (!tripId) return NextResponse.json({ error: "trip_id required" }, { status: 400 });
 
-  const supabase = db();
+  const supabase = serverDb();
 
   const [travelerRes, expenseRes] = await Promise.all([
     supabase.from("travelers").select("*").eq("trip_id", tripId),
@@ -30,7 +26,6 @@ export async function GET(req: NextRequest) {
   const expensesRaw = expenseRes.data ?? [];
   const expenseIds = expensesRaw.map((e) => e.id);
 
-  // Fetch splits directly — avoids PostgREST nested join returning stale is_settled values
   const { data: splitsRaw, error: splitError } = await supabase
     .from("expense_splits")
     .select("*")
@@ -42,7 +37,6 @@ export async function GET(req: NextRequest) {
 
   const splits = splitsRaw ?? [];
 
-  // Attach splits to expenses
   const expenses = expensesRaw.map((e) => ({
     ...e,
     splits: splits.filter((s) => s.expense_id === e.id),
@@ -59,7 +53,6 @@ export async function GET(req: NextRequest) {
         split_count: splits.length,
         unsettled_count: splits.filter((s) => !s.is_settled).length,
         server_time: new Date().toISOString(),
-        splits_raw: splits.map((s) => ({ id: s.id, traveler_id: s.traveler_id, is_settled: s.is_settled })),
       },
     },
     { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate" } }

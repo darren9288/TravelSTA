@@ -1,17 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-}
+import { serverDb } from "@/lib/supabase";
 
 function randomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 export async function GET() {
-  const { data, error } = await db().from("trips").select("*").order("created_at", { ascending: false });
+  const { data, error } = await serverDb().from("trips").select("*").order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
@@ -19,8 +15,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   let join_code = randomCode();
-  // ensure unique
-  const supabase = db();
+  const supabase = serverDb();
   for (let i = 0; i < 5; i++) {
     const { data } = await supabase.from("trips").select("id").eq("join_code", join_code).single();
     if (!data) break;

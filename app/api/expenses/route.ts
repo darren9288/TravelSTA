@@ -1,23 +1,18 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-}
+import { serverDb } from "@/lib/supabase";
 
 function lastDay(month: string) {
   return new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate();
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = db();
+  const supabase = serverDb();
   const p = new URL(req.url).searchParams;
   const tripId = p.get("trip_id");
   const month = p.get("month");
   const category = p.get("category");
 
-  // Fetch expenses (with paid_by traveler joined — that join is fine, only splits join is stale)
   let q = supabase
     .from("expenses")
     .select("*, paid_by:travelers!paid_by_id(*)")
@@ -34,7 +29,6 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!expenses?.length) return NextResponse.json([]);
 
-  // Fetch splits directly to avoid PostgREST nested join returning stale is_settled values
   const expenseIds = expenses.map((e) => e.id);
   const { data: splits, error: splitError } = await supabase
     .from("expense_splits")
@@ -52,7 +46,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = db();
+  const supabase = serverDb();
   const body = await req.json();
 
   const { data: expense, error: expErr } = await supabase.from("expenses").insert({
@@ -70,7 +64,6 @@ export async function POST(req: NextRequest) {
 
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
 
-  // Insert splits
   if (body.splits?.length) {
     const { error: splitErr } = await supabase.from("expense_splits").insert(
       body.splits.map((s: { traveler_id: string; amount: number }) => ({
@@ -87,7 +80,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const supabase = db();
+  const supabase = serverDb();
   const body = await req.json();
   const { id, splits, ...updates } = body;
 
@@ -106,10 +99,11 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const supabase = serverDb();
   const idParam = new URL(req.url).searchParams.get("id");
   const id = idParam ?? (await req.json().catch(() => ({}))).id;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const { error } = await db().from("expenses").delete().eq("id", id);
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

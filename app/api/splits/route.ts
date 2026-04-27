@@ -1,15 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { serverDb } from "@/lib/supabase";
 
-function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-}
-
-// Toggle settled status for a single split
 export async function PUT(req: NextRequest) {
   const { id, is_settled } = await req.json();
-  const { data, error } = await db()
+  const { data, error } = await serverDb()
     .from("expense_splits")
     .update({ is_settled })
     .eq("id", id)
@@ -19,17 +14,16 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json(data);
 }
 
-// Bulk-settle: mark all unsettled splits for a traveler in a trip as settled
 export async function POST(req: NextRequest) {
   const { trip_id, traveler_id } = await req.json();
   if (!trip_id || !traveler_id) return NextResponse.json({ error: "trip_id and traveler_id required" }, { status: 400 });
 
-  // Get all expense IDs for this trip
-  const { data: expenses } = await db().from("expenses").select("id").eq("trip_id", trip_id);
+  const supabase = serverDb();
+  const { data: expenses } = await supabase.from("expenses").select("id").eq("trip_id", trip_id);
   const expenseIds = (expenses ?? []).map((e: { id: string }) => e.id);
   if (!expenseIds.length) return NextResponse.json({ updated: 0 });
 
-  const { error } = await db()
+  const { error } = await supabase
     .from("expense_splits")
     .update({ is_settled: true })
     .in("expense_id", expenseIds)

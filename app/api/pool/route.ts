@@ -1,14 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-}
+import { serverDb } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
-  const supabase = db();
+  const supabase = serverDb();
 
   let q = supabase
     .from("pool_topups")
@@ -18,7 +14,6 @@ export async function GET(req: NextRequest) {
   const { data: topups, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Calculate balance per pool: topups contributed - expenses paid by pool
   const balances: Record<string, number> = {};
   for (const t of topups ?? []) {
     const pid = t.pool_id;
@@ -41,7 +36,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { data, error } = await db().from("pool_topups").insert({
+  const { data, error } = await serverDb().from("pool_topups").insert({
     trip_id: body.trip_id,
     pool_id: body.pool_id,
     contributed_by_id: body.contributed_by_id,
@@ -56,7 +51,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
-  const { error } = await db().from("pool_topups").delete().eq("id", id);
+  const { error } = await serverDb().from("pool_topups").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
