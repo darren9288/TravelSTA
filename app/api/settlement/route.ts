@@ -37,7 +37,6 @@ export async function GET(req: NextRequest) {
 
   const allSplits = expenses.flatMap((e) => (e as Expense & { splits?: unknown[] }).splits ?? []) as { id: string; is_settled: unknown; traveler_id: string; amount: number }[];
 
-  const supabase = db();
   // Also directly query expense_splits to compare
   const { data: directSplits } = await supabase
     .from("expense_splits")
