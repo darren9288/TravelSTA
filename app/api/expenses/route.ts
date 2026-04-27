@@ -17,9 +17,10 @@ export async function GET(req: NextRequest) {
   const month = p.get("month");
   const category = p.get("category");
 
+  // Fetch expenses (with paid_by traveler joined — that join is fine, only splits join is stale)
   let q = supabase
     .from("expenses")
-    .select("*, paid_by:travelers!paid_by_id(*), splits:expense_splits(*, traveler:travelers(*))")
+    .select("*, paid_by:travelers!paid_by_id(*)")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -29,9 +30,25 @@ export async function GET(req: NextRequest) {
   const limit = p.get("limit");
   if (limit) q = q.limit(parseInt(limit));
 
-  const { data, error } = await q;
+  const { data: expenses, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  if (!expenses?.length) return NextResponse.json([]);
+
+  // Fetch splits directly to avoid PostgREST nested join returning stale is_settled values
+  const expenseIds = expenses.map((e) => e.id);
+  const { data: splits, error: splitError } = await supabase
+    .from("expense_splits")
+    .select("*")
+    .in("expense_id", expenseIds);
+
+  if (splitError) return NextResponse.json({ error: splitError.message }, { status: 500 });
+
+  const result = expenses.map((e) => ({
+    ...e,
+    splits: (splits ?? []).filter((s) => s.expense_id === e.id),
+  }));
+
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
