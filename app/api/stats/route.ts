@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const supabase = serverDb();
   const { data: expenses, error } = await supabase
     .from("expenses")
-    .select("date, category, myr_amount, paid_by_id, paid_by:travelers!paid_by_id(name, color)")
+    .select("id, date, category, myr_amount, paid_by_id, paid_by:travelers!paid_by_id(name, color)")
     .eq("trip_id", tripId)
     .order("date");
 
