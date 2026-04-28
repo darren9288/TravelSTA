@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { getIdentity } from "@/lib/identity";
 import { Sparkles, ClipboardList } from "lucide-react";
 
 type SplitEntry = { traveler_id: string; amount: string };
@@ -51,7 +50,7 @@ export default function AddExpensePage() {
       setTrip(tripRes.error ? null : tripRes);
       const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
       setTravelers(all);
-      const me = getIdentity(id);
+      const me = tripRes.my_traveler_id ?? null;
       setMyId(me);
       const defaultPayer = me ?? (all[0]?.id ?? "");
       setPaidById(defaultPayer);

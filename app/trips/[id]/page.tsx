@@ -4,7 +4,6 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense } from "@/lib/supabase";
-import { getIdentity } from "@/lib/identity";
 import { PlusCircle, Banknote, BarChart2, Droplets, Settings2 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,7 +26,7 @@ export default function TripDashboard() {
     setTrip(tripRes);
     setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
-    setMyId(getIdentity(id));
+    setMyId(tripRes.my_traveler_id ?? null);
     setLoading(false);
   }, [id, router]);
 

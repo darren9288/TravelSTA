@@ -1,11 +1,26 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { getSessionUser } from "@/lib/supabase-server";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
-  const { data, error } = await serverDb().from("trips").select("*").eq("id", params.id).single();
+  const db = serverDb();
+  const { data, error } = await db.from("trips").select("*").eq("id", params.id).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 404 });
-  return NextResponse.json(data);
+
+  const user = await getSessionUser();
+  let my_traveler_id: string | null = null;
+  if (user) {
+    const { data: member } = await db
+      .from("trip_members")
+      .select("traveler_id")
+      .eq("trip_id", params.id)
+      .eq("user_id", user.id)
+      .single();
+    my_traveler_id = member?.traveler_id ?? null;
+  }
+
+  return NextResponse.json({ ...data, my_traveler_id });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

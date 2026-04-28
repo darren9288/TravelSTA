@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
-import { getIdentity } from "@/lib/identity";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -55,7 +54,7 @@ export default function PoolPage() {
     setPoolExpenses(Array.isArray(poolRes.expenses) ? poolRes.expenses : []);
     setBalances(poolRes.balances ?? {});
     setWalletOptions(walletRes.wallets ?? []);
-    const me = getIdentity(id);
+    const me = tripRes.my_traveler_id ?? null;
     setMyId(me);
     setContributorId(me ?? allTravelers.filter((t) => !t.is_pool)[0]?.id ?? "");
     setPoolId(poolList[0]?.id ?? "");
