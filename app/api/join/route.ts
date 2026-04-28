@@ -35,14 +35,32 @@ export async function POST(req: NextRequest) {
 
   const db = serverDb();
 
-  // Upsert: add user to trip_members as viewer (or update traveler_id if already a member)
-  const { error } = await db.from("trip_members").upsert({
-    trip_id,
-    user_id: user.id,
-    traveler_id: traveler_id ?? null,
-    role: "viewer",
-  }, { onConflict: "trip_id,user_id", ignoreDuplicates: false });
+  // Check if already a member (preserve existing role)
+  const { data: existing } = await db
+    .from("trip_members")
+    .select("role")
+    .eq("trip_id", trip_id)
+    .eq("user_id", user.id)
+    .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (existing) {
+    // Already a member — only update traveler_id, never downgrade role
+    const { error } = await db
+      .from("trip_members")
+      .update({ traveler_id: traveler_id ?? null })
+      .eq("trip_id", trip_id)
+      .eq("user_id", user.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  } else {
+    // New member — insert as viewer
+    const { error } = await db.from("trip_members").insert({
+      trip_id,
+      user_id: user.id,
+      traveler_id: traveler_id ?? null,
+      role: "viewer",
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
   return NextResponse.json({ success: true });
 }
