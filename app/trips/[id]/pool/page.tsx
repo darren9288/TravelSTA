@@ -105,22 +105,40 @@ export default function PoolPage() {
 
           {/* Pool balances */}
           <div className="flex flex-col gap-3">
-            {pools.map((p) => (
-              <div key={p.id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl px-5 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-semibold">{p.name}</p>
-                    <p className="text-xs text-slate-500">{p.pool_currency}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-2xl font-bold ${(balances[p.id] ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      RM {(balances[p.id] ?? 0).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-slate-600">remaining</p>
+            {pools.map((p) => {
+              const balanceMyr = balances[p.id] ?? 0;
+              const isForeign = p.pool_currency !== "MYR";
+              const rate = p.name.toLowerCase().includes("wise")
+                ? (trip?.wise_rate ?? 1)
+                : (trip?.cash_rate ?? 1);
+              const balanceForeign = balanceMyr * rate;
+              const positive = balanceMyr >= 0;
+              return (
+                <div key={p.id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-semibold">{p.name}</p>
+                      <p className="text-xs text-slate-500">{p.pool_currency}</p>
+                    </div>
+                    <div className="text-right">
+                      {isForeign ? (
+                        <>
+                          <p className={`text-2xl font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
+                            {p.pool_currency} {Math.round(balanceForeign).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-slate-500">RM {balanceMyr.toFixed(2)}</p>
+                        </>
+                      ) : (
+                        <p className={`text-2xl font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
+                          RM {balanceMyr.toFixed(2)}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-600">remaining</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {pools.length === 0 && !loading && (
               <p className="text-center text-slate-500 text-sm py-4">No pools set up for this trip.</p>
             )}
