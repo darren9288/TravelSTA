@@ -230,9 +230,9 @@ export default function WalletsPage() {
           })()}
 
           {/* Wallet cards + history panel */}
-          <div className={`flex gap-4 transition-all duration-300 ${selectedWallet ? "items-start" : ""}`}>
-            {/* Wallet list */}
-            <div className={`flex flex-col gap-3 transition-all duration-300 ${selectedWallet ? "w-2/5 min-w-0" : "w-full"}`}>
+          <div className={`flex gap-4 transition-all duration-300 ${selectedWallet ? "md:items-start" : ""}`}>
+            {/* Wallet list — hidden on mobile when history is open */}
+            <div className={`flex-col gap-3 transition-all duration-300 ${selectedWallet ? "hidden md:flex md:w-2/5 md:min-w-0" : "flex w-full"}`}>
               {loading ? (
                 [1, 2].map((i) => <div key={i} className="h-20 bg-slate-800 rounded-2xl animate-pulse" />)
               ) : wallets.length === 0 ? (
@@ -285,9 +285,9 @@ export default function WalletsPage() {
               )}
             </div>
 
-            {/* History panel */}
+            {/* History panel — full width on mobile, flex-1 on desktop */}
             {selectedWallet && selectedWalletObj && (
-              <div className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+              <div className="w-full md:flex-1 md:min-w-0 bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
                   <button onClick={() => setSelectedWallet(null)} className="text-slate-400 hover:text-white transition-colors">
                     <ArrowLeft size={16} />
@@ -328,7 +328,7 @@ export default function WalletsPage() {
                 })()}
 
                 {/* Events list */}
-                <div className="flex flex-col divide-y divide-slate-700/30 max-h-96 overflow-y-auto">
+                <div className="flex flex-col divide-y divide-slate-700/30 max-h-[60vh] overflow-y-auto">
                   {historyLoading ? (
                     <div className="py-6 text-center text-slate-500 text-xs">Loading...</div>
                   ) : history.length === 0 ? (
