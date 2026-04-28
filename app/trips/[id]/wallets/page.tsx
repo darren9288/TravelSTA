@@ -121,8 +121,8 @@ export default function WalletsPage() {
 
   function sortedEvents(events: WalletEvent[]) {
     const copy = [...events];
-    if (sort === "date-asc") copy.sort((a, b) => a.date.localeCompare(b.date));
-    else if (sort === "date-desc") copy.sort((a, b) => b.date.localeCompare(a.date));
+    if (sort === "date-asc") copy.sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
+    else if (sort === "date-desc") copy.sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at));
     else if (sort === "amount-desc") copy.sort((a, b) => b.amount - a.amount);
     else copy.sort((a, b) => a.amount - b.amount);
     return copy;
@@ -351,7 +351,12 @@ export default function WalletsPage() {
                                 {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
                                 <div className="flex-1 min-w-0">
                                   <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
-                                  <p className="text-xs text-slate-500 truncate">{e.description}{e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}</p>
+                                  <p className="text-xs text-slate-500 truncate">
+                                    {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
+                                     e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
+                                     e.description}
+                                    {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
+                                  </p>
                                 </div>
                                 <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
                                   {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
@@ -367,7 +372,13 @@ export default function WalletsPage() {
                         {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
                         <div className="flex-1 min-w-0">
                           <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
-                          <p className="text-xs text-slate-500 truncate">{fmtDate(e.date)} · {e.description}{e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}</p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {fmtDate(e.date)} ·{" "}
+                            {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
+                             e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
+                             e.description}
+                            {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
+                          </p>
                         </div>
                         <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
                           {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
