@@ -251,6 +251,16 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                   <span className={`text-xs font-medium ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
                     RM {Number(s.amount).toFixed(2)}
                   </span>
+                  {s.is_settled && !locked && (() => {
+                    const fromW = wallets.find((w) => w.id === s.from_wallet_id);
+                    const toW = wallets.find((w) => w.id === s.to_wallet_id);
+                    if (fromW || toW) return (
+                      <span className="text-xs text-slate-600" title={`${fromW?.name ?? "?"} → ${toW?.name ?? "?"}`}>
+                        💳
+                      </span>
+                    );
+                    return <span className="text-xs text-slate-700" title="Settled without wallet">cash</span>;
+                  })()}
                 </div>
               );
             })}

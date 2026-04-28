@@ -2,9 +2,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { Trip } from "@/lib/supabase";
+import { Trip, Traveler } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, CheckCheck, RefreshCw } from "lucide-react";
+import { ArrowRight, CheckCheck, RefreshCw, X } from "lucide-react";
+
+type WalletOption = { id: string; name: string; currency: string; traveler_id: string };
+type PickState = {
+  inst: PaymentInstruction;
+  fromWalletId: string;
+  toWalletId: string;
+};
 
 export default function SettlementPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,16 +19,19 @@ export default function SettlementPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [balances, setBalances] = useState<NetBalance[]>([]);
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
+  const [wallets, setWallets] = useState<WalletOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState<string | null>(null);
   const [apiError, setApiError] = useState("");
+  const [pickState, setPickState] = useState<PickState | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setApiError("");
-    const [tripRes, settleRes] = await Promise.all([
+    const [tripRes, settleRes, walletRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/settlement?trip_id=${id}&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
@@ -30,6 +40,7 @@ export default function SettlementPage() {
       setBalances(settleRes.balances ?? []);
       setInstructions(settleRes.instructions ?? []);
     }
+    setWallets(walletRes.wallets ?? []);
     setLoading(false);
   }, [id]);
 
@@ -41,12 +52,33 @@ export default function SettlementPage() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [load, router]);
 
-  async function markSettled(travelerId: string) {
+  function openPicker(inst: PaymentInstruction) {
+    const fromWallets = wallets.filter((w) => w.traveler_id === inst.from.id);
+    const toWallets = wallets.filter((w) => w.traveler_id === inst.to.id);
+    // If no wallets for either party, skip picker and settle immediately
+    if (!fromWallets.length && !toWallets.length) {
+      doMarkSettled(inst.from.id, undefined, undefined);
+      return;
+    }
+    setPickState({
+      inst,
+      fromWalletId: fromWallets[0]?.id ?? "",
+      toWalletId: toWallets[0]?.id ?? "",
+    });
+  }
+
+  async function doMarkSettled(travelerId: string, fromWalletId?: string, toWalletId?: string) {
+    setPickState(null);
     setSettling(travelerId);
     await fetch("/api/splits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip_id: id, traveler_id: travelerId }),
+      body: JSON.stringify({
+        trip_id: id,
+        traveler_id: travelerId,
+        from_wallet_id: fromWalletId ?? null,
+        to_wallet_id: toWalletId ?? null,
+      }),
     });
     await load();
     setSettling(null);
@@ -68,20 +100,71 @@ export default function SettlementPage() {
             </div>
           </div>
 
+          {/* Wallet picker modal */}
+          {pickState && (() => {
+            const fromWallets = wallets.filter((w) => w.traveler_id === pickState.inst.from.id);
+            const toWallets = wallets.filter((w) => w.traveler_id === pickState.inst.to.id);
+            return (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4" onClick={() => setPickState(null)}>
+                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-white">Record payment via wallet?</p>
+                    <button onClick={() => setPickState(null)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: pickState.inst.from.color }} />
+                    <span>{pickState.inst.from.name}</span>
+                    <ArrowRight size={14} className="text-amber-500" />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: pickState.inst.to.color }} />
+                    <span>{pickState.inst.to.name}</span>
+                    <span className="ml-auto font-bold text-amber-400">RM {pickState.inst.amount.toFixed(2)}</span>
+                  </div>
+                  {fromWallets.length > 0 && (
+                    <div><label className="text-xs text-slate-400 mb-1 block">{pickState.inst.from.name} pays from</label>
+                      <select value={pickState.fromWalletId}
+                        onChange={(e) => setPickState((p) => p ? { ...p, fromWalletId: e.target.value } : p)}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        <option value="">— no wallet —</option>
+                        {fromWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
+                      </select></div>
+                  )}
+                  {toWallets.length > 0 && (
+                    <div><label className="text-xs text-slate-400 mb-1 block">{pickState.inst.to.name} receives into</label>
+                      <select value={pickState.toWalletId}
+                        onChange={(e) => setPickState((p) => p ? { ...p, toWalletId: e.target.value } : p)}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        <option value="">— no wallet —</option>
+                        {toWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
+                      </select></div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => doMarkSettled(pickState.inst.from.id, pickState.fromWalletId || undefined, pickState.toWalletId || undefined)}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors">
+                      Paid with wallets
+                    </button>
+                    <button onClick={() => doMarkSettled(pickState.inst.from.id)}
+                      className="flex-1 py-2.5 border border-slate-600 text-slate-400 hover:text-white text-sm rounded-xl transition-colors">
+                      Paid without
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {apiError && (
             <div className="bg-red-900/30 border border-red-800/50 rounded-xl px-4 py-3">
               <p className="text-sm text-red-400 font-medium">API Error</p>
               <p className="text-xs text-red-300 mt-1">{apiError}</p>
-              <p className="text-xs text-slate-500 mt-1">Check the Dev tab for details.</p>
             </div>
           )}
+
           {loading ? (
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-slate-800 rounded-xl animate-pulse" />)}
             </div>
           ) : (
             <>
-              {/* Who pays who — shown first as it's most actionable */}
               <div>
                 <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Who Pays Who</h2>
                 {instructions.length === 0 ? (
@@ -101,11 +184,8 @@ export default function SettlementPage() {
                           <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
                         </div>
                         <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
-                        <button
-                          onClick={() => markSettled(inst.from.id)}
-                          disabled={settling === inst.from.id}
-                          className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 border border-emerald-700/50 hover:bg-emerald-600/40 disabled:opacity-50 text-emerald-400 text-xs rounded-lg transition-colors flex-shrink-0"
-                        >
+                        <button onClick={() => openPicker(inst)} disabled={settling === inst.from.id}
+                          className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 border border-emerald-700/50 hover:bg-emerald-600/40 disabled:opacity-50 text-emerald-400 text-xs rounded-lg transition-colors flex-shrink-0">
                           <CheckCheck size={12} />
                           {settling === inst.from.id ? "..." : "Paid"}
                         </button>
@@ -115,7 +195,6 @@ export default function SettlementPage() {
                 )}
               </div>
 
-              {/* Net balances */}
               <div>
                 <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Net Balance (unsettled)</h2>
                 <div className="flex flex-col gap-2">
@@ -127,7 +206,7 @@ export default function SettlementPage() {
                         <p className={`text-sm font-bold ${b.net > 0.005 ? "text-emerald-400" : b.net < -0.005 ? "text-red-400" : "text-slate-400"}`}>
                           {b.net > 0.005 ? "+" : ""}RM {b.net.toFixed(2)}
                         </p>
-                        <p className="text-xs text-slate-600">paid RM {b.paid.toFixed(2)} · still owes RM {b.owed.toFixed(2)}</p>
+                        <p className="text-xs text-slate-600">paid RM {b.paid.toFixed(2)} · owes RM {b.owed.toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
