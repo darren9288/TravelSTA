@@ -17,7 +17,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         // Username is stored as the part before @travelsta.app
-        const name = user.email?.replace("@travelsta.app", "") ?? null;
+        const name = user.email?.replace("@placeholder.com", "") ?? null;
         setUsername(name);
       }
     });

@@ -33,7 +33,7 @@ export default function SignupPage() {
 
     // Sign up with fake email pattern (no real email needed)
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: `${clean}@travelsta.app`,
+      email: `${clean}@placeholder.com`,
       password,
       options: { data: { username: clean } },
     });

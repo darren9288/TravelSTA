@@ -21,7 +21,7 @@ export default function LoginPage() {
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
-      email: `${username.trim().toLowerCase()}@travelsta.app`,
+      email: `${username.trim().toLowerCase()}@placeholder.com`,
       password,
     });
 
