@@ -121,6 +121,10 @@ export default function Nav({ tripId, tripName }: NavProps) {
               </Link>
             );
           })}
+          <button onClick={handleLogout}
+            className="flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium text-slate-500 hover:text-red-400 transition-colors min-w-[64px]">
+            <LogOut size={20} /> Sign Out
+          </button>
         </div>
       </nav>
     </>
