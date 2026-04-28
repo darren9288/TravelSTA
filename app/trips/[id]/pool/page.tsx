@@ -299,7 +299,7 @@ export default function PoolPage() {
                           </defs>
                           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => selectedPoolData.isForeign ? (v / 1000).toFixed(0) + "k" : v.toFixed(0)} />
-                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#10b981" }} formatter={(v: number) => [selectedPoolData.isForeign ? Math.round(v).toLocaleString() : `RM ${v.toFixed(2)}`, "Balance"]} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#10b981" }} formatter={(v) => { const n = Number(v ?? 0); return [selectedPoolData.isForeign ? Math.round(n).toLocaleString() : `RM ${n.toFixed(2)}`, "Balance"]; }} />
                           <Area type="monotone" dataKey="balance" stroke="#10b981" strokeWidth={2} fill="url(#poolGrad)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>

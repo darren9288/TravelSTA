@@ -319,7 +319,7 @@ export default function WalletsPage() {
                           </defs>
                           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => isForeign ? (v / 1000).toFixed(0) + "k" : v.toFixed(0)} />
-                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#6366f1" }} formatter={(v: number) => [isForeign ? Math.round(v).toLocaleString() : `RM ${v.toFixed(2)}`, "Balance"]} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#6366f1" }} formatter={(v) => { const n = Number(v ?? 0); return [isForeign ? Math.round(n).toLocaleString() : `RM ${n.toFixed(2)}`, "Balance"]; }} />
                           <Area type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={2} fill="url(#walletGrad)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>
