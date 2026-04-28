@@ -222,12 +222,12 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                   : "RM 0";
 
               return (
-                <div key={s.id} className="flex items-center gap-2">
+                <div key={s.id} className="flex items-start gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleSettle(s); }}
                     disabled={locked || toggling === s.id}
                     title={locked ? `Auto-settled (${lockReason})` : undefined}
-                    className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                    className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
                       locked
                         ? "bg-slate-600 border-slate-600 cursor-not-allowed"
                         : s.is_settled
@@ -241,26 +241,30 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                         : <span className="text-white text-xs leading-none">✓</span>
                     )}
                   </button>
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-                  <span className={`text-xs flex-1 ${(s.is_settled || locked) ? "text-slate-500 line-through" : "text-slate-300"}`}>
-                    {t.name}
-                  </span>
-                  {locked && (
-                    <span className="text-xs text-slate-600 italic">{lockReason}</span>
-                  )}
-                  <span className={`text-xs font-medium ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
+                  <div className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-xs ${(s.is_settled || locked) ? "text-slate-500 line-through" : "text-slate-300"}`}>
+                      {t.name}
+                    </span>
+                    {s.is_settled && !locked && (() => {
+                      const fromW = wallets.find((w) => w.id === s.from_wallet_id);
+                      const toW = wallets.find((w) => w.id === s.to_wallet_id);
+                      if (fromW || toW) return (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          💳 <span className="text-slate-400">{fromW?.name ?? "?"}</span>
+                          <span className="text-slate-600"> → </span>
+                          <span className="text-slate-400">{toW?.name ?? "?"}</span>
+                        </p>
+                      );
+                      return <p className="text-xs text-slate-600 mt-0.5">no wallet</p>;
+                    })()}
+                    {locked && (
+                      <p className="text-xs text-slate-600 italic mt-0.5">{lockReason}</p>
+                    )}
+                  </div>
+                  <span className={`text-xs font-medium flex-shrink-0 ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
                     RM {Number(s.amount).toFixed(2)}
                   </span>
-                  {s.is_settled && !locked && (() => {
-                    const fromW = wallets.find((w) => w.id === s.from_wallet_id);
-                    const toW = wallets.find((w) => w.id === s.to_wallet_id);
-                    if (fromW || toW) return (
-                      <span className="text-xs text-slate-600" title={`${fromW?.name ?? "?"} → ${toW?.name ?? "?"}`}>
-                        💳
-                      </span>
-                    );
-                    return <span className="text-xs text-slate-700" title="Settled without wallet">cash</span>;
-                  })()}
                 </div>
               );
             })}
