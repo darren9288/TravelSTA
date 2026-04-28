@@ -3,7 +3,14 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Shield, UserX } from "lucide-react";
+
+type Member = {
+  user_id: string;
+  role: "admin" | "editor" | "viewer";
+  traveler_id: string | null;
+  profiles: { username: string } | null;
+};
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,11 +33,16 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(TRAVELER_COLORS[0]);
 
+  // Members
+  const [members, setMembers] = useState<Member[]>([]);
+  const [myRole, setMyRole] = useState<string | null>(null);
+
   useEffect(() => {
     async function load() {
-      const [tripRes, travelerRes] = await Promise.all([
+      const [tripRes, travelerRes, membersRes] = await Promise.all([
         fetch(`/api/trips/${id}`).then((r) => r.json()),
         fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
+        fetch(`/api/members?trip_id=${id}`).then((r) => r.json()),
       ]);
       if (tripRes.error) return;
       setTrip(tripRes);
@@ -41,6 +53,10 @@ export default function SettingsPage() {
       setCashRate(String(tripRes.cash_rate));
       setWiseRate(String(tripRes.wise_rate));
       setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
+      if (!membersRes.error) {
+        setMembers(membersRes.members ?? []);
+        setMyRole(membersRes.my_role ?? null);
+      }
     }
     load();
   }, [id]);
@@ -76,6 +92,25 @@ export default function SettingsPage() {
       setTravelers((prev) => [...prev, ...(Array.isArray(data) ? data : [data])]);
       setNewName("");
     }
+  }
+
+  async function changeRole(user_id: string, role: string) {
+    await fetch("/api/members", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trip_id: id, user_id, role }),
+    });
+    setMembers((prev) => prev.map((m) => m.user_id === user_id ? { ...m, role: role as Member["role"] } : m));
+  }
+
+  async function removeMember(user_id: string) {
+    if (!confirm("Remove this member from the trip?")) return;
+    const res = await fetch("/api/members", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trip_id: id, user_id }),
+    });
+    if (res.ok) setMembers((prev) => prev.filter((m) => m.user_id !== user_id));
   }
 
   async function deleteTrip() {
@@ -137,6 +172,39 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-500">Share this with travelers to let them join</p>
             </div>
           </div>
+
+          {/* Members — admin only */}
+          {myRole === "admin" && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Shield size={14} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-white">Members</h2>
+              </div>
+              {members.map((m) => (
+                <div key={m.user_id} className="flex items-center gap-3">
+                  <span className="text-sm text-white flex-1 font-mono">
+                    {m.profiles?.username ?? "unknown"}
+                  </span>
+                  <select
+                    value={m.role}
+                    onChange={(e) => changeRole(m.user_id, e.target.value)}
+                    className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <button onClick={() => removeMember(m.user_id)}
+                    className="p-1.5 text-slate-500 hover:text-red-400 transition-colors">
+                    <UserX size={14} />
+                  </button>
+                </div>
+              ))}
+              {members.length === 0 && (
+                <p className="text-xs text-slate-500">No members yet.</p>
+              )}
+            </div>
+          )}
 
           {/* Travelers */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
