@@ -55,6 +55,7 @@ export type Expense = {
   myr_amount: number;
   notes: string | null;
   created_by_id: string | null;
+  wallet_id?: string | null;
   created_at: string;
   paid_by?: Traveler;
   splits?: ExpenseSplit[];

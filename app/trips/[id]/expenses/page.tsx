@@ -16,6 +16,7 @@ type EditState = {
   paid_by_id: string;
   payment_type: string;
   split_type: string;
+  wallet_id: string;
   splits: { traveler_id: string; amount: string }[];
 };
 
@@ -73,6 +74,7 @@ export default function ExpensesPage() {
       paid_by_id: expense.paid_by_id,
       payment_type: expense.payment_type,
       split_type: expense.split_type,
+      wallet_id: expense.wallet_id ?? "",
       splits: realTravelers.map((t) => {
         const existing = expense.splits?.find((s) => s.traveler_id === t.id);
         return { traveler_id: t.id, amount: existing ? String(existing.amount) : "" };
@@ -112,6 +114,7 @@ export default function ExpensesPage() {
           paid_by_id: editState.paid_by_id,
           payment_type: editState.payment_type,
           split_type: editState.split_type,
+          wallet_id: editState.wallet_id || null,
           splits: splitData,
         }),
       });
@@ -226,10 +229,24 @@ export default function ExpensesPage() {
             </div>
 
             <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
-              <select value={editState.paid_by_id} onChange={(e) => setEditState({ ...editState, paid_by_id: e.target.value })}
+              <select value={editState.paid_by_id} onChange={(e) => setEditState({ ...editState, paid_by_id: e.target.value, wallet_id: "" })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                 {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
               </select></div>
+
+            {(() => {
+              const payerWallets = wallets.filter((w) => w.traveler_id === editState.paid_by_id);
+              if (!payerWallets.length) return null;
+              return (
+                <div><label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
+                  <select value={editState.wallet_id} onChange={(e) => setEditState({ ...editState, wallet_id: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    <option value="">— no wallet —</option>
+                    {payerWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
+                  </select>
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
