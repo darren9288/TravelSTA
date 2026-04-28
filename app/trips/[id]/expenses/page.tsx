@@ -26,6 +26,7 @@ export default function ExpensesPage() {
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPaidBy, setFilterPaidBy] = useState("");
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -34,14 +35,16 @@ export default function ExpensesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [tripRes, travelerRes, expenseRes] = await Promise.all([
+    const [tripRes, travelerRes, expenseRes, walletRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/expenses?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
+    setWallets(walletRes.wallets ?? []);
     setLoading(false);
   }, [id]);
 
@@ -191,7 +194,7 @@ export default function ExpensesPage() {
                 <div className="flex flex-col gap-2">
                   {groups[date].map((e) => (
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
-                      onDelete={handleDelete} onEdit={openEdit} />
+                      wallets={wallets} onDelete={handleDelete} onEdit={openEdit} />
                   ))}
                 </div>
               </div>

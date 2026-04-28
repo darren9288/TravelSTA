@@ -3,10 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 
 export async function PUT(req: NextRequest) {
-  const { id, is_settled } = await req.json();
+  const { id, is_settled, from_wallet_id, to_wallet_id } = await req.json();
+  const update: Record<string, unknown> = { is_settled };
+  if (is_settled) {
+    update.from_wallet_id = from_wallet_id ?? null;
+    update.to_wallet_id = to_wallet_id ?? null;
+  } else {
+    // Unsettling — clear wallet links
+    update.from_wallet_id = null;
+    update.to_wallet_id = null;
+  }
   const { data, error } = await serverDb()
     .from("expense_splits")
-    .update({ is_settled })
+    .update(update)
     .eq("id", id)
     .select()
     .single();

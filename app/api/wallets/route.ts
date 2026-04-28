@@ -19,15 +19,27 @@ export async function GET(req: NextRequest) {
   const walletIds = (wallets ?? []).map((w) => w.id);
   if (!walletIds.length) return NextResponse.json({ wallets: [], balances: {} });
 
-  // Fetch top-ups, expenses, and pool topups linked to these wallets in parallel
-  const [{ data: topups }, { data: expenses }, { data: poolTopups }] = await Promise.all([
+  // Fetch trip for exchange rates (needed for foreign currency settlement conversion)
+  const { data: tripData } = await db.from("trips").select("cash_rate, wise_rate, foreign_currency").eq("id", trip_id).single();
+
+  // Fetch top-ups, expenses, pool topups, and split settlements in parallel
+  const [{ data: topups }, { data: expenses }, { data: poolTopups }, { data: settledFrom }, { data: settledTo }] = await Promise.all([
     db.from("wallet_topups").select("wallet_id, amount").in("wallet_id", walletIds),
     db.from("expenses").select("wallet_id, myr_amount, foreign_amount").in("wallet_id", walletIds),
     db.from("pool_topups").select("from_wallet_id, myr_amount, foreign_amount").in("from_wallet_id", walletIds),
+    db.from("expense_splits").select("from_wallet_id, amount").in("from_wallet_id", walletIds).eq("is_settled", true),
+    db.from("expense_splits").select("to_wallet_id, amount").in("to_wallet_id", walletIds).eq("is_settled", true),
   ]);
 
-  // Build balance map per wallet
-  const walletMap = Object.fromEntries((wallets ?? []).map((w) => [w.id, w.currency]));
+  // Build wallet metadata map
+  const walletMap = Object.fromEntries((wallets ?? []).map((w) => [w.id, { currency: w.currency, name: w.name.toLowerCase() }]));
+
+  function getRate(walletId: string): number {
+    const w = walletMap[walletId];
+    if (!w || w.currency === "MYR") return 1;
+    return w.name.includes("wise") ? (tripData?.wise_rate ?? 1) : (tripData?.cash_rate ?? 1);
+  }
+
   const balances: Record<string, number> = {};
 
   for (const t of topups ?? []) {
@@ -35,15 +47,27 @@ export async function GET(req: NextRequest) {
   }
   for (const e of expenses ?? []) {
     if (!e.wallet_id) continue;
-    const currency = walletMap[e.wallet_id];
+    const currency = walletMap[e.wallet_id]?.currency;
     const deduct = currency === "MYR" ? Number(e.myr_amount) : Number(e.foreign_amount ?? 0);
     balances[e.wallet_id] = (balances[e.wallet_id] ?? 0) - deduct;
   }
   for (const p of poolTopups ?? []) {
     if (!p.from_wallet_id) continue;
-    const currency = walletMap[p.from_wallet_id];
+    const currency = walletMap[p.from_wallet_id]?.currency;
     const deduct = currency === "MYR" ? Number(p.myr_amount) : Number(p.foreign_amount ?? 0);
     balances[p.from_wallet_id] = (balances[p.from_wallet_id] ?? 0) - deduct;
+  }
+  // Settlements paid OUT from wallet (deduct)
+  for (const s of settledFrom ?? []) {
+    if (!s.from_wallet_id) continue;
+    const rate = getRate(s.from_wallet_id);
+    balances[s.from_wallet_id] = (balances[s.from_wallet_id] ?? 0) - Number(s.amount) * rate;
+  }
+  // Settlements received INTO wallet (add)
+  for (const s of settledTo ?? []) {
+    if (!s.to_wallet_id) continue;
+    const rate = getRate(s.to_wallet_id);
+    balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + Number(s.amount) * rate;
   }
 
   return NextResponse.json({ wallets: wallets ?? [], balances });
