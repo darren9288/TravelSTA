@@ -23,16 +23,30 @@ export async function GET(req: NextRequest) {
 
   if (!me) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
-  // Fetch all members with their profiles
+  // Fetch all members
   const { data: members, error } = await db
     .from("trip_members")
-    .select("user_id, role, traveler_id, profiles(username)")
+    .select("user_id, role, traveler_id")
     .eq("trip_id", trip_id)
     .order("role");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ members, my_role: me.role });
+  // Fetch profiles for all member user_ids
+  const userIds = (members ?? []).map((m) => m.user_id);
+  const { data: profiles } = await db
+    .from("profiles")
+    .select("id, username")
+    .in("id", userIds);
+
+  const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.username]));
+
+  const result = (members ?? []).map((m) => ({
+    ...m,
+    profiles: { username: profileMap[m.user_id] ?? "unknown" },
+  }));
+
+  return NextResponse.json({ members: result, my_role: me.role });
 }
 
 // PATCH /api/members — change a member's role (admin only)
