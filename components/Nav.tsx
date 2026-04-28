@@ -78,14 +78,6 @@ export default function Nav({ tripId, tripName }: NavProps) {
     { href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" },
   ];
 
-  const mobileLinks = [
-    { href: `/trips/${tripId}`, icon: BarChart2, label: "Home" },
-    { href: `/trips/${tripId}/expenses`, icon: Receipt, label: "Expenses" },
-    { href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" },
-    { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
-    { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Stats" },
-  ];
-
   return (
     <>
       <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full w-56 bg-slate-900 border-r border-slate-800 p-4 gap-1 z-50 overflow-y-auto">
@@ -118,16 +110,18 @@ export default function Nav({ tripId, tripName }: NavProps) {
           </button>
         </div>
       </nav>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
-        {mobileLinks.map(({ href, icon: Icon, label }) => {
-          const active = path === href;
-          return (
-            <Link key={href} href={href}
-              className={`flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium transition-colors ${active ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}>
-              <Icon size={20} /> {label}
-            </Link>
-          );
-        })}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50">
+        <div className="flex overflow-x-auto scrollbar-none">
+          {links.map(({ href, icon: Icon, label }) => {
+            const active = path === href;
+            return (
+              <Link key={href} href={href}
+                className={`flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium transition-colors min-w-[64px] ${active ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}>
+                <Icon size={20} /> {label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </>
   );
