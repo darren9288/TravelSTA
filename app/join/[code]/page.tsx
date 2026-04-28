@@ -32,9 +32,15 @@ export default function JoinPage() {
     load();
   }, [code, router]);
 
-  function pick(travelerId: string) {
+  async function pick(travelerId: string) {
     if (!trip) return;
     setIdentity(trip.id, travelerId);
+    // Register this user as a trip member with their chosen traveler identity
+    await fetch("/api/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trip_id: trip.id, traveler_id: travelerId }),
+    });
     router.push(`/trips/${trip.id}`);
   }
 

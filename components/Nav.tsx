@@ -1,15 +1,36 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User } from "lucide-react";
+import { createClient } from "@/lib/supabase-browser";
+import { useEffect, useState } from "react";
 
 type NavProps = { tripId?: string; tripName?: string };
 
 export default function Nav({ tripId, tripName }: NavProps) {
   const path = usePathname();
+  const router = useRouter();
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        // Username is stored as the part before @travelsta.app
+        const name = user.email?.replace("@travelsta.app", "") ?? null;
+        setUsername(name);
+      }
+    });
+  }, []);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   if (!tripId) {
-    // Home nav
     return (
       <>
         <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full w-56 bg-slate-900 border-r border-slate-800 p-4 gap-1 z-50">
@@ -20,11 +41,26 @@ export default function Nav({ tripId, tripName }: NavProps) {
           <Link href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${path === "/" ? "bg-emerald-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
             <Home size={18} /> My Trips
           </Link>
+          <div className="mt-auto pt-4 border-t border-slate-800">
+            {username && (
+              <div className="flex items-center gap-2 px-3 py-2 mb-1">
+                <User size={14} className="text-slate-500" />
+                <span className="text-xs text-slate-400 font-mono">{username}</span>
+              </div>
+            )}
+            <button onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">
+              <LogOut size={18} /> Sign Out
+            </button>
+          </div>
         </nav>
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
           <Link href="/" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-emerald-400">
             <Home size={20} /> Trips
           </Link>
+          <button onClick={handleLogout} className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-slate-500">
+            <LogOut size={20} /> Sign Out
+          </button>
         </nav>
       </>
     );
@@ -68,6 +104,18 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </Link>
           );
         })}
+        <div className="mt-auto pt-4 border-t border-slate-800">
+          {username && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-1">
+              <User size={14} className="text-slate-500" />
+              <span className="text-xs text-slate-400 font-mono">{username}</span>
+            </div>
+          )}
+          <button onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">
+            <LogOut size={18} /> Sign Out
+          </button>
+        </div>
       </nav>
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
         {mobileLinks.map(({ href, icon: Icon, label }) => {
