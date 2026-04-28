@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     myr_amount: body.myr_amount,
     notes: body.notes ?? null,
     created_by_id: body.created_by_id ?? null,
+    wallet_id: body.wallet_id ?? null,
   }).select().single();
 
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });

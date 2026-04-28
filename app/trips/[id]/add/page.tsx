@@ -29,6 +29,8 @@ export default function AddExpensePage() {
   const [myrAmount, setMyrAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [splits, setSplits] = useState<SplitEntry[]>([]);
+  const [walletId, setWalletId] = useState<string>("");
+  const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
 
   // AI tab
   const [aiText, setAiText] = useState("");
@@ -41,9 +43,10 @@ export default function AddExpensePage() {
 
   useEffect(() => {
     async function load() {
-      const [tripRes, travelerRes] = await Promise.all([
+      const [tripRes, travelerRes, walletRes] = await Promise.all([
         fetch(`/api/trips/${id}`).then((r) => r.json()),
         fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
+        fetch(`/api/wallets?trip_id=${id}`).then((r) => r.json()),
       ]);
       setTrip(tripRes.error ? null : tripRes);
       const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
@@ -56,6 +59,7 @@ export default function AddExpensePage() {
       const real = all.filter((t) => !t.is_pool);
       setSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
       setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
+      setWalletOptions(walletRes.wallets ?? []);
     }
     load();
   }, [id]);
@@ -99,6 +103,7 @@ export default function AddExpensePage() {
           paid_by_id: paidById, payment_type: paymentType,
           foreign_amount: parseFloat(foreignAmount) || null,
           myr_amount: total, notes: notes || null, created_by_id: myId, splits: splitData,
+          wallet_id: walletId || null,
         }),
       });
       const data = await res.json();
@@ -210,10 +215,20 @@ export default function AddExpensePage() {
                   </select></div>
               </div>
               <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
-                <select value={paidById} onChange={(e) => setPaidById(e.target.value)}
+                <select value={paidById} onChange={(e) => { setPaidById(e.target.value); setWalletId(""); }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                 </select></div>
+              {walletOptions.filter((w) => w.traveler_id === paidById).length > 0 && (
+                <div><label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
+                  <select value={walletId} onChange={(e) => setWalletId(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    <option value="">— not linked to a wallet —</option>
+                    {walletOptions.filter((w) => w.traveler_id === paidById).map((w) => (
+                      <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
+                    ))}
+                  </select></div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
                   <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)}

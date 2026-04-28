@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     foreign_amount: body.foreign_amount ?? null,
     date: body.date,
     notes: body.notes ?? null,
+    from_wallet_id: body.from_wallet_id ?? null,
   }).select("*, pool:travelers!pool_id(*), contributed_by:travelers!contributed_by_id(*)").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

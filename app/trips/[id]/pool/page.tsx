@@ -27,14 +27,18 @@ export default function PoolPage() {
   const [topupDate, setTopupDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
+  const [fromWalletId, setFromWalletId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [tripRes, travelerRes, poolRes] = await Promise.all([
+    const [tripRes, travelerRes, poolRes, walletRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/pool?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
+    setWalletOptions(walletRes.wallets ?? []);
     setTrip(tripRes.error ? null : tripRes);
     const allTravelers: Traveler[] = Array.isArray(travelerRes) ? travelerRes : [];
     setTravelers(allTravelers.filter((t) => !t.is_pool));
@@ -70,6 +74,7 @@ export default function PoolPage() {
           myr_amount: parseFloat(myrAmount),
           foreign_amount: parseFloat(foreignAmount) || null,
           date: topupDate, notes: notes || null,
+          from_wallet_id: fromWalletId || null,
         }),
       });
       const data = await res.json();
@@ -154,10 +159,20 @@ export default function PoolPage() {
                   {pools.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select></div>
               <div><label className="text-xs text-slate-400 mb-1 block">Contributed By</label>
-                <select value={contributorId} onChange={(e) => setContributorId(e.target.value)}
+                <select value={contributorId} onChange={(e) => { setContributorId(e.target.value); setFromWalletId(""); }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select></div>
+              {walletOptions.filter((w) => w.traveler_id === contributorId).length > 0 && (
+                <div><label className="text-xs text-slate-400 mb-1 block">From Wallet</label>
+                  <select value={fromWalletId} onChange={(e) => setFromWalletId(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    <option value="">— not linked to a wallet —</option>
+                    {walletOptions.filter((w) => w.traveler_id === contributorId).map((w) => (
+                      <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
+                    ))}
+                  </select></div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
                   <input type="number" value={myrAmount} onChange={(e) => setMyrAmount(e.target.value)} placeholder="e.g. 200" step="0.01"
