@@ -53,12 +53,12 @@ export async function GET(req: NextRequest) {
     events.push({ id: e.id, type: "expense", date: e.date, amount: amt, sign: -1, description: e.category, category: e.category, notes: e.notes });
   }
   for (const s of splitsOut ?? []) {
-    const exp = (s as { expenses: { date: string; category: string; notes: string | null } }).expenses;
+    const exp = (s as unknown as { expenses: { date: string; category: string; notes: string | null } }).expenses;
     const amt = Number(s.amount) * rate;
     events.push({ id: s.id, type: "settlement_out", date: exp?.date ?? "", amount: amt, sign: -1, description: "Settlement paid", category: exp?.category, notes: exp?.notes });
   }
   for (const s of splitsIn ?? []) {
-    const exp = (s as { expenses: { date: string; category: string; notes: string | null } }).expenses;
+    const exp = (s as unknown as { expenses: { date: string; category: string; notes: string | null } }).expenses;
     const amt = Number(s.amount) * rate;
     events.push({ id: s.id, type: "settlement_in", date: exp?.date ?? "", amount: amt, sign: 1, description: "Settlement received", category: exp?.category, notes: exp?.notes });
   }
