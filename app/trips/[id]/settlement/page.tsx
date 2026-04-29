@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, SettlementPayment } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, CheckCheck, RefreshCw, X, Undo2 } from "lucide-react";
+import { ArrowRight, CheckCheck, RefreshCw, X, Undo2, CheckCircle2 } from "lucide-react";
 
 type WalletOption = { id: string; name: string; currency: string; traveler_id: string };
 type PickState = {
@@ -25,6 +25,7 @@ export default function SettlementPage() {
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState<string | null>(null);
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
   const [apiError, setApiError] = useState("");
   const [pickState, setPickState] = useState<PickState | null>(null);
 
@@ -111,6 +112,18 @@ export default function SettlementPage() {
     }
     await load();
     setUndoing(null);
+  }
+
+  async function markAllSettled() {
+    setMarkingAll(true);
+    setApiError("");
+    const res = await fetch(`/api/trips/${id}/settle-all`, { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json();
+      setApiError(d.error ?? "Failed to mark all settled");
+    }
+    await load();
+    setMarkingAll(false);
   }
 
   function travelerName(tid: string) {
@@ -206,9 +219,17 @@ export default function SettlementPage() {
               <div>
                 <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Who Pays Who</h2>
                 {instructions.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 text-sm">
-                    <p className="text-3xl mb-2">🎉</p>
-                    Everyone is settled up!
+                  <div className="text-center py-8 text-slate-500 text-sm flex flex-col items-center gap-3">
+                    <p className="text-3xl">🎉</p>
+                    <p>Everyone is settled up!</p>
+                    <button
+                      onClick={markAllSettled}
+                      disabled={markingAll}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 border border-emerald-700/50 hover:bg-emerald-600/40 disabled:opacity-50 text-emerald-400 text-xs font-medium rounded-xl transition-colors"
+                    >
+                      <CheckCircle2 size={14} />
+                      {markingAll ? "Marking…" : "Mark all expense splits as settled"}
+                    </button>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
