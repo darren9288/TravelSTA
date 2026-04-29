@@ -263,12 +263,18 @@ export default function ExpensesPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-slate-400 mb-1 block">{trip?.foreign_currency} Amount</label>
+                <input type="number" value={editState.foreign_amount} step="1"
+                  onChange={(e) => {
+                    const fv = e.target.value;
+                    const rate = editState.payment_type === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                    const myr = fv && parseFloat(fv) > 0 ? (parseFloat(fv) / rate).toFixed(2) : editState.myr_amount;
+                    setEditState({ ...editState, foreign_amount: fv, myr_amount: myr });
+                  }}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
                 <input type="number" value={editState.myr_amount} onChange={(e) => setEditState({ ...editState, myr_amount: e.target.value })} step="0.01"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
-              <div><label className="text-xs text-slate-400 mb-1 block">{trip?.foreign_currency} Amount</label>
-                <input type="number" value={editState.foreign_amount} onChange={(e) => setEditState({ ...editState, foreign_amount: e.target.value })} step="1"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
             </div>
 
             {editState.split_type === "individual" && (

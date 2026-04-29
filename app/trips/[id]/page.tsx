@@ -16,16 +16,20 @@ export default function TripDashboard() {
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
 
+  const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
+
   const load = useCallback(async () => {
-    const [tripRes, travelerRes, expenseRes] = await Promise.all([
+    const [tripRes, travelerRes, expenseRes, walletRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/expenses?trip_id=${id}&limit=5`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     if (tripRes.error) { router.push("/"); return; }
     setTrip(tripRes);
     setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
+    setWallets(walletRes.wallets ?? []);
     setMyId(tripRes.my_traveler_id ?? null);
     setLoading(false);
   }, [id, router]);
@@ -155,7 +159,7 @@ export default function TripDashboard() {
             ) : (
               <div className="flex flex-col gap-2">
                 {expenses.map((e) => (
-                  <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip.foreign_currency} />
+                  <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip.foreign_currency} wallets={wallets} />
                 ))}
               </div>
             )}
