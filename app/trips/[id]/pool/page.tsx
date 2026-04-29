@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
-import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type SortKey = "date-asc" | "date-desc" | "amount-desc" | "amount-asc";
+type ContribEntry = { amount: string; walletId: string };
+type EditTopup = { id: string; myrAmount: string; foreignAmount: string; date: string; notes: string; saving: boolean };
 
 export default function PoolPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,21 +23,21 @@ export default function PoolPage() {
   const [error, setError] = useState("");
   const [myId, setMyId] = useState<string | null>(null);
   const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
-  const [fromWalletId, setFromWalletId] = useState("");
 
   // Selected pool for history
   const [selectedPool, setSelectedPool] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("date-asc");
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
-  // Form
-  const [poolId, setPoolId] = useState("");
-  const [contributorId, setContributorId] = useState("");
-  const [myrAmount, setMyrAmount] = useState("");
-  const [foreignAmount, setForeignAmount] = useState("");
-  const [topupDate, setTopupDate] = useState(new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState("");
+  // Multi-traveler top-up form
   const [showForm, setShowForm] = useState(false);
+  const [poolId, setPoolId] = useState("");
+  const [topupDate, setTopupDate] = useState(new Date().toISOString().slice(0, 10));
+  const [topupNotes, setTopupNotes] = useState("");
+  const [contributions, setContributions] = useState<Record<string, ContribEntry>>({});
+
+  // Edit top-up
+  const [editTopup, setEditTopup] = useState<EditTopup | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,10 +58,11 @@ export default function PoolPage() {
     setWalletOptions(walletRes.wallets ?? []);
     const me = tripRes.my_traveler_id ?? null;
     setMyId(me);
-    setContributorId(me ?? allTravelers.filter((t) => !t.is_pool)[0]?.id ?? "");
+    const realTravelers = allTravelers.filter((t: Traveler) => !t.is_pool);
+    setContributions(Object.fromEntries(realTravelers.map((t: Traveler) => [t.id, { amount: "", walletId: "" }])));
     setPoolId(poolList[0]?.id ?? "");
     setLoading(false);
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -69,43 +72,65 @@ export default function PoolPage() {
   }, [load]);
 
   async function handleTopup() {
-    if (!myrAmount || !poolId || !contributorId) { setError("Fill in all fields."); return; }
+    const entries = travelers.filter((t) => parseFloat(contributions[t.id]?.amount) > 0);
+    if (!entries.length || !poolId) { setError("Enter at least one amount."); return; }
     setSaving(true); setError("");
     try {
-      const res = await fetch("/api/pool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trip_id: id, pool_id: poolId, contributed_by_id: contributorId,
-          myr_amount: parseFloat(myrAmount),
-          foreign_amount: parseFloat(foreignAmount) || null,
-          date: topupDate, notes: notes || null,
-          from_wallet_id: fromWalletId || null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMyrAmount(""); setForeignAmount(""); setNotes(""); setShowForm(false);
+      await Promise.all(entries.map((t) =>
+        fetch("/api/pool", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trip_id: id, pool_id: poolId, contributed_by_id: t.id,
+            myr_amount: parseFloat(contributions[t.id].amount),
+            foreign_amount: null,
+            date: topupDate, notes: topupNotes || null,
+            from_wallet_id: contributions[t.id].walletId || null,
+          }),
+        })
+      ));
+      setContributions(Object.fromEntries(travelers.map((t) => [t.id, { amount: "", walletId: "" }])));
+      setTopupNotes(""); setShowForm(false);
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setSaving(false); }
   }
 
+  async function saveEditTopup() {
+    if (!editTopup) return;
+    setEditTopup((p) => p ? { ...p, saving: true } : p);
+    const res = await fetch("/api/pool", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editTopup.id,
+        myr_amount: parseFloat(editTopup.myrAmount) || 0,
+        foreign_amount: parseFloat(editTopup.foreignAmount) || null,
+        date: editTopup.date,
+        notes: editTopup.notes || null,
+      }),
+    });
+    if (res.ok) { setEditTopup(null); await load(); }
+    else { setEditTopup((p) => p ? { ...p, saving: false } : p); }
+  }
+
   // Build pool history events for a given pool
   function buildPoolHistory(poolId: string) {
-    type Event = { id: string; date: string; amount: number; sign: 1 | -1; label: string; sub: string; isForeign: boolean; foreignAmt?: number };
+    type Event = { id: string; date: string; amount: number; sign: 1 | -1; label: string; sub: string; isForeign: boolean; isTopup: boolean };
     const pool = pools.find((p) => p.id === poolId);
     const isForeign = pool?.pool_currency !== "MYR";
     const rate = pool?.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
 
     const events: Event[] = [];
     for (const t of topups.filter((t) => t.pool_id === poolId)) {
-      const amt = isForeign ? Number(t.foreign_amount ?? 0) : Number(t.myr_amount);
-      events.push({ id: t.id, date: t.date, amount: amt, sign: 1, label: "Top-up", sub: t.notes ?? "", isForeign, foreignAmt: Number(t.foreign_amount ?? 0) });
+      // Bug fix: use myr_amount * rate as fallback when foreign_amount is null
+      const amt = isForeign ? Number(t.foreign_amount ?? (Number(t.myr_amount) * rate)) : Number(t.myr_amount);
+      const contributor = (t as unknown as { contributed_by?: { name: string } }).contributed_by;
+      events.push({ id: t.id, date: t.date, amount: amt, sign: 1, label: "Top-up", sub: contributor?.name ?? "", isForeign, isTopup: true });
     }
     for (const e of poolExpenses.filter((e) => e.paid_by_id === poolId)) {
-      const amt = isForeign ? Number(e.foreign_amount ?? Number(e.myr_amount) * rate) : Number(e.myr_amount);
-      events.push({ id: e.id, date: e.date, amount: amt, sign: -1, label: e.category, sub: e.notes ?? "", isForeign, foreignAmt: Number(e.foreign_amount ?? 0) });
+      const amt = isForeign ? Number(e.foreign_amount ?? (Number(e.myr_amount) * rate)) : Number(e.myr_amount);
+      events.push({ id: e.id, date: e.date, amount: amt, sign: -1, label: e.category, sub: e.notes ?? "", isForeign, isTopup: false });
     }
     return { events, isForeign, pool, rate };
   }
@@ -144,8 +169,64 @@ export default function PoolPage() {
     return new Date(d + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
   }
 
+  function openEdit(eventId: string) {
+    const t = topups.find((t) => t.id === eventId);
+    if (!t) return;
+    setEditTopup({ id: t.id, myrAmount: String(t.myr_amount), foreignAmount: t.foreign_amount ? String(t.foreign_amount) : "", date: t.date, notes: t.notes ?? "", saving: false });
+  }
+
   const selectedPoolData = selectedPool ? buildPoolHistory(selectedPool) : null;
   const selectedPoolObj = selectedPool ? pools.find((p) => p.id === selectedPool) : null;
+  const totalContrib = travelers.reduce((s, t) => s + (parseFloat(contributions[t.id]?.amount) || 0), 0);
+
+  function renderEvent(e: ReturnType<typeof buildPoolHistory>["events"][0], showDate = false) {
+    const isEditing = editTopup?.id === e.id;
+    if (isEditing && editTopup) {
+      return (
+        <div key={e.id} className="px-4 py-2.5 bg-slate-700/40 flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="text-xs text-slate-500 mb-0.5 block">MYR Amount</label>
+              <input type="number" value={editTopup.myrAmount} step="0.01"
+                onChange={(ev) => setEditTopup((p) => p ? { ...p, myrAmount: ev.target.value } : p)}
+                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" /></div>
+            <div><label className="text-xs text-slate-500 mb-0.5 block">Date</label>
+              <input type="date" value={editTopup.date}
+                onChange={(ev) => setEditTopup((p) => p ? { ...p, date: ev.target.value } : p)}
+                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+          </div>
+          <input value={editTopup.notes} placeholder="Notes (optional)"
+            onChange={(ev) => setEditTopup((p) => p ? { ...p, notes: ev.target.value } : p)}
+            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500" />
+          <div className="flex gap-2">
+            <button onClick={saveEditTopup} disabled={editTopup.saving}
+              className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded transition-colors disabled:opacity-50">
+              <Check size={11} /> {editTopup.saving ? "Saving..." : "Save"}
+            </button>
+            <button onClick={() => setEditTopup(null)} className="flex items-center gap-1 px-3 py-1 border border-slate-600 text-slate-400 text-xs rounded hover:text-white transition-colors">
+              <X size={11} /> Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 group">
+        {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-white font-medium">{e.label}</p>
+          <p className="text-xs text-slate-500 truncate">{showDate ? `${fmtDate(e.date)} · ` : ""}{e.sub || "—"}</p>
+        </div>
+        <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
+          {e.sign === 1 ? "+" : "-"}{selectedPoolData?.isForeign ? Math.round(e.amount).toLocaleString() : `RM ${e.amount.toFixed(2)}`}
+        </span>
+        {e.isTopup && (
+          <button onClick={() => openEdit(e.id)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-amber-400 transition-all flex-shrink-0">
+            <Pencil size={11} />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -166,52 +247,67 @@ export default function PoolPage() {
             </div>
           </div>
 
-          {/* Top-up form */}
+          {/* Multi-traveler top-up form */}
           {showForm && (
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-white">Add Top-Up</h2>
-              <div><label className="text-xs text-slate-400 mb-1 block">Pool</label>
-                <select value={poolId} onChange={(e) => setPoolId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                  {pools.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select></div>
-              <div><label className="text-xs text-slate-400 mb-1 block">Contributed By</label>
-                <select value={contributorId} onChange={(e) => { setContributorId(e.target.value); setFromWalletId(""); }}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                  {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select></div>
-              {walletOptions.filter((w) => w.traveler_id === contributorId).length > 0 && (
-                <div><label className="text-xs text-slate-400 mb-1 block">From Wallet</label>
-                  <select value={fromWalletId} onChange={(e) => setFromWalletId(e.target.value)}
+              <h2 className="text-sm font-semibold text-white">Pool Top-Up</h2>
+
+              {pools.length > 1 && (
+                <div><label className="text-xs text-slate-400 mb-1 block">Pool</label>
+                  <select value={poolId} onChange={(e) => setPoolId(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                    <option value="">— not linked to a wallet —</option>
-                    {walletOptions.filter((w) => w.traveler_id === contributorId).map((w) => (
-                      <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
-                    ))}
+                    {pools.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select></div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
-                  <input type="number" value={myrAmount} onChange={(e) => setMyrAmount(e.target.value)} placeholder="e.g. 200" step="0.01"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">{trip?.foreign_currency} Amount</label>
-                  <input type="number" value={foreignAmount} onChange={(e) => setForeignAmount(e.target.value)} placeholder="Optional" step="1"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
-              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
                   <input type="date" value={topupDate} onChange={(e) => setTopupDate(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Notes</label>
-                  <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional"
+                <div><label className="text-xs text-slate-400 mb-1 block">Notes (shared)</label>
+                  <input value={topupNotes} onChange={(e) => setTopupNotes(e.target.value)} placeholder="Optional"
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               </div>
+
+              {/* Per-traveler contributions */}
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-3 gap-2 px-1">
+                  <span className="text-xs text-slate-500">Traveler</span>
+                  <span className="text-xs text-slate-500">Amount (RM)</span>
+                  <span className="text-xs text-slate-500">From Wallet</span>
+                </div>
+                {travelers.map((t) => {
+                  const c = contributions[t.id] ?? { amount: "", walletId: "" };
+                  const tWallets = walletOptions.filter((w) => w.traveler_id === t.id);
+                  return (
+                    <div key={t.id} className="grid grid-cols-3 gap-2 items-center">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="text-xs text-slate-300 truncate">{t.name}</span>
+                      </div>
+                      <input type="number" value={c.amount} placeholder="0" step="0.01" min="0"
+                        onChange={(e) => setContributions((prev) => ({ ...prev, [t.id]: { ...c, amount: e.target.value } }))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                      <select value={c.walletId}
+                        onChange={(e) => setContributions((prev) => ({ ...prev, [t.id]: { ...c, walletId: e.target.value } }))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                        <option value="">— no wallet —</option>
+                        {tWallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+                {totalContrib > 0 && (
+                  <p className="text-xs text-slate-500 text-right">Total: <span className="text-white font-medium">RM {totalContrib.toFixed(2)}</span></p>
+                )}
+              </div>
+
               {error && <p className="text-sm text-red-400">{error}</p>}
               <div className="flex gap-2">
-                <button onClick={() => setShowForm(false)} className="flex-1 py-2 border border-slate-600 text-slate-400 text-sm rounded-xl hover:text-white transition-colors">Cancel</button>
-                <button onClick={handleTopup} disabled={saving}
+                <button onClick={() => { setShowForm(false); setError(""); }} className="flex-1 py-2 border border-slate-600 text-slate-400 text-sm rounded-xl hover:text-white transition-colors">Cancel</button>
+                <button onClick={handleTopup} disabled={saving || totalContrib === 0}
                   className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
-                  {saving ? "Saving..." : "Add Top-Up"}
+                  {saving ? "Saving..." : `Add Top-Up${totalContrib > 0 ? ` (RM ${totalContrib.toFixed(2)})` : ""}`}
                 </button>
               </div>
             </div>
@@ -256,20 +352,17 @@ export default function PoolPage() {
                         <p className="text-xs text-slate-600">remaining</p>
                       </div>
                     </div>
-                    {!selectedPool && (
-                      <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>
-                    )}
+                    {!selectedPool && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}
                   </div>
                 );
               })}
             </div>
 
-            {/* History panel — full width on mobile, flex-1 on desktop */}
+            {/* History panel */}
             {selectedPool && selectedPoolData && (
               <div className="w-full md:flex-1 md:min-w-0 bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
-                {/* Header */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
-                  <button onClick={() => setSelectedPool(null)} className="text-slate-400 hover:text-white transition-colors">
+                  <button onClick={() => { setSelectedPool(null); setEditTopup(null); }} className="text-slate-400 hover:text-white transition-colors">
                     <ArrowLeft size={16} />
                   </button>
                   <span className="text-sm font-semibold text-white flex-1">{selectedPoolObj?.name} History</span>
@@ -282,7 +375,6 @@ export default function PoolPage() {
                   </select>
                 </div>
 
-                {/* Chart */}
                 {selectedPoolData.events.length > 0 && (() => {
                   const chartData = buildChartData(selectedPoolData.events);
                   return (
@@ -306,7 +398,6 @@ export default function PoolPage() {
                   );
                 })()}
 
-                {/* Date-grouped events */}
                 <div className="flex flex-col divide-y divide-slate-700/30 max-h-[60vh] overflow-y-auto">
                   {selectedPoolData.events.length === 0 ? (
                     <p className="text-center py-6 text-slate-600 text-sm">No history yet</p>
@@ -323,39 +414,12 @@ export default function PoolPage() {
                               {fmtDate(date)}
                               {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                             </button>
-                            {!collapsed && evts.map((e) => (
-                              <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                                {e.sign === 1
-                                  ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" />
-                                  : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-white font-medium">{e.label}</p>
-                                  {e.sub && <p className="text-xs text-slate-500 truncate">{e.sub}</p>}
-                                </div>
-                                <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                                  {e.sign === 1 ? "+" : "-"}{selectedPoolData.isForeign ? Math.round(e.amount).toLocaleString() : `RM ${e.amount.toFixed(2)}`}
-                                </span>
-                              </div>
-                            ))}
+                            {!collapsed && evts.map((e) => renderEvent(e))}
                           </div>
                         );
                       });
                     }
-                    // Non-date sort: flat list
-                    return sorted.map((e) => (
-                      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                        {e.sign === 1
-                          ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" />
-                          : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-white font-medium">{e.label}</p>
-                          <p className="text-xs text-slate-500">{fmtDate(e.date)}{e.sub ? ` · ${e.sub}` : ""}</p>
-                        </div>
-                        <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                          {e.sign === 1 ? "+" : "-"}{selectedPoolData.isForeign ? Math.round(e.amount).toLocaleString() : `RM ${e.amount.toFixed(2)}`}
-                        </span>
-                      </div>
-                    ));
+                    return sorted.map((e) => renderEvent(e, true));
                   })()}
                 </div>
               </div>

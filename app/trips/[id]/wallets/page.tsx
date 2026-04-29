@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler } from "@/lib/supabase";
-import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet } from "lucide-react";
+import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { WalletEvent } from "@/app/api/wallet-history/route";
 
@@ -23,7 +23,13 @@ export default function WalletsPage() {
   const [newTravelerId, setNewTravelerId] = useState("");
   const [newName, setNewName] = useState("");
   const [newCurrency, setNewCurrency] = useState("MYR");
+  const [newInitialAmount, setNewInitialAmount] = useState("");
+  const [newInitialDate, setNewInitialDate] = useState(new Date().toISOString().slice(0, 10));
   const [creating, setCreating] = useState(false);
+
+  type EditTopup = { id: string; amount: string; date: string; notes: string };
+  const [editTopup, setEditTopup] = useState<EditTopup | null>(null);
+  const [savingTopup, setSavingTopup] = useState(false);
 
   const [topupWalletId, setTopupWalletId] = useState<string | null>(null);
   const [topupAmount, setTopupAmount] = useState("");
@@ -79,9 +85,34 @@ export default function WalletsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trip_id: id, traveler_id: newTravelerId, name: newName.trim(), currency: newCurrency }),
     });
-    if (res.ok) { setNewName(""); setShowCreate(false); await load(); }
-    else { const d = await res.json(); setError(d.error); }
+    if (res.ok) {
+      const wallet = await res.json();
+      if (newInitialAmount && parseFloat(newInitialAmount) > 0) {
+        await fetch("/api/wallet-topups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wallet_id: wallet.id, trip_id: id, amount: parseFloat(newInitialAmount), date: newInitialDate, notes: null }),
+        });
+      }
+      setNewName(""); setNewInitialAmount(""); setShowCreate(false); await load();
+    } else { const d = await res.json(); setError(d.error); }
     setCreating(false);
+  }
+
+  async function saveEditTopup() {
+    if (!editTopup || !editTopup.amount) return;
+    setSavingTopup(true);
+    const res = await fetch("/api/wallet-topups", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editTopup.id, amount: parseFloat(editTopup.amount), date: editTopup.date, notes: editTopup.notes || null }),
+    });
+    if (res.ok) {
+      setEditTopup(null);
+      await load();
+      if (selectedWallet) await loadHistory(selectedWallet);
+    }
+    setSavingTopup(false);
   }
 
   async function deleteWallet(walletId: string) {
@@ -187,6 +218,14 @@ export default function WalletsPage() {
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                     {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Initial Top-up ({newCurrency}) <span className="text-slate-600">optional</span></label>
+                  <input type="number" value={newInitialAmount} onChange={(e) => setNewInitialAmount(e.target.value)} placeholder="0.00" step="0.01"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Top-up Date</label>
+                  <input type="date" value={newInitialDate} onChange={(e) => setNewInitialDate(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
               </div>
               {error && <p className="text-sm text-red-400">{error}</p>}
               <div className="flex gap-2">
@@ -347,20 +386,45 @@ export default function WalletsPage() {
                               {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                             </button>
                             {!collapsed && evts.map((e) => (
-                              <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                                {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
-                                <div className="flex-1 min-w-0">
-                                  <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
-                                  <p className="text-xs text-slate-500 truncate">
-                                    {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
-                                     e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
-                                     e.description}
-                                    {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
-                                  </p>
-                                </div>
-                                <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                                  {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
-                                </span>
+                              <div key={e.id} className="px-4 py-2.5 border-b border-slate-700/20 last:border-0">
+                                {editTopup?.id === e.id ? (
+                                  <div className="flex flex-col gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input type="number" value={editTopup.amount} onChange={(ev) => setEditTopup({ ...editTopup, amount: ev.target.value })} step="0.01"
+                                        className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                                      <input type="date" value={editTopup.date} onChange={(ev) => setEditTopup({ ...editTopup, date: ev.target.value })}
+                                        className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
+                                    </div>
+                                    <input value={editTopup.notes} onChange={(ev) => setEditTopup({ ...editTopup, notes: ev.target.value })} placeholder="Notes (optional)"
+                                      className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                                    <div className="flex gap-2">
+                                      <button onClick={() => setEditTopup(null)} className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 border border-slate-600 rounded-lg hover:text-white transition-colors"><X size={11} /> Cancel</button>
+                                      <button onClick={saveEditTopup} disabled={savingTopup} className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-50 transition-colors"><Check size={11} /> {savingTopup ? "Saving..." : "Save"}</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-3">
+                                    {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
+                                      <p className="text-xs text-slate-500 truncate">
+                                        {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
+                                         e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
+                                         e.description}
+                                        {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
+                                      </p>
+                                    </div>
+                                    <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
+                                      {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
+                                    </span>
+                                    {e.type === "topup" && (
+                                      <button onClick={() => setEditTopup({ id: e.id, amount: String(e.amount), date: e.date, notes: e.notes ?? "" })}
+                                        className="p-1 text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0">
+                                        <Pencil size={11} />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -368,21 +432,46 @@ export default function WalletsPage() {
                       });
                     }
                     return sorted.map((e) => (
-                      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                        {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
-                          <p className="text-xs text-slate-500 truncate">
-                            {fmtDate(e.date)} ·{" "}
-                            {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
-                             e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
-                             e.description}
-                            {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
-                          </p>
-                        </div>
-                        <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                          {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
-                        </span>
+                      <div key={e.id} className="px-4 py-2.5 border-b border-slate-700/20 last:border-0">
+                        {editTopup?.id === e.id ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input type="number" value={editTopup.amount} onChange={(ev) => setEditTopup({ ...editTopup, amount: ev.target.value })} step="0.01"
+                                className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                              <input type="date" value={editTopup.date} onChange={(ev) => setEditTopup({ ...editTopup, date: ev.target.value })}
+                                className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
+                            </div>
+                            <input value={editTopup.notes} onChange={(ev) => setEditTopup({ ...editTopup, notes: ev.target.value })} placeholder="Notes (optional)"
+                              className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                            <div className="flex gap-2">
+                              <button onClick={() => setEditTopup(null)} className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 border border-slate-600 rounded-lg hover:text-white transition-colors"><X size={11} /> Cancel</button>
+                              <button onClick={saveEditTopup} disabled={savingTopup} className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-50 transition-colors"><Check size={11} /> {savingTopup ? "Saving..." : "Save"}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            {e.sign === 1 ? <TrendingUp size={12} className="text-emerald-400 flex-shrink-0" /> : <TrendingDown size={12} className="text-red-400 flex-shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-medium ${typeColor[e.type]}`}>{typeLabel[e.type]}</p>
+                              <p className="text-xs text-slate-500 truncate">
+                                {fmtDate(e.date)} ·{" "}
+                                {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
+                                 e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
+                                 e.description}
+                                {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
+                              </p>
+                            </div>
+                            <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
+                              {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
+                            </span>
+                            {e.type === "topup" && (
+                              <button onClick={() => setEditTopup({ id: e.id, amount: String(e.amount), date: e.date, notes: e.notes ?? "" })}
+                                className="p-1 text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0">
+                                <Pencil size={11} />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ));
                   })()}

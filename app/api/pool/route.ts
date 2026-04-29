@@ -52,6 +52,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data, { status: 201 });
 }
 
+export async function PUT(req: NextRequest) {
+  const { id, myr_amount, foreign_amount, date, notes } = await req.json();
+  const { data, error } = await serverDb().from("pool_topups")
+    .update({ myr_amount, foreign_amount: foreign_amount ?? null, date, notes: notes ?? null })
+    .eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
 export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   const { error } = await serverDb().from("pool_topups").delete().eq("id", id);
