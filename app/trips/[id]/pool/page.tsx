@@ -39,6 +39,12 @@ export default function PoolPage() {
   // Edit top-up
   const [editTopup, setEditTopup] = useState<EditTopup | null>(null);
 
+  // Create new pool wallet
+  const [showCreatePool, setShowCreatePool] = useState(false);
+  const [newPoolName, setNewPoolName] = useState("");
+  const [newPoolCurrency, setNewPoolCurrency] = useState("MYR");
+  const [creatingPool, setCreatingPool] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     const [tripRes, travelerRes, poolRes, walletRes] = await Promise.all([
@@ -61,6 +67,7 @@ export default function PoolPage() {
     const realTravelers = allTravelers.filter((t: Traveler) => !t.is_pool);
     setContributions(Object.fromEntries(realTravelers.map((t: Traveler) => [t.id, { amount: "", walletId: "" }])));
     setPoolId(poolList[0]?.id ?? "");
+    setNewPoolCurrency(tripRes.foreign_currency ?? "MYR");
     setLoading(false);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -112,6 +119,21 @@ export default function PoolPage() {
     });
     if (res.ok) { setEditTopup(null); await load(); }
     else { setEditTopup((p) => p ? { ...p, saving: false } : p); }
+  }
+
+  async function createPool() {
+    if (!newPoolName.trim()) return;
+    setCreatingPool(true); setError("");
+    const res = await fetch("/api/travelers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trip_id: id, name: newPoolName.trim(), color: "#10b981", is_pool: true, pool_currency: newPoolCurrency }),
+    });
+    if (res.ok) {
+      setNewPoolName(""); setShowCreatePool(false);
+      await load();
+    } else { const d = await res.json(); setError(d.error); }
+    setCreatingPool(false);
   }
 
   // Build pool history events for a given pool
@@ -217,7 +239,7 @@ export default function PoolPage() {
           <p className="text-xs text-slate-500 truncate">{showDate ? `${fmtDate(e.date)} · ` : ""}{e.sub || "—"}</p>
         </div>
         <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-          {e.sign === 1 ? "+" : "-"}{selectedPoolData?.isForeign ? Math.round(e.amount).toLocaleString() : `RM ${e.amount.toFixed(2)}`}
+          {e.sign === 1 ? "+" : "-"}{selectedPoolData?.isForeign ? `${selectedPoolObj?.pool_currency} ${Math.round(e.amount).toLocaleString()}` : `RM ${e.amount.toFixed(2)}`}
         </span>
         {e.isTopup && (
           <button onClick={() => openEdit(e.id)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-amber-400 transition-all flex-shrink-0">
@@ -240,12 +262,42 @@ export default function PoolPage() {
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
               </button>
-              <button onClick={() => setShowForm((v) => !v)}
+              <button onClick={() => { setShowCreatePool((v) => !v); setShowForm(false); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors">
+                <Plus size={14} /> New Pool
+              </button>
+              <button onClick={() => { setShowForm((v) => !v); setShowCreatePool(false); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
                 <Plus size={14} /> Top Up
               </button>
             </div>
           </div>
+
+          {/* Create pool form */}
+          {showCreatePool && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-white">New Pool Wallet</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Pool Name</label>
+                  <input value={newPoolName} onChange={(e) => setNewPoolName(e.target.value)} placeholder="e.g. Japan Pool"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                  <select value={newPoolCurrency} onChange={(e) => setNewPoolCurrency(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    <option value="MYR">MYR</option>
+                    {trip?.foreign_currency && trip.foreign_currency !== "MYR" && <option value={trip.foreign_currency}>{trip.foreign_currency}</option>}
+                  </select></div>
+              </div>
+              {error && <p className="text-sm text-red-400">{error}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => { setShowCreatePool(false); setError(""); }} className="flex-1 py-2 border border-slate-600 text-slate-400 text-sm rounded-xl hover:text-white transition-colors">Cancel</button>
+                <button onClick={createPool} disabled={creatingPool || !newPoolName.trim()}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                  {creatingPool ? "Creating..." : "Create Pool"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Multi-traveler top-up form */}
           {showForm && (
@@ -390,7 +442,7 @@ export default function PoolPage() {
                           </defs>
                           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => selectedPoolData.isForeign ? (v / 1000).toFixed(0) + "k" : v.toFixed(0)} />
-                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#10b981" }} formatter={(v) => { const n = Number(v ?? 0); return [selectedPoolData.isForeign ? Math.round(n).toLocaleString() : `RM ${n.toFixed(2)}`, "Balance"]; }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#10b981" }} formatter={(v) => { const n = Number(v ?? 0); return [selectedPoolData.isForeign ? `${selectedPoolObj?.pool_currency} ${Math.round(n).toLocaleString()}` : `RM ${n.toFixed(2)}`, "Balance"]; }} />
                           <Area type="monotone" dataKey="balance" stroke="#10b981" strokeWidth={2} fill="url(#poolGrad)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>

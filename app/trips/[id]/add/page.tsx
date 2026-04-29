@@ -5,7 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
 import { Sparkles, ClipboardList } from "lucide-react";
 
-type SplitEntry = { traveler_id: string; amount: string };
+type SplitEntry = { traveler_id: string; amount: string; foreignAmount: string };
 type ParsedEntry = { description: string; category: string; foreign_amount?: number; myr_amount?: number };
 
 export default function AddExpensePage() {
@@ -56,8 +56,8 @@ export default function AddExpensePage() {
       setPaidById(defaultPayer);
       setAiPaidBy(defaultPayer);
       const real = all.filter((t) => !t.is_pool);
-      setSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
-      setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "" })));
+      setSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
+      setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
       setWalletOptions(walletRes.wallets ?? []);
     }
     load();
@@ -220,7 +220,21 @@ export default function AddExpensePage() {
                 </select></div>
               {walletOptions.filter((w) => w.traveler_id === paidById).length > 0 && (
                 <div><label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
-                  <select value={walletId} onChange={(e) => setWalletId(e.target.value)}
+                  <select value={walletId} onChange={(e) => {
+                    const wId = e.target.value;
+                    setWalletId(wId);
+                    if (wId) {
+                      const w = walletOptions.find((x) => x.id === wId);
+                      if (w) {
+                        const n = w.name.toLowerCase();
+                        if (n.includes("wise")) setPaymentType("Wise");
+                        else if (n.includes("credit")) setPaymentType("Credit Card");
+                        else if (n.includes("debit") || n.includes("card")) setPaymentType("Debit Card");
+                        else if (n.includes("tng") || n.includes("touch")) setPaymentType("TNG");
+                        else setPaymentType("Cash");
+                      }
+                    }
+                  }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                     <option value="">— not linked to a wallet —</option>
                     {walletOptions.filter((w) => w.traveler_id === paidById).map((w) => (
@@ -254,24 +268,65 @@ export default function AddExpensePage() {
               )}
               {splitType === "individual" && (
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-slate-400">Individual Splits (MYR)</label>
-                  {splits.map((s, i) => {
-                    const t = travelers.find((x) => x.id === s.traveler_id);
+                  {trip.foreign_currency && trip.foreign_currency !== "MYR" ? (
+                    <>
+                      <div className="grid grid-cols-[1fr_90px_90px] gap-2 px-1">
+                        <span className="text-xs text-slate-500">Traveler</span>
+                        <span className="text-xs text-slate-500 text-right">{trip.foreign_currency}</span>
+                        <span className="text-xs text-slate-500 text-right">MYR</span>
+                      </div>
+                      {splits.map((s, i) => {
+                        const t = travelers.find((x) => x.id === s.traveler_id);
+                        const rate = paymentType === "Wise" ? (trip.wise_rate ?? 1) : (trip.cash_rate ?? 1);
+                        return (
+                          <div key={s.traveler_id} className="grid grid-cols-[1fr_90px_90px] gap-2 items-center">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                              <span className="text-sm text-slate-300 truncate">{t?.name}</span>
+                            </div>
+                            <input type="number" value={s.foreignAmount} step="1" placeholder="0"
+                              onChange={(e) => {
+                                const fv = e.target.value;
+                                const myr = fv ? (parseFloat(fv) / rate).toFixed(2) : "";
+                                setSplits(splits.map((x, idx) => idx === i ? { ...x, foreignAmount: fv, amount: myr } : x));
+                              }}
+                              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                            <input type="number" value={s.amount} step="0.01" placeholder="0.00"
+                              onChange={(e) => setSplits(splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value, foreignAmount: "" } : x))}
+                              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-xs text-slate-400">Individual Splits (MYR)</label>
+                      {splits.map((s, i) => {
+                        const t = travelers.find((x) => x.id === s.traveler_id);
+                        return (
+                          <div key={s.traveler_id} className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                            <span className="text-sm text-slate-300 flex-1">{t?.name}</span>
+                            <input type="number" value={s.amount} step="0.01" placeholder="0.00"
+                              onChange={(e) => setSplits(splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))}
+                              className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                  {myrAmount && (() => {
+                    const splitsSum = splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+                    const foreignSum = splits.reduce((s, x) => s + (parseFloat(x.foreignAmount) || 0), 0);
+                    const diff = Math.abs(splitsSum - parseFloat(myrAmount));
                     return (
-                      <div key={s.traveler_id} className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
-                        <span className="text-sm text-slate-300 flex-1">{t?.name}</span>
-                        <input type="number" value={s.amount} step="0.01" placeholder="0.00"
-                          onChange={(e) => setSplits(splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))}
-                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                      <div className={`text-xs ${diff > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
+                        {trip.foreign_currency && trip.foreign_currency !== "MYR" && foreignSum > 0
+                          ? `${trip.foreign_currency} ${foreignSum.toLocaleString()} · `
+                          : ""}
+                        Splits: RM {splitsSum.toFixed(2)} / Total: RM {parseFloat(myrAmount).toFixed(2)}
                       </div>
                     );
-                  })}
-                  {myrAmount && (() => {
-                    const diff = Math.abs(splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0) - parseFloat(myrAmount));
-                    return <p className={`text-xs ${diff > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
-                      Splits: RM {splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0).toFixed(2)} / Total: RM {parseFloat(myrAmount).toFixed(2)}
-                    </p>;
                   })()}
                 </div>
               )}

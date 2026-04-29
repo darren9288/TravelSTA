@@ -358,7 +358,7 @@ export default function WalletsPage() {
                           </defs>
                           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => isForeign ? (v / 1000).toFixed(0) + "k" : v.toFixed(0)} />
-                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#6366f1" }} formatter={(v) => { const n = Number(v ?? 0); return [isForeign ? Math.round(n).toLocaleString() : `RM ${n.toFixed(2)}`, "Balance"]; }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#6366f1" }} formatter={(v) => { const n = Number(v ?? 0); return [isForeign ? `${selectedWalletObj.currency} ${Math.round(n).toLocaleString()}` : `RM ${n.toFixed(2)}`, "Balance"]; }} />
                           <Area type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={2} fill="url(#walletGrad)" dot={false} />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -415,7 +415,7 @@ export default function WalletsPage() {
                                       </p>
                                     </div>
                                     <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                                      {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
+                                      {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : `${selectedWalletObj.currency} ${Math.round(e.amount).toLocaleString()}`}
                                     </span>
                                     {e.type === "topup" && (
                                       <button onClick={() => setEditTopup({ id: e.id, amount: String(e.amount), date: e.date, notes: e.notes ?? "" })}
@@ -462,7 +462,7 @@ export default function WalletsPage() {
                               </p>
                             </div>
                             <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
-                              {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : Math.round(e.amount).toLocaleString()}
+                              {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : `${selectedWalletObj.currency} ${Math.round(e.amount).toLocaleString()}`}
                             </span>
                             {e.type === "topup" && (
                               <button onClick={() => setEditTopup({ id: e.id, amount: String(e.amount), date: e.date, notes: e.notes ?? "" })}
