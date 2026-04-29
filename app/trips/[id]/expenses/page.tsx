@@ -17,7 +17,7 @@ type EditState = {
   payment_type: string;
   split_type: string;
   wallet_id: string;
-  splits: { traveler_id: string; amount: string }[];
+  splits: { traveler_id: string; amount: string; foreignAmount: string }[];
 };
 
 export default function ExpensesPage() {
@@ -77,7 +77,7 @@ export default function ExpensesPage() {
       wallet_id: expense.wallet_id ?? "",
       splits: realTravelers.map((t) => {
         const existing = expense.splits?.find((s) => s.traveler_id === t.id);
-        return { traveler_id: t.id, amount: existing ? String(existing.amount) : "" };
+        return { traveler_id: t.id, amount: existing ? String(existing.amount) : "", foreignAmount: "" };
       }),
     });
     setEditError("");
@@ -88,7 +88,7 @@ export default function ExpensesPage() {
     if (editState.split_type === "individual") {
       const myr = parseFloat(editState.myr_amount);
       const splitsSum = editState.splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
-      if (Math.abs(splitsSum - myr) > 0.01) {
+      if (Math.abs(splitsSum - myr) > 0.05) {
         setEditError(`Splits (RM ${splitsSum.toFixed(2)}) must equal total (RM ${myr.toFixed(2)})`);
         return;
       }
@@ -239,7 +239,28 @@ export default function ExpensesPage() {
               if (!payerWallets.length) return null;
               return (
                 <div><label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
-                  <select value={editState.wallet_id} onChange={(e) => setEditState({ ...editState, wallet_id: e.target.value })}
+                  <select value={editState.wallet_id} onChange={(e) => {
+                    const wId = e.target.value;
+                    const w = wallets.find((x) => x.id === wId);
+                    let newPayType = editState.payment_type;
+                    if (w) {
+                      const n = w.name.toLowerCase();
+                      if (n.includes("wise")) newPayType = "Wise";
+                      else if (n.includes("credit")) newPayType = "Credit Card";
+                      else if (n.includes("debit") || n.includes("card")) newPayType = "Debit Card";
+                      else if (n.includes("tng") || n.includes("touch")) newPayType = "TNG";
+                      else newPayType = "Cash";
+                    }
+                    const fv = editState.foreign_amount;
+                    const rate = newPayType === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                    const newMyr = fv && parseFloat(fv) > 0 ? (parseFloat(fv) / rate).toFixed(2) : editState.myr_amount;
+                    const newSplits = editState.splits.map((s) =>
+                      s.foreignAmount && parseFloat(s.foreignAmount) > 0
+                        ? { ...s, amount: (parseFloat(s.foreignAmount) / rate).toFixed(2) }
+                        : s
+                    );
+                    setEditState({ ...editState, wallet_id: wId, payment_type: newPayType, myr_amount: newMyr, splits: newSplits });
+                  }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                     <option value="">— no wallet —</option>
                     {payerWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
@@ -250,7 +271,18 @@ export default function ExpensesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
-                <select value={editState.payment_type} onChange={(e) => setEditState({ ...editState, payment_type: e.target.value })}
+                <select value={editState.payment_type} onChange={(e) => {
+                  const newPayType = e.target.value;
+                  const fv = editState.foreign_amount;
+                  const rate = newPayType === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                  const newMyr = fv && parseFloat(fv) > 0 ? (parseFloat(fv) / rate).toFixed(2) : editState.myr_amount;
+                  const newSplits = editState.splits.map((s) =>
+                    s.foreignAmount && parseFloat(s.foreignAmount) > 0
+                      ? { ...s, amount: (parseFloat(s.foreignAmount) / rate).toFixed(2) }
+                      : s
+                  );
+                  setEditState({ ...editState, payment_type: newPayType, myr_amount: newMyr, splits: newSplits });
+                }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {PAYMENT_TYPES.map((p) => <option key={p}>{p}</option>)}
                 </select></div>
@@ -279,22 +311,65 @@ export default function ExpensesPage() {
 
             {editState.split_type === "individual" && (
               <div className="flex flex-col gap-2">
-                <label className="text-xs text-slate-400">Individual Splits (MYR)</label>
-                {editState.splits.map((s, i) => {
-                  const t = realTravelers.find((x) => x.id === s.traveler_id);
+                {trip?.foreign_currency && trip.foreign_currency !== "MYR" ? (
+                  <>
+                    <div className="grid grid-cols-[1fr_80px_80px] gap-2 px-1">
+                      <span className="text-xs text-slate-500">Traveler</span>
+                      <span className="text-xs text-slate-500 text-right">{trip.foreign_currency}</span>
+                      <span className="text-xs text-slate-500 text-right">MYR</span>
+                    </div>
+                    {editState.splits.map((s, i) => {
+                      const t = realTravelers.find((x) => x.id === s.traveler_id);
+                      const rate = editState.payment_type === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                      return (
+                        <div key={s.traveler_id} className="grid grid-cols-[1fr_80px_80px] gap-2 items-center">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                            <span className="text-sm text-slate-300 truncate">{t?.name}</span>
+                          </div>
+                          <input type="number" value={s.foreignAmount} step="1" placeholder="0"
+                            onChange={(e) => {
+                              const fv = e.target.value;
+                              const myr = fv ? (parseFloat(fv) / rate).toFixed(2) : "";
+                              setEditState({ ...editState, splits: editState.splits.map((x, idx) => idx === i ? { ...x, foreignAmount: fv, amount: myr } : x) });
+                            }}
+                            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                          <input type="number" value={s.amount} step="0.01" placeholder="0.00"
+                            onChange={(e) => setEditState({ ...editState, splits: editState.splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value, foreignAmount: "" } : x) })}
+                            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                        </div>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <label className="text-xs text-slate-400">Individual Splits (MYR)</label>
+                    {editState.splits.map((s, i) => {
+                      const t = realTravelers.find((x) => x.id === s.traveler_id);
+                      return (
+                        <div key={s.traveler_id} className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                          <span className="text-sm text-slate-300 flex-1">{t?.name}</span>
+                          <input type="number" value={s.amount} step="0.01" placeholder="0.00"
+                            onChange={(e) => setEditState({ ...editState, splits: editState.splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x) })}
+                            className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {editState.myr_amount && (() => {
+                  const splitsSum = editState.splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+                  const foreignSum = editState.splits.reduce((s, x) => s + (parseFloat(x.foreignAmount) || 0), 0);
+                  const diff = Math.abs(splitsSum - parseFloat(editState.myr_amount));
                   return (
-                    <div key={s.traveler_id} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
-                      <span className="text-sm text-slate-300 flex-1">{t?.name}</span>
-                      <input type="number" value={s.amount} step="0.01" placeholder="0.00"
-                        onChange={(e) => setEditState({
-                          ...editState,
-                          splits: editState.splits.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x)
-                        })}
-                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                    <div className={`text-xs ${diff > 0.05 ? "text-red-400" : "text-emerald-400"}`}>
+                      {trip?.foreign_currency && trip.foreign_currency !== "MYR" && foreignSum > 0
+                        ? `${trip.foreign_currency} ${foreignSum.toLocaleString()} · ` : ""}
+                      Splits: RM {splitsSum.toFixed(2)} / Total: RM {parseFloat(editState.myr_amount).toFixed(2)}
                     </div>
                   );
-                })}
+                })()}
               </div>
             )}
 
