@@ -320,7 +320,7 @@ export default function AddExpensePage() {
                     const foreignSum = splits.reduce((s, x) => s + (parseFloat(x.foreignAmount) || 0), 0);
                     const diff = Math.abs(splitsSum - parseFloat(myrAmount));
                     return (
-                      <div className={`text-xs ${diff > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
+                      <div className={`text-xs ${diff > 0.05 ? "text-red-400" : "text-emerald-400"}`}>
                         {trip.foreign_currency && trip.foreign_currency !== "MYR" && foreignSum > 0
                           ? `${trip.foreign_currency} ${foreignSum.toLocaleString()} · `
                           : ""}
@@ -411,7 +411,7 @@ export default function AddExpensePage() {
                           </div>
                         );
                       })}
-                      <p className={`text-xs ${Math.abs(aiSplitsTotal - aiTotal) > 0.01 ? "text-red-400" : "text-emerald-400"}`}>
+                      <p className={`text-xs ${Math.abs(aiSplitsTotal - aiTotal) > 0.05 ? "text-red-400" : "text-emerald-400"}`}>
                         Splits: RM {aiSplitsTotal.toFixed(2)} / Total: RM {aiTotal.toFixed(2)}
                       </p>
                     </div>
