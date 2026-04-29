@@ -51,7 +51,8 @@ export function calculateSettlement(
       .filter((p) => p.to_traveler_id === t.id)
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    const net = (paid - owed) + paymentsReceived - paymentsMade;
+    // Payments made reduce your outstanding debt; payments received reduce your outstanding credit.
+    const net = (paid - owed) + paymentsMade - paymentsReceived;
     return { traveler: t, paid, owed, net };
   });
 
