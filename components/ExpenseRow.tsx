@@ -25,14 +25,11 @@ type Props = {
   onEdit?: (expense: Expense) => void;
 };
 
-// Returns true if this split should be auto-settled and locked from manual toggling
+// Returns true if this split is auto-settled and not a real outstanding debt
 function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Traveler[]): boolean {
   const payer = travelers.find((t) => t.id === expense.paid_by_id);
-  // Rule 3: paid by a pool — pool already covers it, all splits auto-settled
   if (payer?.is_pool) return true;
-  // Rule 1: this person is the one who paid — they don't owe themselves
   if (split.traveler_id === expense.paid_by_id) return true;
-  // Rule 2: individual split with RM 0 — they weren't involved
   if (expense.split_type === "individual" && Number(split.amount) === 0) return true;
   return false;
 }
@@ -40,25 +37,19 @@ function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Travele
 export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], onDelete, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
-  const [toggling, setToggling] = useState<string | null>(null);
-  const [toggleError, setToggleError] = useState("");
   const autoSavedIds = useRef<Set<string>>(new Set());
-
-  // Wallet picker state — shown when settling a split that has wallet options
-  const [settlingPick, setSettlingPick] = useState<{ split: ExpenseSplit; fromWalletId: string; toWalletId: string } | null>(null);
 
   // Sync splits when parent re-fetches fresh data
   useEffect(() => {
-    if (!toggling) setSplits(expense.splits ?? []);
+    setSplits(expense.splits ?? []);
   }, [expense.splits]);
 
-  // Auto-settle splits that should be locked — fix DB if they're wrongly unsettled
+  // Auto-settle payer/pool/RM0 splits in DB if they're wrongly unsettled
   useEffect(() => {
     const toFix = (expense.splits ?? []).filter(
       (s) => isAutoSettled(s, expense, travelers) && !s.is_settled && !autoSavedIds.current.has(s.id)
     );
     if (toFix.length === 0) return;
-
     toFix.forEach((s) => {
       autoSavedIds.current.add(s.id);
       fetch("/api/splits", {
@@ -67,7 +58,6 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
         body: JSON.stringify({ id: s.id, is_settled: true }),
       });
     });
-
     setSplits((prev) =>
       prev.map((s) => toFix.some((f) => f.id === s.id) ? { ...s, is_settled: true } : s)
     );
@@ -77,50 +67,11 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
   const paidByPool = travelers.find((t) => t.id === expense.paid_by_id)?.is_pool ?? false;
 
-  // Only count manually-settleable splits for the "unsettled" indicator
   const hasUnsettled = splits.some((s) => !s.is_settled && !isAutoSettled(s, expense, travelers));
   const displayNotes = expense.notes && expense.notes.trim().toLowerCase() !== expense.category.trim().toLowerCase()
     ? expense.notes : null;
   const splitsTotal = splits.reduce((s, x) => s + Number(x.amount), 0);
   const splitsMismatch = splits.length > 0 && Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
-
-  async function doSettle(split: ExpenseSplit, fromWalletId?: string, toWalletId?: string) {
-    setSettlingPick(null);
-    setToggling(split.id);
-    setToggleError("");
-    const newVal = !split.is_settled;
-    setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: newVal } : s));
-    try {
-      const res = await fetch("/api/splits", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: split.id, is_settled: newVal, from_wallet_id: fromWalletId ?? null, to_wallet_id: toWalletId ?? null }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
-        setToggleError(data.error ?? `Save failed (${res.status})`);
-      }
-    } catch {
-      setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: split.is_settled } : s));
-      setToggleError("Network error — could not save");
-    }
-    setToggling(null);
-  }
-
-  function toggleSettle(split: ExpenseSplit) {
-    if (isAutoSettled(split, expense, travelers)) return;
-    // If unsettling, skip wallet picker
-    if (split.is_settled) { doSettle(split); return; }
-    // Check if either party has wallets — if so, show picker
-    const settlerWallets = wallets.filter((w) => w.traveler_id === split.traveler_id);
-    const payerWallets = wallets.filter((w) => w.traveler_id === expense.paid_by_id);
-    if (settlerWallets.length > 0 || payerWallets.length > 0) {
-      setSettlingPick({ split, fromWalletId: settlerWallets[0]?.id ?? "", toWalletId: payerWallets[0]?.id ?? "" });
-    } else {
-      doSettle(split);
-    }
-  }
 
   return (
     <div className={`border rounded-xl overflow-hidden transition-colors ${hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
@@ -153,54 +104,6 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
 
       {expanded && (
         <div className="border-t border-slate-700/50 px-4 py-3 bg-slate-900/30">
-          {toggleError && <p className="text-xs text-red-400 mb-2">⚠ {toggleError}</p>}
-
-          {/* Wallet picker — shown when settling a split */}
-          {settlingPick && (() => {
-            const settlerWallets = wallets.filter((w) => w.traveler_id === settlingPick.split.traveler_id);
-            const payerWallets = wallets.filter((w) => w.traveler_id === expense.paid_by_id);
-            const settlerName = travelers.find((t) => t.id === settlingPick.split.traveler_id)?.name ?? "Settler";
-            const payerName = travelers.find((t) => t.id === expense.paid_by_id)?.name ?? "Payer";
-            return (
-              <div className="mb-3 bg-slate-800 border border-slate-600 rounded-xl p-3 flex flex-col gap-2">
-                <p className="text-xs text-slate-400 font-medium">Settle via wallet transfer?</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {settlerWallets.length > 0 && (
-                    <div><label className="text-xs text-slate-500 mb-1 block">{settlerName} pays from</label>
-                      <select value={settlingPick.fromWalletId}
-                        onChange={(e) => setSettlingPick((p) => p ? { ...p, fromWalletId: e.target.value } : p)}
-                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
-                        <option value="">— no wallet —</option>
-                        {settlerWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
-                      </select></div>
-                  )}
-                  {payerWallets.length > 0 && (
-                    <div><label className="text-xs text-slate-500 mb-1 block">{payerName} receives into</label>
-                      <select value={settlingPick.toWalletId}
-                        onChange={(e) => setSettlingPick((p) => p ? { ...p, toWalletId: e.target.value } : p)}
-                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
-                        <option value="">— no wallet —</option>
-                        {payerWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
-                      </select></div>
-                  )}
-                </div>
-                <div className="flex gap-2 mt-1">
-                  <button onClick={() => doSettle(settlingPick.split, settlingPick.fromWalletId || undefined, settlingPick.toWalletId || undefined)}
-                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors">
-                    Settle with wallets
-                  </button>
-                  <button onClick={() => doSettle(settlingPick.split)}
-                    className="flex-1 py-1.5 border border-slate-600 text-slate-400 hover:text-white text-xs rounded-lg transition-colors">
-                    Settle without wallets
-                  </button>
-                  <button onClick={() => setSettlingPick(null)}
-                    className="px-2 py-1.5 text-slate-600 hover:text-slate-400 text-xs rounded-lg transition-colors">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
           {displayNotes && <p className="text-xs text-slate-400 mb-2">📝 {displayNotes}</p>}
           {splitsMismatch && (
             <p className="text-xs text-red-400 mb-2">
@@ -214,7 +117,6 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
               if (!t) return null;
               const locked = isAutoSettled(s, expense, travelers);
 
-              // Reason label for locked splits
               const lockReason = paidByPool
                 ? "pool"
                 : s.traveler_id === expense.paid_by_id
@@ -223,24 +125,23 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
 
               return (
                 <div key={s.id} className="flex items-start gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleSettle(s); }}
-                    disabled={locked || toggling === s.id}
-                    title={locked ? `Auto-settled (${lockReason})` : undefined}
-                    className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                  {/* Read-only settled indicator — settlement tab controls this */}
+                  <div
+                    title={locked ? `Auto-settled (${lockReason})` : s.is_settled ? "Settled via settlement tab" : "Unsettled"}
+                    className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
                       locked
-                        ? "bg-slate-600 border-slate-600 cursor-not-allowed"
+                        ? "bg-slate-600 border-slate-600"
                         : s.is_settled
-                          ? "bg-emerald-500 border-emerald-500 cursor-pointer"
-                          : "border-slate-500 hover:border-amber-400 cursor-pointer"
-                    } ${toggling === s.id ? "opacity-50" : ""}`}
+                          ? "bg-emerald-500 border-emerald-500"
+                          : "border-slate-500"
+                    }`}
                   >
                     {(s.is_settled || locked) && (
                       locked
                         ? <Lock size={8} className="text-slate-400" />
                         : <span className="text-white text-xs leading-none">✓</span>
                     )}
-                  </button>
+                  </div>
                   <div className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                   <div className="flex-1 min-w-0">
                     <span className={`text-xs ${(s.is_settled || locked) ? "text-slate-500 line-through" : "text-slate-300"}`}>
@@ -256,7 +157,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                           <span className="text-slate-400">{toW?.name ?? "?"}</span>
                         </p>
                       );
-                      return <p className="text-xs text-slate-600 mt-0.5">no wallet</p>;
+                      return null;
                     })()}
                     {locked && (
                       <p className="text-xs text-slate-600 italic mt-0.5">{lockReason}</p>
