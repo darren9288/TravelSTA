@@ -72,6 +72,17 @@ export type ExpenseSplit = {
   traveler?: Traveler;
 };
 
+export type SettlementPayment = {
+  id: string;
+  trip_id: string;
+  from_traveler_id: string;
+  to_traveler_id: string;
+  amount: number;
+  from_wallet_id: string | null;
+  to_wallet_id: string | null;
+  created_at: string;
+};
+
 export type PoolTopup = {
   id: string;
   trip_id: string;

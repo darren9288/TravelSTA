@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { Trip, Traveler } from "@/lib/supabase";
+import { Trip, Traveler, SettlementPayment } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, CheckCheck, RefreshCw, X } from "lucide-react";
+import { ArrowRight, CheckCheck, RefreshCw, X, Undo2 } from "lucide-react";
 
 type WalletOption = { id: string; name: string; currency: string; traveler_id: string };
 type PickState = {
@@ -19,19 +19,23 @@ export default function SettlementPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [balances, setBalances] = useState<NetBalance[]>([]);
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
+  const [payments, setPayments] = useState<SettlementPayment[]>([]);
+  const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [wallets, setWallets] = useState<WalletOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
   const [apiError, setApiError] = useState("");
   const [pickState, setPickState] = useState<PickState | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setApiError("");
-    const [tripRes, settleRes, walletRes] = await Promise.all([
+    const [tripRes, settleRes, walletRes, travelerRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/settlement?trip_id=${id}&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
@@ -39,8 +43,10 @@ export default function SettlementPage() {
     } else {
       setBalances(settleRes.balances ?? []);
       setInstructions(settleRes.instructions ?? []);
+      setPayments(settleRes.payments ?? []);
     }
     setWallets(walletRes.wallets ?? []);
+    setTravelers(Array.isArray(travelerRes) ? travelerRes.filter((t: Traveler) => !t.is_pool) : []);
     setLoading(false);
   }, [id]);
 
@@ -55,9 +61,8 @@ export default function SettlementPage() {
   function openPicker(inst: PaymentInstruction) {
     const fromWallets = wallets.filter((w) => w.traveler_id === inst.from.id);
     const toWallets = wallets.filter((w) => w.traveler_id === inst.to.id);
-    // If no wallets for either party, skip picker and settle immediately
     if (!fromWallets.length && !toWallets.length) {
-      doMarkSettled(inst.from.id, undefined, undefined);
+      doRecordPayment(inst, undefined, undefined);
       return;
     }
     setPickState({
@@ -67,21 +72,56 @@ export default function SettlementPage() {
     });
   }
 
-  async function doMarkSettled(travelerId: string, fromWalletId?: string, toWalletId?: string) {
+  async function doRecordPayment(inst: PaymentInstruction, fromWalletId?: string, toWalletId?: string) {
     setPickState(null);
-    setSettling(travelerId);
-    await fetch("/api/splits", {
+    const key = `${inst.from.id}-${inst.to.id}`;
+    setSettling(key);
+    setApiError("");
+    const res = await fetch("/api/settlement-payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         trip_id: id,
-        traveler_id: travelerId,
+        from_traveler_id: inst.from.id,
+        to_traveler_id: inst.to.id,
+        amount: inst.amount,
         from_wallet_id: fromWalletId ?? null,
         to_wallet_id: toWalletId ?? null,
       }),
     });
+    if (!res.ok) {
+      const d = await res.json();
+      setApiError(d.error ?? "Failed to record payment");
+    }
     await load();
     setSettling(null);
+  }
+
+  async function undoPayment(paymentId: string) {
+    setUndoing(paymentId);
+    setApiError("");
+    const res = await fetch("/api/settlement-payments", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: paymentId }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setApiError(d.error ?? "Failed to undo payment");
+    }
+    await load();
+    setUndoing(null);
+  }
+
+  function travelerName(tid: string) {
+    return travelers.find((t) => t.id === tid)?.name ?? "?";
+  }
+  function travelerColor(tid: string) {
+    return travelers.find((t) => t.id === tid)?.color ?? "#94a3b8";
+  }
+  function walletName(wid: string | null) {
+    if (!wid) return null;
+    return wallets.find((w) => w.id === wid)?.name ?? null;
   }
 
   return (
@@ -91,13 +131,10 @@ export default function SettlementPage() {
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Settlement</h1>
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-slate-500">Unsettled splits only</p>
-              <button onClick={load} disabled={loading}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
-                <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
-              </button>
-            </div>
+            <button onClick={load} disabled={loading}
+              className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
+              <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+            </button>
           </div>
 
           {/* Wallet picker modal */}
@@ -138,11 +175,11 @@ export default function SettlementPage() {
                       </select></div>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => doMarkSettled(pickState.inst.from.id, pickState.fromWalletId || undefined, pickState.toWalletId || undefined)}
+                    <button onClick={() => doRecordPayment(pickState.inst, pickState.fromWalletId || undefined, pickState.toWalletId || undefined)}
                       className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors">
                       Paid with wallets
                     </button>
-                    <button onClick={() => doMarkSettled(pickState.inst.from.id)}
+                    <button onClick={() => doRecordPayment(pickState.inst)}
                       className="flex-1 py-2.5 border border-slate-600 text-slate-400 hover:text-white text-sm rounded-xl transition-colors">
                       Paid without
                     </button>
@@ -154,7 +191,7 @@ export default function SettlementPage() {
 
           {apiError && (
             <div className="bg-red-900/30 border border-red-800/50 rounded-xl px-4 py-3">
-              <p className="text-sm text-red-400 font-medium">API Error</p>
+              <p className="text-sm text-red-400 font-medium">Error</p>
               <p className="text-xs text-red-300 mt-1">{apiError}</p>
             </div>
           )}
@@ -165,6 +202,7 @@ export default function SettlementPage() {
             </div>
           ) : (
             <>
+              {/* Outstanding instructions */}
               <div>
                 <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Who Pays Who</h2>
                 {instructions.length === 0 ? (
@@ -174,29 +212,33 @@ export default function SettlementPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {instructions.map((inst, i) => (
-                      <div key={i} className="flex items-center gap-3 bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.from.color }} />
-                          <span className="text-sm text-white font-medium truncate">{inst.from.name}</span>
-                          <ArrowRight size={14} className="text-amber-500 flex-shrink-0" />
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
-                          <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
+                    {instructions.map((inst, i) => {
+                      const key = `${inst.from.id}-${inst.to.id}`;
+                      return (
+                        <div key={i} className="flex items-center gap-3 bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.from.color }} />
+                            <span className="text-sm text-white font-medium truncate">{inst.from.name}</span>
+                            <ArrowRight size={14} className="text-amber-500 flex-shrink-0" />
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
+                            <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
+                          </div>
+                          <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
+                          <button onClick={() => openPicker(inst)} disabled={settling === key}
+                            className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 border border-emerald-700/50 hover:bg-emerald-600/40 disabled:opacity-50 text-emerald-400 text-xs rounded-lg transition-colors flex-shrink-0">
+                            <CheckCheck size={12} />
+                            {settling === key ? "..." : "Paid"}
+                          </button>
                         </div>
-                        <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
-                        <button onClick={() => openPicker(inst)} disabled={settling === inst.from.id}
-                          className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 border border-emerald-700/50 hover:bg-emerald-600/40 disabled:opacity-50 text-emerald-400 text-xs rounded-lg transition-colors flex-shrink-0">
-                          <CheckCheck size={12} />
-                          {settling === inst.from.id ? "..." : "Paid"}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
+              {/* Net balances */}
               <div>
-                <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Net Balance (unsettled)</h2>
+                <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Net Balance</h2>
                 <div className="flex flex-col gap-2">
                   {balances.map((b) => (
                     <div key={b.traveler.id} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3">
@@ -212,6 +254,44 @@ export default function SettlementPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Payment history */}
+              {payments.length > 0 && (
+                <div>
+                  <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Payments Recorded</h2>
+                  <div className="flex flex-col gap-2">
+                    {payments.map((p) => {
+                      const fw = walletName(p.from_wallet_id);
+                      const tw = walletName(p.to_wallet_id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: travelerColor(p.from_traveler_id) }} />
+                            <span className="text-xs text-slate-400 truncate">{travelerName(p.from_traveler_id)}</span>
+                            <ArrowRight size={11} className="text-slate-600 flex-shrink-0" />
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: travelerColor(p.to_traveler_id) }} />
+                            <span className="text-xs text-slate-400 truncate">{travelerName(p.to_traveler_id)}</span>
+                            {(fw || tw) && (
+                              <span className="text-xs text-slate-600 truncate hidden sm:block">
+                                💳 {fw ?? "?"} → {tw ?? "?"}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">RM {Number(p.amount).toFixed(2)}</span>
+                          <button
+                            onClick={() => undoPayment(p.id)}
+                            disabled={undoing === p.id}
+                            title="Undo this payment"
+                            className="flex items-center gap-1 px-1.5 py-1 text-slate-600 hover:text-red-400 disabled:opacity-50 text-xs rounded transition-colors flex-shrink-0">
+                            <Undo2 size={11} />
+                            {undoing === p.id ? "..." : "Undo"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

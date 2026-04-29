@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { calculateSettlement } from "@/lib/settlement";
-import { Expense, Traveler } from "@/lib/supabase";
+import { Expense, Traveler, SettlementPayment } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
@@ -10,9 +10,10 @@ export async function GET(req: NextRequest) {
 
   const supabase = serverDb();
 
-  const [travelerRes, expenseRes] = await Promise.all([
+  const [travelerRes, expenseRes, paymentRes] = await Promise.all([
     supabase.from("travelers").select("*").eq("trip_id", tripId),
     supabase.from("expenses").select("*").eq("trip_id", tripId),
+    supabase.from("settlement_payments").select("*").eq("trip_id", tripId),
   ]);
 
   if (travelerRes.error) {
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   const travelers = travelerRes.data ?? [];
   const expensesRaw = expenseRes.data ?? [];
+  const payments = (paymentRes.data ?? []) as SettlementPayment[];
   const expenseIds = expensesRaw.map((e) => e.id);
 
   const { data: splitsRaw, error: splitError } = await supabase
@@ -42,16 +44,17 @@ export async function GET(req: NextRequest) {
     splits: splits.filter((s) => s.expense_id === e.id),
   }));
 
-  const result = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
+  const result = calculateSettlement(travelers as Traveler[], expenses as Expense[], payments);
 
   return NextResponse.json(
     {
       ...result,
+      payments,
       _debug: {
         traveler_count: travelers.length,
         expense_count: expenses.length,
         split_count: splits.length,
-        unsettled_count: splits.filter((s) => !s.is_settled).length,
+        payment_count: payments.length,
         server_time: new Date().toISOString(),
       },
     },

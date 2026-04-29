@@ -1,4 +1,4 @@
-import { Traveler, ExpenseSplit, Expense } from "./supabase";
+import { Traveler, ExpenseSplit, Expense, SettlementPayment } from "./supabase";
 
 export type NetBalance = {
   traveler: Traveler;
@@ -15,30 +15,40 @@ export type PaymentInstruction = {
 
 export function calculateSettlement(
   travelers: Traveler[],
-  expenses: Expense[]
+  expenses: Expense[],
+  payments: SettlementPayment[] = []
 ): { balances: NetBalance[]; instructions: PaymentInstruction[] } {
   // Only real travelers (not pools) participate in settlement
   const realTravelers = travelers.filter((t) => !t.is_pool);
 
-  // Flatten all splits with their parent expense's paid_by_id attached
-  const allUnsettled = expenses.flatMap((e) =>
-    (e.splits ?? [])
-      .filter((s) => !s.is_settled)
-      .map((s) => ({ ...s, paid_by_id: e.paid_by_id }))
+  // Use ALL splits (settled or not) as the base — settlement payments are the
+  // only mechanism that actually reduces what's owed in the settlement view.
+  const allSplits = expenses.flatMap((e) =>
+    (e.splits ?? []).map((s) => ({ ...s, paid_by_id: e.paid_by_id }))
   );
 
   const balances: NetBalance[] = realTravelers.map((t) => {
-    // Credit: unsettled split amounts on expenses this traveler paid
-    const paid = allUnsettled
-      .filter((s) => s.paid_by_id === t.id)
+    // Credit: split amounts on expenses this traveler paid (others owe them)
+    const paid = allSplits
+      .filter((s) => s.paid_by_id === t.id && s.traveler_id !== t.id)
       .reduce((sum, s) => sum + Number(s.amount), 0);
 
-    // Debit: this traveler's own unsettled splits
-    const owed = allUnsettled
-      .filter((s) => s.traveler_id === t.id)
+    // Debit: this traveler's own splits on others' expenses
+    const owed = allSplits
+      .filter((s) => s.traveler_id === t.id && s.paid_by_id !== t.id)
       .reduce((sum, s) => sum + Number(s.amount), 0);
 
-    return { traveler: t, paid, owed, net: paid - owed };
+    // Settlement payments already made reduce the outstanding balance
+    const paymentsMade = payments
+      .filter((p) => p.from_traveler_id === t.id)
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+
+    const paymentsReceived = payments
+      .filter((p) => p.to_traveler_id === t.id)
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+
+    const net = (paid - owed) + paymentsReceived - paymentsMade;
+    return { traveler: t, paid, owed, net };
   });
 
   // Greedy algorithm to minimise transactions
