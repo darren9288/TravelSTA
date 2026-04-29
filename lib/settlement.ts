@@ -1,4 +1,4 @@
-import { Traveler, ExpenseSplit, Expense, SettlementPayment } from "./supabase";
+import { Traveler, Expense } from "./supabase";
 
 export type NetBalance = {
   traveler: Traveler;
@@ -16,44 +16,30 @@ export type PaymentInstruction = {
 export function calculateSettlement(
   travelers: Traveler[],
   expenses: Expense[],
-  payments: SettlementPayment[] = []
 ): { balances: NetBalance[]; instructions: PaymentInstruction[] } {
-  // Only real travelers (not pools) participate in settlement
   const realTravelers = travelers.filter((t) => !t.is_pool);
-
-  // Pool traveler IDs — their expenses are excluded from settlement because
-  // the pool fund covers those costs, not individual travelers.
   const poolIds = new Set(travelers.filter((t) => t.is_pool).map((t) => t.id));
 
-  // Use ALL splits (settled or not) as the base, excluding pool-paid expenses.
-  // Settlement payments are the only mechanism that reduces outstanding balances.
-  const allSplits = expenses
+  // Only unsettled splits on non-pool expenses drive the settlement calculation.
+  // Individual split ticks are the mechanism that reduces outstanding balances.
+  const unsettled = expenses
     .filter((e) => !poolIds.has(e.paid_by_id))
-    .flatMap((e) => (e.splits ?? []).map((s) => ({ ...s, paid_by_id: e.paid_by_id })));
+    .flatMap((e) =>
+      (e.splits ?? [])
+        .filter((s) => !s.is_settled)
+        .map((s) => ({ ...s, paid_by_id: e.paid_by_id }))
+    );
 
   const balances: NetBalance[] = realTravelers.map((t) => {
-    // Credit: split amounts on expenses this traveler paid (others owe them)
-    const paid = allSplits
+    const paid = unsettled
       .filter((s) => s.paid_by_id === t.id && s.traveler_id !== t.id)
       .reduce((sum, s) => sum + Number(s.amount), 0);
 
-    // Debit: this traveler's own splits on others' expenses
-    const owed = allSplits
+    const owed = unsettled
       .filter((s) => s.traveler_id === t.id && s.paid_by_id !== t.id)
       .reduce((sum, s) => sum + Number(s.amount), 0);
 
-    // Settlement payments already made reduce the outstanding balance
-    const paymentsMade = payments
-      .filter((p) => p.from_traveler_id === t.id)
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-
-    const paymentsReceived = payments
-      .filter((p) => p.to_traveler_id === t.id)
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-
-    // Payments made reduce your outstanding debt; payments received reduce your outstanding credit.
-    const net = (paid - owed) + paymentsMade - paymentsReceived;
-    return { traveler: t, paid, owed, net };
+    return { traveler: t, paid, owed, net: paid - owed };
   });
 
   // Greedy algorithm to minimise transactions
@@ -68,7 +54,6 @@ export function calculateSettlement(
     .sort((a, b) => a.net - b.net);
 
   const instructions: PaymentInstruction[] = [];
-
   let ci = 0;
   let di = 0;
 
