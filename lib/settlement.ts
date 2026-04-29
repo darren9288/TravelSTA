@@ -21,11 +21,15 @@ export function calculateSettlement(
   // Only real travelers (not pools) participate in settlement
   const realTravelers = travelers.filter((t) => !t.is_pool);
 
-  // Use ALL splits (settled or not) as the base — settlement payments are the
-  // only mechanism that actually reduces what's owed in the settlement view.
-  const allSplits = expenses.flatMap((e) =>
-    (e.splits ?? []).map((s) => ({ ...s, paid_by_id: e.paid_by_id }))
-  );
+  // Pool traveler IDs — their expenses are excluded from settlement because
+  // the pool fund covers those costs, not individual travelers.
+  const poolIds = new Set(travelers.filter((t) => t.is_pool).map((t) => t.id));
+
+  // Use ALL splits (settled or not) as the base, excluding pool-paid expenses.
+  // Settlement payments are the only mechanism that reduces outstanding balances.
+  const allSplits = expenses
+    .filter((e) => !poolIds.has(e.paid_by_id))
+    .flatMap((e) => (e.splits ?? []).map((s) => ({ ...s, paid_by_id: e.paid_by_id })));
 
   const balances: NetBalance[] = realTravelers.map((t) => {
     // Credit: split amounts on expenses this traveler paid (others owe them)
