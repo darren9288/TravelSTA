@@ -26,6 +26,7 @@ type Props = {
 };
 
 function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Traveler[]): boolean {
+  if (split.locked) return true;
   const payer = travelers.find((t) => t.id === expense.paid_by_id);
   if (payer?.is_pool) return true;
   if (split.traveler_id === expense.paid_by_id) return true;
@@ -204,7 +205,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
               const t = travelers.find((x) => x.id === s.traveler_id);
               if (!t) return null;
               const locked = isAutoSettled(s, expense, travelers);
-              const lockReason = paidByPool ? "pool" : s.traveler_id === expense.paid_by_id ? "payer" : "RM 0";
+              const lockReason = s.locked ? "settled" : paidByPool ? "pool" : s.traveler_id === expense.paid_by_id ? "payer" : "RM 0";
 
               return (
                 <div key={s.id} className="flex items-start gap-2">

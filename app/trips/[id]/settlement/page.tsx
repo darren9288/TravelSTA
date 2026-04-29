@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
 import { ArrowRight, RefreshCw, CheckCircle2 } from "lucide-react";
+import { SettlementPayment, Traveler } from "@/lib/supabase";
 
 export default function SettlementPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +13,8 @@ export default function SettlementPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [balances, setBalances] = useState<NetBalance[]>([]);
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
+  const [history, setHistory] = useState<SettlementPayment[]>([]);
+  const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState(false);
   const [apiError, setApiError] = useState("");
@@ -20,9 +23,11 @@ export default function SettlementPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setApiError("");
-    const [tripRes, settleRes] = await Promise.all([
+    const [tripRes, settleRes, travelerRes, historyRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/settlement?trip_id=${id}&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/settlement-payments?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
@@ -31,6 +36,8 @@ export default function SettlementPage() {
       setBalances(settleRes.balances ?? []);
       setInstructions(settleRes.instructions ?? []);
     }
+    setTravelers(Array.isArray(travelerRes) ? travelerRes.filter((t: Traveler) => !t.is_pool) : []);
+    setHistory(historyRes.payments ?? []);
     setLoading(false);
   }, [id]);
 
@@ -54,6 +61,16 @@ export default function SettlementPage() {
     await load();
     setSettling(false);
   }
+
+  function tName(tid: string) { return travelers.find((t) => t.id === tid)?.name ?? "?"; }
+  function tColor(tid: string) { return travelers.find((t) => t.id === tid)?.color ?? "#94a3b8"; }
+
+  // Group history payments by date (created_at date)
+  const historyByDate = history.reduce<Record<string, SettlementPayment[]>>((acc, p) => {
+    const date = new Date(p.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
+    (acc[date] ??= []).push(p);
+    return acc;
+  }, {});
 
   return (
     <>
@@ -157,6 +174,34 @@ export default function SettlementPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Settlement history */}
+              {Object.keys(historyByDate).length > 0 && (
+                <div>
+                  <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Settlement History</h2>
+                  <div className="flex flex-col gap-3">
+                    {Object.entries(historyByDate).map(([date, payments]) => (
+                      <div key={date}>
+                        <p className="text-xs text-slate-600 mb-1.5">{date}</p>
+                        <div className="flex flex-col gap-1.5">
+                          {payments.map((p) => (
+                            <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-2.5">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.from_traveler_id) }} />
+                                <span className="text-xs text-slate-400 truncate">{tName(p.from_traveler_id)}</span>
+                                <ArrowRight size={11} className="text-slate-600 flex-shrink-0" />
+                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.to_traveler_id) }} />
+                                <span className="text-xs text-slate-400 truncate">{tName(p.to_traveler_id)}</span>
+                              </div>
+                              <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">RM {Number(p.amount).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
