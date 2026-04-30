@@ -4,8 +4,13 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, RefreshCw, CheckCircle2 } from "lucide-react";
+import { ArrowRight, RefreshCw, CheckCircle2, Wallet } from "lucide-react";
 import { SettlementPayment, Traveler } from "@/lib/supabase";
+
+type WalletSelection = {
+  from_wallet_id: string | null;
+  to_wallet_id: string | null;
+};
 
 export default function SettlementPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,19 +20,22 @@ export default function SettlementPage() {
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
   const [history, setHistory] = useState<SettlementPayment[]>([]);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
+  const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [settling, setSettling] = useState(false);
   const [apiError, setApiError] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const [walletSelections, setWalletSelections] = useState<Record<number, WalletSelection>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     setApiError("");
-    const [tripRes, settleRes, travelerRes, historyRes] = await Promise.all([
+    const [tripRes, settleRes, travelerRes, historyRes, walletRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/settlement?trip_id=${id}&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/settlement-payments?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     setTrip(tripRes.error ? null : tripRes);
     if (settleRes.error) {
@@ -38,6 +46,7 @@ export default function SettlementPage() {
     }
     setTravelers(Array.isArray(travelerRes) ? travelerRes.filter((t: Traveler) => !t.is_pool) : []);
     setHistory(historyRes.payments ?? []);
+    setWallets(walletRes.wallets ?? []);
     setLoading(false);
   }, [id]);
 
@@ -53,7 +62,11 @@ export default function SettlementPage() {
     setConfirm(false);
     setSettling(true);
     setApiError("");
-    const res = await fetch(`/api/trips/${id}/settle-all`, { method: "POST" });
+    const res = await fetch(`/api/trips/${id}/settle-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletSelections }),
+    });
     if (!res.ok) {
       const d = await res.json();
       setApiError(d.error ?? "Failed to settle");
@@ -64,6 +77,7 @@ export default function SettlementPage() {
 
   function tName(tid: string) { return travelers.find((t) => t.id === tid)?.name ?? "?"; }
   function tColor(tid: string) { return travelers.find((t) => t.id === tid)?.color ?? "#94a3b8"; }
+  function wName(wid: string | null) { return wid ? wallets.find((w) => w.id === wid)?.name ?? "?" : null; }
 
   // Group history payments by date (created_at date)
   const historyByDate = history.reduce<Record<string, SettlementPayment[]>>((acc, p) => {
@@ -108,18 +122,66 @@ export default function SettlementPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {instructions.map((inst, i) => (
-                      <div key={i} className="flex items-center gap-3 bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.from.color }} />
-                          <span className="text-sm text-white font-medium truncate">{inst.from.name}</span>
-                          <ArrowRight size={14} className="text-amber-500 flex-shrink-0" />
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
-                          <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
+                    {instructions.map((inst, i) => {
+                      const fromWallets = wallets.filter((w) => w.traveler_id === inst.from.id);
+                      const toWallets = wallets.filter((w) => w.traveler_id === inst.to.id);
+                      const selection = walletSelections[i] ?? { from_wallet_id: null, to_wallet_id: null };
+
+                      return (
+                        <div key={i} className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3 flex flex-col gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.from.color }} />
+                              <span className="text-sm text-white font-medium truncate">{inst.from.name}</span>
+                              <ArrowRight size={14} className="text-amber-500 flex-shrink-0" />
+                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
+                              <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
+                            </div>
+                            <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
+                          </div>
+
+                          {/* Wallet selection */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <label className="text-slate-500 mb-1 flex items-center gap-1">
+                                <Wallet size={11} /> From wallet
+                              </label>
+                              <select
+                                value={selection.from_wallet_id ?? ""}
+                                onChange={(e) => setWalletSelections({
+                                  ...walletSelections,
+                                  [i]: { ...selection, from_wallet_id: e.target.value || null }
+                                })}
+                                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+                              >
+                                <option value="">No wallet</option>
+                                {fromWallets.map((w) => (
+                                  <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-slate-500 mb-1 flex items-center gap-1">
+                                <Wallet size={11} /> To wallet
+                              </label>
+                              <select
+                                value={selection.to_wallet_id ?? ""}
+                                onChange={(e) => setWalletSelections({
+                                  ...walletSelections,
+                                  [i]: { ...selection, to_wallet_id: e.target.value || null }
+                                })}
+                                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+                              >
+                                <option value="">No wallet</option>
+                                {toWallets.map((w) => (
+                                  <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     {/* Confirm step */}
                     {!confirm ? (
@@ -184,18 +246,24 @@ export default function SettlementPage() {
                       <div key={date}>
                         <p className="text-xs text-slate-600 mb-1.5">{date}</p>
                         <div className="flex flex-col gap-1.5">
-                          {payments.map((p) => (
-                            <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-2.5">
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.from_traveler_id) }} />
-                                <span className="text-xs text-slate-400 truncate">{tName(p.from_traveler_id)}</span>
-                                <ArrowRight size={11} className="text-slate-600 flex-shrink-0" />
-                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.to_traveler_id) }} />
-                                <span className="text-xs text-slate-400 truncate">{tName(p.to_traveler_id)}</span>
+                          {payments.map((p) => {
+                            const fromWallet = wName(p.from_wallet_id);
+                            const toWallet = wName(p.to_wallet_id);
+                            return (
+                              <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-2.5">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.from_traveler_id) }} />
+                                  <span className="text-xs text-slate-400 truncate">{tName(p.from_traveler_id)}</span>
+                                  {fromWallet && <span className="text-xs text-slate-600">({fromWallet})</span>}
+                                  <ArrowRight size={11} className="text-slate-600 flex-shrink-0" />
+                                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tColor(p.to_traveler_id) }} />
+                                  <span className="text-xs text-slate-400 truncate">{tName(p.to_traveler_id)}</span>
+                                  {toWallet && <span className="text-xs text-slate-600">({toWallet})</span>}
+                                </div>
+                                <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">RM {Number(p.amount).toFixed(2)}</span>
                               </div>
-                              <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">RM {Number(p.amount).toFixed(2)}</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}

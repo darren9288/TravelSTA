@@ -15,15 +15,18 @@ export default function TripDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [myShare, setMyShare] = useState(0);
 
   const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
 
   const load = useCallback(async () => {
-    const [tripRes, travelerRes, expenseRes, walletRes] = await Promise.all([
+    const [tripRes, travelerRes, expenseRes, walletRes, statsRes] = await Promise.all([
       fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/expenses?trip_id=${id}&limit=5`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/stats?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
     if (tripRes.error) { router.push("/"); return; }
     setTrip(tripRes);
@@ -31,6 +34,11 @@ export default function TripDashboard() {
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
     setWallets(walletRes.wallets ?? []);
     setMyId(tripRes.my_traveler_id ?? null);
+
+    setTotalSpent(statsRes.total ?? 0);
+    const myTravelerStats = statsRes.byTraveler?.find((t: any) => t.id === tripRes.my_traveler_id);
+    setMyShare(myTravelerStats?.amount ?? 0);
+
     setLoading(false);
   }, [id, router]);
 
@@ -54,11 +62,6 @@ export default function TripDashboard() {
 
   const realTravelers = travelers.filter((t) => !t.is_pool);
   const me = realTravelers.find((t) => t.id === myId);
-  const totalSpent = expenses.reduce((s, e) => s + Number(e.myr_amount), 0);
-  const myShare = expenses
-    .flatMap((e) => e.splits ?? [])
-    .filter((s) => s.traveler_id === myId)
-    .reduce((sum, s) => sum + Number(s.amount), 0);
 
   const dateStr = trip.start_date && trip.end_date
     ? `${new Date(trip.start_date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short" })} – ${new Date(trip.end_date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}`
