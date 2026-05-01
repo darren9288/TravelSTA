@@ -1,0 +1,303 @@
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import { serverDb } from "@/lib/supabase";
+
+interface ImportTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  currency: string;
+  paid_by_name: string;
+  paid_by_wallet?: string;
+  category?: string;
+  split_type: "equal" | "custom";
+  split_participants: string | Array<{ name: string; amount?: number }>;
+  notes?: string;
+}
+
+interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+}
+
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const db = serverDb();
+  const body = await req.json();
+  const { format, data: importData } = body;
+
+  let transactions: ImportTransaction[] = [];
+
+  // Parse based on format
+  if (format === "csv") {
+    const lines = importData.trim().split("\n");
+    const headers = lines[0].split(",").map((h: string) => h.trim());
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i]);
+      const row: any = {};
+      headers.forEach((header: string, idx: number) => {
+        row[header] = values[idx]?.trim() || "";
+      });
+
+      transactions.push({
+        date: row.date,
+        description: row.description,
+        amount: parseFloat(row.amount),
+        currency: row.currency,
+        paid_by_name: row.paid_by_name,
+        paid_by_wallet: row.paid_by_wallet || undefined,
+        category: row.category || undefined,
+        split_type: row.split_type === "custom" ? "custom" : "equal",
+        split_participants: row.split_participants,
+        notes: row.notes || undefined,
+      });
+    }
+  } else if (format === "json") {
+    const parsed = typeof importData === "string" ? JSON.parse(importData) : importData;
+    transactions = parsed.transactions || [];
+  } else {
+    return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
+  }
+
+  // Validate and prepare data
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  // Fetch trip travelers and wallets
+  const { data: travelers } = await db
+    .from("travelers")
+    .select("id, name")
+    .eq("trip_id", params.id);
+
+  const { data: wallets } = await db
+    .from("wallets")
+    .select("id, name, traveler_id, travelers(name)")
+    .eq("trip_id", params.id);
+
+  // Fetch existing expenses for duplicate detection
+  const { data: existingExpenses } = await db
+    .from("expenses")
+    .select("date, description, amount")
+    .eq("trip_id", params.id);
+
+  const travelerMap = new Map(
+    (travelers || []).map((t) => [t.name.toLowerCase(), t.id])
+  );
+
+  const walletMap = new Map(
+    (wallets || []).map((w) => [
+      `${(w.travelers as any)?.name?.toLowerCase()}-${w.name.toLowerCase()}`,
+      w.id,
+    ])
+  );
+
+  const duplicateSet = new Set(
+    (existingExpenses || []).map(
+      (e) => `${e.date}|${e.description.toLowerCase()}|${e.amount}`
+    )
+  );
+
+  const validTransactions: any[] = [];
+
+  for (let i = 0; i < transactions.length; i++) {
+    const txn = transactions[i];
+    const rowNum = i + 2; // +2 because row 1 is header, array is 0-indexed
+
+    // Check for duplicates
+    const dupKey = `${txn.date}|${txn.description.toLowerCase()}|${txn.amount}`;
+    if (duplicateSet.has(dupKey)) {
+      warnings.push(`Row ${rowNum}: Duplicate transaction skipped (${txn.description})`);
+      continue;
+    }
+
+    // Validate required fields
+    if (!txn.date) {
+      errors.push({ row: rowNum, field: "date", message: "Date is required" });
+      continue;
+    }
+    if (!txn.description) {
+      errors.push({ row: rowNum, field: "description", message: "Description is required" });
+      continue;
+    }
+    if (!txn.amount || isNaN(txn.amount)) {
+      errors.push({ row: rowNum, field: "amount", message: "Valid amount is required" });
+      continue;
+    }
+    if (!txn.currency) {
+      errors.push({ row: rowNum, field: "currency", message: "Currency is required" });
+      continue;
+    }
+
+    // Match paid_by traveler
+    const paidByTravelerId = travelerMap.get(txn.paid_by_name.toLowerCase());
+    if (!paidByTravelerId) {
+      errors.push({
+        row: rowNum,
+        field: "paid_by_name",
+        message: `Traveler "${txn.paid_by_name}" not found`,
+      });
+      continue;
+    }
+
+    // Match wallet if provided
+    let paidByWalletId: string | null = null;
+    if (txn.paid_by_wallet) {
+      const walletKey = `${txn.paid_by_name.toLowerCase()}-${txn.paid_by_wallet.toLowerCase()}`;
+      paidByWalletId = walletMap.get(walletKey) || null;
+      if (!paidByWalletId) {
+        errors.push({
+          row: rowNum,
+          field: "paid_by_wallet",
+          message: `Wallet "${txn.paid_by_wallet}" not found for ${txn.paid_by_name}`,
+        });
+        continue;
+      }
+    }
+
+    // Parse split participants
+    let splitParticipants: Array<{ traveler_id: string; amount?: number }> = [];
+    if (typeof txn.split_participants === "string") {
+      const names = txn.split_participants.split(";").map((n) => n.trim()).filter(Boolean);
+      for (const name of names) {
+        const travelerId = travelerMap.get(name.toLowerCase());
+        if (!travelerId) {
+          errors.push({
+            row: rowNum,
+            field: "split_participants",
+            message: `Participant "${name}" not found`,
+          });
+          break;
+        }
+        splitParticipants.push({ traveler_id: travelerId });
+      }
+    } else if (Array.isArray(txn.split_participants)) {
+      for (const participant of txn.split_participants) {
+        const travelerId = travelerMap.get(participant.name.toLowerCase());
+        if (!travelerId) {
+          errors.push({
+            row: rowNum,
+            field: "split_participants",
+            message: `Participant "${participant.name}" not found`,
+          });
+          break;
+        }
+        splitParticipants.push({
+          traveler_id: travelerId,
+          amount: participant.amount,
+        });
+      }
+    }
+
+    if (errors.some((e) => e.row === rowNum)) continue;
+
+    validTransactions.push({
+      trip_id: params.id,
+      date: txn.date,
+      description: txn.description,
+      amount: txn.amount,
+      currency: txn.currency,
+      paid_by: paidByTravelerId,
+      paid_by_wallet_id: paidByWalletId,
+      category: txn.category || null,
+      notes: txn.notes || null,
+      split_type: txn.split_type,
+      split_participants: splitParticipants,
+    });
+  }
+
+  if (errors.length > 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        errors,
+        warnings,
+        valid_count: validTransactions.length,
+        total_count: transactions.length,
+      },
+      { status: 400 }
+    );
+  }
+
+  // Insert transactions
+  let insertedCount = 0;
+  for (const txn of validTransactions) {
+    const { split_participants, split_type, ...expenseData } = txn;
+
+    const { data: expense, error: expenseError } = await db
+      .from("expenses")
+      .insert(expenseData)
+      .select()
+      .single();
+
+    if (expenseError) {
+      errors.push({
+        row: insertedCount + 2,
+        field: "database",
+        message: expenseError.message,
+      });
+      continue;
+    }
+
+    // Insert splits
+    const splits = split_participants.map((sp: any, idx: number) => ({
+      expense_id: expense.id,
+      traveler_id: sp.traveler_id,
+      amount:
+        sp.amount !== undefined
+          ? sp.amount
+          : Math.round((txn.amount / split_participants.length) * 100) / 100,
+      locked: false,
+    }));
+
+    const { error: splitsError } = await db.from("expense_splits").insert(splits);
+
+    if (splitsError) {
+      errors.push({
+        row: insertedCount + 2,
+        field: "splits",
+        message: splitsError.message,
+      });
+      await db.from("expenses").delete().eq("id", expense.id);
+      continue;
+    }
+
+    insertedCount++;
+  }
+
+  return NextResponse.json({
+    success: true,
+    inserted_count: insertedCount,
+    total_count: transactions.length,
+    warnings,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+}
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current);
+  return result;
+}

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet } from "lucide-react";
+import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useEffect, useState } from "react";
 
@@ -74,6 +74,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
     { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Analytics" },
     { href: `/trips/${tripId}/pool`, icon: Banknote, label: "Pool" },
     { href: `/trips/${tripId}/wallets`, icon: Wallet, label: "Wallets" },
+    { href: `/trips/${tripId}/import-export`, icon: ArrowLeftRight, label: "Import/Export" },
     { href: `/trips/${tripId}/settings`, icon: Settings2, label: "Settings" },
     { href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" },
   ];

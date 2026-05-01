@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight } from "lucide-react";
 
 type Member = {
   user_id: string;
@@ -171,6 +171,23 @@ export default function SettingsPage() {
               <span className="text-2xl font-bold text-emerald-400 font-mono tracking-widest">{trip.join_code}</span>
               <p className="text-xs text-slate-500">Share this with travelers to let them join</p>
             </div>
+          </div>
+
+          {/* Import/Export */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ArrowLeftRight size={14} className="text-blue-400" />
+              <h2 className="text-sm font-semibold text-white">Import / Export</h2>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Export your transactions to CSV or JSON, or import transactions from a file.
+            </p>
+            <button
+              onClick={() => router.push(`/trips/${id}/import-export`)}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              Go to Import/Export
+            </button>
           </div>
 
           {/* Members — admin only */}
