@@ -4,13 +4,13 @@ import { serverDb } from "@/lib/supabase";
 
 interface ImportTransaction {
   date: string;
-  description: string;
-  amount: number;
-  currency: string;
-  paid_by_name: string;
-  paid_by_wallet?: string;
-  category?: string;
-  split_type: "equal" | "custom";
+  category: string;
+  myr_amount: number;
+  foreign_amount?: number;
+  paid_by: string;
+  payment_type: string;
+  wallet?: string;
+  split_type: string;
   split_participants: string | Array<{ name: string; amount?: number }>;
   notes?: string;
 }
@@ -42,13 +42,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       transactions.push({
         date: row.date,
-        description: row.description,
-        amount: parseFloat(row.amount),
-        currency: row.currency,
-        paid_by_name: row.paid_by_name,
-        paid_by_wallet: row.paid_by_wallet || undefined,
-        category: row.category || undefined,
-        split_type: row.split_type === "custom" ? "custom" : "equal",
+        category: row.category,
+        myr_amount: parseFloat(row.myr_amount),
+        foreign_amount: row.foreign_amount ? parseFloat(row.foreign_amount) : undefined,
+        paid_by: row.paid_by,
+        payment_type: row.payment_type || "Cash",
+        wallet: row.wallet || undefined,
+        split_type: row.split_type || "even",
         split_participants: row.split_participants,
         notes: row.notes || undefined,
       });
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Fetch existing expenses for duplicate detection
   const { data: existingExpenses } = await db
     .from("expenses")
-    .select("date, description, amount")
+    .select("date, category, myr_amount")
     .eq("trip_id", params.id);
 
   const travelerMap = new Map(
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const duplicateSet = new Set(
     (existingExpenses || []).map(
-      (e) => `${e.date}|${e.description.toLowerCase()}|${e.amount}`
+      (e) => `${e.date}|${e.category.toLowerCase()}|${e.myr_amount}`
     )
   );
 
@@ -105,9 +105,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const rowNum = i + 2; // +2 because row 1 is header, array is 0-indexed
 
     // Check for duplicates
-    const dupKey = `${txn.date}|${txn.description.toLowerCase()}|${txn.amount}`;
+    const dupKey = `${txn.date}|${txn.category.toLowerCase()}|${txn.myr_amount}`;
     if (duplicateSet.has(dupKey)) {
-      warnings.push(`Row ${rowNum}: Duplicate transaction skipped (${txn.description})`);
+      warnings.push(`Row ${rowNum}: Duplicate transaction skipped (${txn.category})`);
       continue;
     }
 
@@ -116,40 +116,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       errors.push({ row: rowNum, field: "date", message: "Date is required" });
       continue;
     }
-    if (!txn.description) {
-      errors.push({ row: rowNum, field: "description", message: "Description is required" });
+    if (!txn.category) {
+      errors.push({ row: rowNum, field: "category", message: "Category is required" });
       continue;
     }
-    if (!txn.amount || isNaN(txn.amount)) {
-      errors.push({ row: rowNum, field: "amount", message: "Valid amount is required" });
-      continue;
-    }
-    if (!txn.currency) {
-      errors.push({ row: rowNum, field: "currency", message: "Currency is required" });
+    if (!txn.myr_amount || isNaN(txn.myr_amount)) {
+      errors.push({ row: rowNum, field: "myr_amount", message: "Valid MYR amount is required" });
       continue;
     }
 
     // Match paid_by traveler
-    const paidByTravelerId = travelerMap.get(txn.paid_by_name.toLowerCase());
+    const paidByTravelerId = travelerMap.get(txn.paid_by.toLowerCase());
     if (!paidByTravelerId) {
       errors.push({
         row: rowNum,
-        field: "paid_by_name",
-        message: `Traveler "${txn.paid_by_name}" not found`,
+        field: "paid_by",
+        message: `Traveler "${txn.paid_by}" not found`,
       });
       continue;
     }
 
     // Match wallet if provided
-    let paidByWalletId: string | null = null;
-    if (txn.paid_by_wallet) {
-      const walletKey = `${txn.paid_by_name.toLowerCase()}-${txn.paid_by_wallet.toLowerCase()}`;
-      paidByWalletId = walletMap.get(walletKey) || null;
-      if (!paidByWalletId) {
+    let walletId: string | null = null;
+    if (txn.wallet) {
+      const walletKey = `${txn.paid_by.toLowerCase()}-${txn.wallet.toLowerCase()}`;
+      walletId = walletMap.get(walletKey) || null;
+      if (!walletId) {
         errors.push({
           row: rowNum,
-          field: "paid_by_wallet",
-          message: `Wallet "${txn.paid_by_wallet}" not found for ${txn.paid_by_name}`,
+          field: "wallet",
+          message: `Wallet "${txn.wallet}" not found for ${txn.paid_by}`,
         });
         continue;
       }
@@ -194,14 +190,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     validTransactions.push({
       trip_id: params.id,
       date: txn.date,
-      description: txn.description,
-      amount: txn.amount,
-      currency: txn.currency,
-      paid_by: paidByTravelerId,
-      paid_by_wallet_id: paidByWalletId,
-      category: txn.category || null,
-      notes: txn.notes || null,
+      category: txn.category,
+      myr_amount: txn.myr_amount,
+      foreign_amount: txn.foreign_amount || null,
+      paid_by_id: paidByTravelerId,
+      payment_type: txn.payment_type,
+      wallet_id: walletId,
       split_type: txn.split_type,
+      notes: txn.notes || null,
       split_participants: splitParticipants,
     });
   }
@@ -222,7 +218,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Insert transactions
   let insertedCount = 0;
   for (const txn of validTransactions) {
-    const { split_participants, split_type, ...expenseData } = txn;
+    const { split_participants, ...expenseData } = txn;
 
     const { data: expense, error: expenseError } = await db
       .from("expenses")
@@ -240,14 +236,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Insert splits
-    const splits = split_participants.map((sp: any, idx: number) => ({
+    const splits = split_participants.map((sp: any) => ({
       expense_id: expense.id,
       traveler_id: sp.traveler_id,
       amount:
         sp.amount !== undefined
           ? sp.amount
-          : Math.round((txn.amount / split_participants.length) * 100) / 100,
-      locked: false,
+          : Math.round((txn.myr_amount / split_participants.length) * 100) / 100,
+      is_settled: false,
     }));
 
     const { error: splitsError } = await db.from("expense_splits").insert(splits);

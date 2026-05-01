@@ -20,17 +20,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: tripError.message }, { status: 404 });
   }
 
-  // Build query for expenses with splits and travelers
+  // Build query for expenses
   let query = db
     .from("expenses")
     .select(`
       *,
-      paid_by_traveler:travelers!expenses_paid_by_fkey(id, name),
-      paid_by_wallet:wallets(id, name),
-      splits(
-        *,
-        traveler:travelers(id, name)
-      )
+      paid_by:travelers!paid_by_id(id, name),
+      wallet:wallets(id, name)
     `)
     .eq("trip_id", params.id)
     .order("date", { ascending: true });
@@ -49,17 +45,29 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: expensesError.message }, { status: 500 });
   }
 
+  // Fetch splits for all expenses
+  const expenseIds = (expenses || []).map((e: any) => e.id);
+  let splits: any[] = [];
+
+  if (expenseIds.length > 0) {
+    const { data: splitsData } = await db
+      .from("expense_splits")
+      .select("*, traveler:travelers(id, name)")
+      .in("expense_id", expenseIds);
+    splits = splitsData || [];
+  }
+
   if (format === "csv") {
     // Generate CSV
     const csvRows = [
       [
         "date",
-        "description",
-        "amount",
-        "currency",
-        "paid_by_name",
-        "paid_by_wallet",
         "category",
+        "myr_amount",
+        "foreign_amount",
+        "paid_by",
+        "payment_type",
+        "wallet",
         "split_type",
         "split_participants",
         "notes",
@@ -67,8 +75,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     ];
 
     for (const expense of expenses || []) {
-      const splits = expense.splits || [];
-      const participantNames = splits
+      const expenseSplits = splits.filter((s: any) => s.expense_id === expense.id);
+      const participantNames = expenseSplits
         .map((s: any) => s.traveler?.name || "")
         .filter(Boolean)
         .join(";");
@@ -76,15 +84,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       csvRows.push(
         [
           expense.date,
-          `"${expense.description.replace(/"/g, '""')}"`,
-          expense.amount,
-          expense.currency,
-          expense.paid_by_traveler?.name || "",
-          expense.paid_by_wallet?.name || "",
-          expense.category || "",
-          splits.length > 0 && splits.every((s: any) => s.amount === splits[0].amount)
-            ? "equal"
-            : "custom",
+          `"${expense.category.replace(/"/g, '""')}"`,
+          expense.myr_amount,
+          expense.foreign_amount || "",
+          expense.paid_by?.name || "",
+          expense.payment_type,
+          expense.wallet?.name || "",
+          expense.split_type,
           `"${participantNames}"`,
           `"${(expense.notes || "").replace(/"/g, '""')}"`,
         ].join(",")
@@ -101,20 +107,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   } else {
     // Generate JSON
     const transactions = (expenses || []).map((expense: any) => {
-      const splits = expense.splits || [];
+      const expenseSplits = splits.filter((s: any) => s.expense_id === expense.id);
       return {
         date: expense.date,
-        description: expense.description,
-        amount: expense.amount,
-        currency: expense.currency,
-        paid_by: expense.paid_by_traveler?.name || "",
-        paid_by_wallet: expense.paid_by_wallet?.name || "",
-        category: expense.category || "",
-        split_type:
-          splits.length > 0 && splits.every((s: any) => s.amount === splits[0].amount)
-            ? "equal"
-            : "custom",
-        split_participants: splits.map((s: any) => ({
+        category: expense.category,
+        myr_amount: expense.myr_amount,
+        foreign_amount: expense.foreign_amount,
+        paid_by: expense.paid_by?.name || "",
+        payment_type: expense.payment_type,
+        wallet: expense.wallet?.name || "",
+        split_type: expense.split_type,
+        split_participants: expenseSplits.map((s: any) => ({
           name: s.traveler?.name || "",
           amount: s.amount,
         })),
@@ -125,6 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const exportData = {
       trip_id: trip.id,
       trip_name: trip.name,
+      foreign_currency: trip.foreign_currency,
       exported_at: new Date().toISOString(),
       date_range: {
         start: startDate || "all",

@@ -323,10 +323,11 @@ export default function ImportExportPage() {
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="text-sm font-semibold text-blue-900 mb-2">Import Notes:</h3>
           <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-            <li>Duplicate transactions (same date, description, amount) will be skipped</li>
+            <li>Duplicate transactions (same date, category, MYR amount) will be skipped</li>
             <li>Traveler names and wallet names must match exactly (case-insensitive)</li>
             <li>Split participants should be separated by semicolons in CSV format</li>
             <li>All imported transactions will be added to existing transactions</li>
+            <li>CSV columns: date, category, myr_amount, foreign_amount, paid_by, payment_type, wallet, split_type, split_participants, notes</li>
           </ul>
         </div>
       </div>
