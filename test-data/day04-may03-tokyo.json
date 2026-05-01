@@ -1,0 +1,153 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 4 - May 3, 2026 (Tokyo)",
+  "transactions": [
+    {
+      "date": "2026-05-03",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 3600,
+      "myr_amount": 108,
+      "paid_by": "Mac",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 27 },
+        { "name": "Willy", "amount": 27 },
+        { "name": "Mac", "amount": 27 },
+        { "name": "Cristo", "amount": 27 }
+      ],
+      "notes": "Breakfast at convenience store"
+    },
+    {
+      "date": "2026-05-03",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 12000,
+      "myr_amount": 360,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 90 },
+        { "name": "Willy", "amount": 90 },
+        { "name": "Mac", "amount": 90 },
+        { "name": "Cristo", "amount": 90 }
+      ],
+      "notes": "Tokyo Disneyland tickets"
+    },
+    {
+      "date": "2026-05-03",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 8000,
+      "myr_amount": 240,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 60 },
+        { "name": "Willy", "amount": 60 },
+        { "name": "Mac", "amount": 60 },
+        { "name": "Cristo", "amount": 60 }
+      ],
+      "notes": "Lunch at Disneyland"
+    },
+    {
+      "date": "2026-05-03",
+      "category": "Shopping",
+      "currency": "JPY",
+      "amount": 15000,
+      "myr_amount": 450,
+      "paid_by": "Willy",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "custom",
+      "split_participants": [
+        { "name": "Darren", "amount": 150 },
+        { "name": "Willy", "amount": 150 },
+        { "name": "Mac", "amount": 150 }
+      ],
+      "notes": "Disney merchandise (Cristo opted out)"
+    },
+    {
+      "date": "2026-05-03",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 9600,
+      "myr_amount": 288,
+      "paid_by": "Mac",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 72 },
+        { "name": "Willy", "amount": 72 },
+        { "name": "Mac", "amount": 72 },
+        { "name": "Cristo", "amount": 72 }
+      ],
+      "notes": "Dinner at Shibuya"
+    },
+    {
+      "date": "2026-05-03",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 2400,
+      "myr_amount": 72,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 18 },
+        { "name": "Willy", "amount": 18 },
+        { "name": "Mac", "amount": 18 },
+        { "name": "Cristo", "amount": 18 }
+      ],
+      "notes": "Train tickets for the day"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-05-03 EOD",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR 1,060.25 (spent JPY 4800+12000+2400 = MYR 576)",
+        "Cash MYR": "MYR 500",
+        "Cash JPY": "JPY 0"
+      },
+      "Willy": {
+        "TNG": "MYR 1,450",
+        "Credit Card": "MYR -1,290 (charged JPY 18000+15000 = MYR 990)",
+        "Cash MYR": "MYR 300",
+        "Cash JPY": "JPY 0"
+      },
+      "Mac": {
+        "Credit Card": "MYR -546 (charged JPY 3600+9600 = MYR 396)",
+        "Cash MYR": "MYR 400",
+        "Cash JPY": "JPY 0"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash JPY": "JPY 0 (spent JPY 5200+8000 = MYR 396)"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool JPY": "JPY 0"
+    },
+    "settlement_status": {
+      "total_spent": "MYR 3,543 (Day 1-4 cumulative)",
+      "per_person_share": "MYR 885.75",
+      "balances": {
+        "Darren": "owes MYR 34.25 (paid 1119.75, share 885.75)",
+        "Willy": "owes MYR -4.25 (paid 890, share 885.75)",
+        "Mac": "owes MYR 204.75 (paid 681, share 885.75)",
+        "Cristo": "owes MYR -234.75 (paid 776.75, share 885.75)"
+      },
+      "note": "Cristo is now owed money (overpaid)"
+    }
+  }
+}

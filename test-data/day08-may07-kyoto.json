@@ -1,0 +1,153 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 8 - May 7, 2026 (Kyoto)",
+  "transactions": [
+    {
+      "date": "2026-05-07",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 4800,
+      "myr_amount": 144,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 36 },
+        { "name": "Willy", "amount": 36 },
+        { "name": "Mac", "amount": 36 },
+        { "name": "Cristo", "amount": 36 }
+      ],
+      "notes": "Breakfast at traditional tea house"
+    },
+    {
+      "date": "2026-05-07",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 16000,
+      "myr_amount": 480,
+      "paid_by": "Japan Fund",
+      "payment_type": "Cash",
+      "wallet": "Cash Pool JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 120 },
+        { "name": "Willy", "amount": 120 },
+        { "name": "Mac", "amount": 120 },
+        { "name": "Cristo", "amount": 120 }
+      ],
+      "notes": "Arashiyama Bamboo Grove & Monkey Park - POOL FUNDED"
+    },
+    {
+      "date": "2026-05-07",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 8400,
+      "myr_amount": 252,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 63 },
+        { "name": "Willy", "amount": 63 },
+        { "name": "Mac", "amount": 63 },
+        { "name": "Cristo", "amount": 63 }
+      ],
+      "notes": "Lunch at Arashiyama"
+    },
+    {
+      "date": "2026-05-07",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 12000,
+      "myr_amount": 360,
+      "paid_by": "Japan Fund",
+      "payment_type": "Cash",
+      "wallet": "Cash Pool JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 90 },
+        { "name": "Willy", "amount": 90 },
+        { "name": "Mac", "amount": 90 },
+        { "name": "Cristo", "amount": 90 }
+      ],
+      "notes": "Kinkaku-ji (Golden Pavilion) tickets - POOL FUNDED"
+    },
+    {
+      "date": "2026-05-07",
+      "category": "Shopping",
+      "currency": "JPY",
+      "amount": 18000,
+      "myr_amount": 540,
+      "paid_by": "Willy",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "custom",
+      "split_participants": [
+        { "name": "Willy", "amount": 270 },
+        { "name": "Mac", "amount": 270 }
+      ],
+      "notes": "Kimono shopping - Willy & Mac only"
+    },
+    {
+      "date": "2026-05-07",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 9600,
+      "myr_amount": 288,
+      "paid_by": "Mac",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 72 },
+        { "name": "Willy", "amount": 72 },
+        { "name": "Mac", "amount": 72 },
+        { "name": "Cristo", "amount": 72 }
+      ],
+      "notes": "Dinner at Gion district"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-05-07 EOD",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR -1,795.75 (spent JPY 8400 = MYR 252)",
+        "Cash MYR": "MYR 500",
+        "Cash JPY": "JPY 0"
+      },
+      "Willy": {
+        "TNG": "MYR 778",
+        "Credit Card": "MYR -1,830 (charged JPY 18000 = MYR 540)",
+        "Cash MYR": "MYR 300",
+        "Cash JPY": "JPY 0"
+      },
+      "Mac": {
+        "Credit Card": "MYR -2,244 (charged JPY 9600+18000 = MYR 828)",
+        "Cash MYR": "MYR 400",
+        "Cash JPY": "JPY 0"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash JPY": "JPY 0 (spent JPY 4800 = MYR 144)"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool JPY": "JPY 0 (spent JPY 28000 = MYR 840 on activities)"
+    },
+    "settlement_status": {
+      "total_spent_day6_8": "MYR 4,500 (Day 6-8 cumulative)",
+      "pool_funded": "MYR 840 (auto-settled, not in balances)",
+      "per_person_share": "MYR 915",
+      "balances": {
+        "Darren": "owes MYR -141 (paid 1056, share 915)",
+        "Willy": "owes MYR -105 (paid 1020, share 915)",
+        "Mac": "owes MYR -213 (paid 1128, share 915)",
+        "Cristo": "owes MYR 279 (paid 636, share 915)"
+      },
+      "note": "Pool expenses auto-settled, Cristo owes the most"
+    }
+  }
+}
