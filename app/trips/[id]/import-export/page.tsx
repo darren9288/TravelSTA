@@ -120,217 +120,214 @@ export default function ImportExportPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Nav />
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="text-center py-12">Loading...</div>
-        </div>
-      </div>
+      <>
+        <Nav tripId={id} tripName={trip?.name} />
+        <main className="md:ml-56 pb-24 md:pb-8 min-h-screen flex items-center justify-center">
+          <div className="text-slate-400 text-sm">Loading...</div>
+        </main>
+      </>
     );
   }
 
   if (!trip) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Nav />
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="text-center py-12 text-red-600">Trip not found</div>
-        </div>
-      </div>
+      <>
+        <Nav tripId={id} />
+        <main className="md:ml-56 pb-24 md:pb-8 min-h-screen flex items-center justify-center">
+          <div className="text-red-400 text-sm">Trip not found</div>
+        </main>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Nav />
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Import / Export</h1>
-          <p className="text-sm text-gray-600 mt-1">{trip.name}</p>
-        </div>
+    <>
+      <Nav tripId={id} tripName={trip.name} />
+      <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
+        <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
+          <h1 className="text-xl font-bold text-white">Import / Export</h1>
 
-        {/* Export Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Download className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Export Transactions</h2>
-          </div>
-
-          <div className="space-y-4">
+          {/* Export Section */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use-date-filter"
-                checked={useDateFilter}
-                onChange={(e) => setUseDateFilter(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded"
-              />
-              <label htmlFor="use-date-filter" className="text-sm text-gray-700">
-                Filter by date range
-              </label>
+              <Download className="w-5 h-5 text-blue-400" />
+              <h2 className="text-base font-semibold text-white">Export Transactions</h2>
             </div>
 
-            {useDateFilter && (
-              <div className="flex gap-4 items-center pl-6">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <label className="text-sm text-gray-600">From:</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-300 rounded text-sm"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600">To:</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-300 rounded text-sm"
-                  />
-                </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="use-date-filter"
+                  checked={useDateFilter}
+                  onChange={(e) => setUseDateFilter(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <label htmlFor="use-date-filter" className="text-sm text-slate-300">
+                  Filter by date range
+                </label>
               </div>
-            )}
 
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => handleExport("csv")}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FileText className="w-4 h-4" />
-                Export as CSV
-              </button>
-              <button
-                onClick={() => handleExport("json")}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FileJson className="w-4 h-4" />
-                Export as JSON
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Import Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Upload className="w-5 h-5 text-purple-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Import Transactions</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select CSV or JSON file
-              </label>
-              <input
-                type="file"
-                accept=".csv,.json"
-                onChange={handleFileChange}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
-              />
-            </div>
-
-            {importFile && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <FileText className="w-4 h-4" />
-                <span>{importFile.name}</span>
-                <span className="text-gray-400">
-                  ({(importFile.size / 1024).toFixed(1)} KB)
-                </span>
-              </div>
-            )}
-
-            <button
-              onClick={handleImport}
-              disabled={!importFile || importing}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Upload className="w-4 h-4" />
-              {importing ? "Importing..." : "Import Transactions"}
-            </button>
-
-            {/* Import Result */}
-            {importResult && (
-              <div className="mt-4 p-4 rounded-lg border">
-                {importResult.success ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-green-700">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="font-semibold">Import Successful</span>
-                    </div>
-                    <p className="text-sm text-gray-700">
-                      Imported {importResult.inserted_count} of {importResult.total_count}{" "}
-                      transactions
-                    </p>
-                    {importResult.warnings && importResult.warnings.length > 0 && (
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2 text-yellow-700 mb-1">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm font-semibold">Warnings:</span>
-                        </div>
-                        <ul className="text-sm text-gray-600 space-y-1 pl-6">
-                          {importResult.warnings.map((warning, idx) => (
-                            <li key={idx}>{warning}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <p className="text-sm text-gray-500 mt-2">
-                      Redirecting to expenses page...
-                    </p>
+              {useDateFilter && (
+                <div className="flex gap-3 items-center pl-6">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <label className="text-xs text-slate-400">From:</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200"
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-red-700">
-                      <XCircle className="w-5 h-5" />
-                      <span className="font-semibold">Import Failed</span>
-                    </div>
-                    {importResult.valid_count !== undefined && (
-                      <p className="text-sm text-gray-700">
-                        {importResult.valid_count} of {importResult.total_count} transactions
-                        are valid
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-400">To:</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => handleExport("csv")}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Export CSV
+                </button>
+                <button
+                  onClick={() => handleExport("json")}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <FileJson className="w-4 h-4" />
+                  Export JSON
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Import Section */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-purple-400" />
+              <h2 className="text-base font-semibold text-white">Import Transactions</h2>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Select CSV or JSON file
+                </label>
+                <input
+                  type="file"
+                  accept=".csv,.json"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-500 file:transition-colors"
+                />
+              </div>
+
+              {importFile && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <FileText className="w-4 h-4" />
+                  <span>{importFile.name}</span>
+                  <span className="text-slate-500">
+                    ({(importFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+              )}
+
+              <button
+                onClick={handleImport}
+                disabled={!importFile || importing}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                {importing ? "Importing..." : "Import Transactions"}
+              </button>
+
+              {/* Import Result */}
+              {importResult && (
+                <div className="mt-3 p-4 rounded-lg border border-slate-600 bg-slate-700/50">
+                  {importResult.success ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-semibold text-sm">Import Successful</span>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        Imported {importResult.inserted_count} of {importResult.total_count} transactions
                       </p>
-                    )}
-                    {importResult.errors && importResult.errors.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-sm font-semibold text-red-700 mb-1">Errors:</div>
-                        <ul className="text-sm text-gray-600 space-y-1 pl-4">
-                          {importResult.errors.slice(0, 10).map((error, idx) => (
-                            <li key={idx}>
-                              Row {error.row}, {error.field}: {error.message}
-                            </li>
-                          ))}
-                          {importResult.errors.length > 10 && (
-                            <li className="text-gray-500">
-                              ... and {importResult.errors.length - 10} more errors
-                            </li>
-                          )}
-                        </ul>
+                      {importResult.warnings && importResult.warnings.length > 0 && (
+                        <div className="mt-2">
+                          <div className="flex items-center gap-2 text-yellow-400 mb-1">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Warnings:</span>
+                          </div>
+                          <ul className="text-xs text-slate-400 space-y-1 pl-6">
+                            {importResult.warnings.map((warning, idx) => (
+                              <li key={idx}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <p className="text-xs text-slate-500 mt-2">
+                        Redirecting to expenses page...
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-red-400">
+                        <XCircle className="w-5 h-5" />
+                        <span className="font-semibold text-sm">Import Failed</span>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                      {importResult.valid_count !== undefined && (
+                        <p className="text-sm text-slate-300">
+                          {importResult.valid_count} of {importResult.total_count} transactions are valid
+                        </p>
+                      )}
+                      {importResult.errors && importResult.errors.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-semibold text-red-400 mb-1">Errors:</div>
+                          <ul className="text-xs text-slate-400 space-y-1 pl-4">
+                            {importResult.errors.slice(0, 10).map((error, idx) => (
+                              <li key={idx}>
+                                Row {error.row}, {error.field}: {error.message}
+                              </li>
+                            ))}
+                            {importResult.errors.length > 10 && (
+                              <li className="text-slate-500">
+                                ... and {importResult.errors.length - 10} more errors
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-800/40 border border-slate-700/50 rounded-xl">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Import Notes:</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Duplicate transactions (same date, category, MYR amount) will be skipped</li>
+              <li>Traveler names and wallet names must match exactly (case-insensitive)</li>
+              <li>Split participants should be separated by semicolons in CSV format</li>
+              <li>All imported transactions will be added to existing transactions</li>
+              <li>CSV columns: date, category, myr_amount, foreign_amount, paid_by, payment_type, wallet, split_type, split_participants, notes</li>
+            </ul>
           </div>
         </div>
-
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-sm font-semibold text-blue-900 mb-2">Import Notes:</h3>
-          <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-            <li>Duplicate transactions (same date, category, MYR amount) will be skipped</li>
-            <li>Traveler names and wallet names must match exactly (case-insensitive)</li>
-            <li>Split participants should be separated by semicolons in CSV format</li>
-            <li>All imported transactions will be added to existing transactions</li>
-            <li>CSV columns: date, category, myr_amount, foreign_amount, paid_by, payment_type, wallet, split_type, split_participants, notes</li>
-          </ul>
-        </div>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }
