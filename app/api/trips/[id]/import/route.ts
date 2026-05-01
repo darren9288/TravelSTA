@@ -5,8 +5,10 @@ import { serverDb } from "@/lib/supabase";
 interface ImportTransaction {
   date: string;
   category: string;
+  currency?: string;
+  amount?: number;
   myr_amount: number;
-  foreign_amount?: number;
+  foreign_amount?: number; // Legacy support
   paid_by: string;
   payment_type: string;
   wallet?: string;
@@ -43,6 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       transactions.push({
         date: row.date,
         category: row.category,
+        currency: row.currency || "MYR",
+        amount: row.amount ? parseFloat(row.amount) : undefined,
         myr_amount: parseFloat(row.myr_amount),
         foreign_amount: row.foreign_amount ? parseFloat(row.foreign_amount) : undefined,
         paid_by: row.paid_by,
@@ -63,6 +67,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Validate and prepare data
   const errors: ValidationError[] = [];
   const warnings: string[] = [];
+
+  // Fetch trip info for currency validation
+  const { data: trip } = await db
+    .from("trips")
+    .select("foreign_currency, foreign_currency_2")
+    .eq("id", params.id)
+    .single();
+
+  const allowedCurrencies = ["MYR", trip?.foreign_currency];
+  if (trip?.foreign_currency_2 && trip.foreign_currency_2 !== "None") {
+    allowedCurrencies.push(trip.foreign_currency_2);
+  }
 
   // Fetch trip travelers and wallets
   const { data: travelers } = await db
@@ -122,6 +138,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     if (!txn.myr_amount || isNaN(txn.myr_amount)) {
       errors.push({ row: rowNum, field: "myr_amount", message: "Valid MYR amount is required" });
+      continue;
+    }
+
+    // Validate currency
+    const currency = txn.currency || "MYR";
+    if (!allowedCurrencies.includes(currency)) {
+      errors.push({
+        row: rowNum,
+        field: "currency",
+        message: `Currency "${currency}" not allowed for this trip. Allowed: ${allowedCurrencies.join(", ")}`,
+      });
       continue;
     }
 
@@ -191,8 +218,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       trip_id: params.id,
       date: txn.date,
       category: txn.category,
+      currency: txn.currency || "MYR",
       myr_amount: txn.myr_amount,
-      foreign_amount: txn.foreign_amount || null,
+      foreign_amount: txn.amount || txn.foreign_amount || null,
       paid_by_id: paidByTravelerId,
       payment_type: txn.payment_type,
       wallet_id: walletId,

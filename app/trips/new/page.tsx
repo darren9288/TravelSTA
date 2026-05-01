@@ -22,6 +22,7 @@ export default function NewTripPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [currency, setCurrency] = useState("JPY");
+  const [currency2, setCurrency2] = useState("None");
 
   // Step 2
   const [travelers, setTravelers] = useState<TravelerDraft[]>([{ name: "", color: TRAVELER_COLORS[0] }]);
@@ -32,6 +33,8 @@ export default function NewTripPage() {
   // Step 4
   const [cashRate, setCashRate] = useState("");
   const [wiseRate, setWiseRate] = useState("");
+  const [cashRate2, setCashRate2] = useState("");
+  const [wiseRate2, setWiseRate2] = useState("");
 
   function addTraveler() {
     setTravelers([...travelers, { name: "", color: TRAVELER_COLORS[travelers.length % TRAVELER_COLORS.length] }]);
@@ -58,6 +61,9 @@ export default function NewTripPage() {
           foreign_currency: currency,
           cash_rate: parseFloat(cashRate) || 1,
           wise_rate: parseFloat(wiseRate) || 1,
+          foreign_currency_2: currency2 !== "None" ? currency2 : null,
+          cash_rate_2: currency2 !== "None" ? (parseFloat(cashRate2) || 1) : null,
+          wise_rate_2: currency2 !== "None" ? (parseFloat(wiseRate2) || 1) : null,
         }),
       });
       const trip = await tripRes.json();
@@ -111,6 +117,11 @@ export default function NewTripPage() {
                 <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
                 </select></div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Second Foreign Currency (Optional)</label>
+                <select value={currency2} onChange={(e) => setCurrency2(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                  <option>None</option>
+                  {CURRENCIES.filter(c => c !== currency).map((c) => <option key={c}>{c}</option>)}
+                </select></div>
               <button onClick={() => { if (name.trim()) setStep(2); }} disabled={!name.trim()}
                 className="flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
                 Next <ChevronRight size={16} />
@@ -160,7 +171,7 @@ export default function NewTripPage() {
                     placeholder="Pool name (e.g. Cash Pool)" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                   <select value={p.pool_currency} onChange={(e) => setPools(pools.map((x, idx) => idx === i ? { ...x, pool_currency: e.target.value } : x))}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                    <option>MYR</option><option>{currency}</option>
+                    <option>MYR</option><option>{currency}</option>{currency2 !== "None" && <option>{currency2}</option>}
                   </select>
                   {pools.length > 1 && <button onClick={() => removePool(i)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>}
                 </div>
@@ -187,6 +198,19 @@ export default function NewTripPage() {
               <div><label className="text-xs text-slate-400 mb-1 block">Wise Rate (1 MYR = ? {currency})</label>
                 <input type="number" value={wiseRate} onChange={(e) => setWiseRate(e.target.value)} placeholder="e.g. 34.2" step="0.01"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+
+              {currency2 !== "None" && (
+                <>
+                  <p className="text-sm text-slate-500 mt-2">How many {currency2} per 1 MYR?</p>
+                  <div><label className="text-xs text-slate-400 mb-1 block">Cash Rate (1 MYR = ? {currency2})</label>
+                    <input type="number" value={cashRate2} onChange={(e) => setCashRate2(e.target.value)} placeholder="e.g. 33.5" step="0.01"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                  <div><label className="text-xs text-slate-400 mb-1 block">Wise Rate (1 MYR = ? {currency2})</label>
+                    <input type="number" value={wiseRate2} onChange={(e) => setWiseRate2(e.target.value)} placeholder="e.g. 34.2" step="0.01"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                </>
+              )}
+
               {error && <p className="text-sm text-red-400">{error}</p>}
               <div className="flex gap-2 mt-2">
                 <button onClick={() => setStep(3)} className="flex-1 py-2.5 border border-slate-600 text-slate-400 hover:text-white rounded-xl text-sm transition-colors">Back</button>

@@ -63,8 +63,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       [
         "date",
         "category",
+        "currency",
+        "amount",
         "myr_amount",
-        "foreign_amount",
         "paid_by",
         "payment_type",
         "wallet",
@@ -85,8 +86,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         [
           expense.date,
           `"${expense.category.replace(/"/g, '""')}"`,
+          expense.currency || "MYR",
+          expense.foreign_amount || expense.myr_amount,
           expense.myr_amount,
-          expense.foreign_amount || "",
           expense.paid_by?.name || "",
           expense.payment_type,
           expense.wallet?.name || "",
@@ -111,8 +113,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return {
         date: expense.date,
         category: expense.category,
+        currency: expense.currency || "MYR",
+        amount: expense.foreign_amount || expense.myr_amount,
         myr_amount: expense.myr_amount,
-        foreign_amount: expense.foreign_amount,
         paid_by: expense.paid_by?.name || "",
         payment_type: expense.payment_type,
         wallet: expense.wallet?.name || "",
@@ -129,6 +132,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       trip_id: trip.id,
       trip_name: trip.name,
       foreign_currency: trip.foreign_currency,
+      foreign_currency_2: trip.foreign_currency_2 || null,
       exported_at: new Date().toISOString(),
       date_range: {
         start: startDate || "all",

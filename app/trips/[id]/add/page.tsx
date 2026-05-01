@@ -24,6 +24,7 @@ export default function AddExpensePage() {
   const [splitType, setSplitType] = useState<"even" | "individual">("even");
   const [paidById, setPaidById] = useState("");
   const [paymentType, setPaymentType] = useState("Cash");
+  const [currency, setCurrency] = useState("MYR");
   const [foreignAmount, setForeignAmount] = useState("");
   const [myrAmount, setMyrAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -65,11 +66,16 @@ export default function AddExpensePage() {
 
   // Auto-convert foreign → MYR for form tab
   useEffect(() => {
-    if (!trip || !foreignAmount) return;
-    const rate = paymentType === "Wise" ? trip.wise_rate : trip.cash_rate;
+    if (!trip || !foreignAmount || currency === "MYR") return;
+    let rate = 1;
+    if (currency === trip.foreign_currency) {
+      rate = paymentType === "Wise" ? trip.wise_rate : trip.cash_rate;
+    } else if (currency === trip.foreign_currency_2) {
+      rate = paymentType === "Wise" ? (trip.wise_rate_2 ?? 1) : (trip.cash_rate_2 ?? 1);
+    }
     const myr = parseFloat(foreignAmount) / rate;
     if (!isNaN(myr)) setMyrAmount(myr.toFixed(2));
-  }, [foreignAmount, paymentType, trip]);
+  }, [foreignAmount, paymentType, trip, currency]);
 
   const realTravelers = travelers.filter((t) => !t.is_pool);
 
@@ -100,7 +106,8 @@ export default function AddExpensePage() {
         body: JSON.stringify({
           trip_id: id, date, category, split_type: splitType,
           paid_by_id: paidById, payment_type: paymentType,
-          foreign_amount: parseFloat(foreignAmount) || null,
+          currency: currency,
+          foreign_amount: currency !== "MYR" ? parseFloat(foreignAmount) || null : null,
           myr_amount: total, notes: notes || null, created_by_id: myId, splits: splitData,
           wallet_id: walletId || null,
         }),
@@ -256,13 +263,22 @@ export default function AddExpensePage() {
                   </select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">{trip.foreign_currency} Amount</label>
-                  <input type="number" value={foreignAmount} onChange={(e) => setForeignAmount(e.target.value)} placeholder="e.g. 1200" step="1"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
-                  <input type="number" value={myrAmount} onChange={(e) => setMyrAmount(e.target.value)} placeholder="e.g. 35.80" step="0.01"
+                <div><label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                  <select value={currency} onChange={(e) => { setCurrency(e.target.value); setForeignAmount(""); setMyrAmount(""); }}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    <option value="MYR">MYR</option>
+                    <option value={trip.foreign_currency}>{trip.foreign_currency}</option>
+                    {trip.foreign_currency_2 && <option value={trip.foreign_currency_2}>{trip.foreign_currency_2}</option>}
+                  </select></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">{currency} Amount *</label>
+                  <input type="number" value={currency === "MYR" ? myrAmount : foreignAmount}
+                    onChange={(e) => currency === "MYR" ? setMyrAmount(e.target.value) : setForeignAmount(e.target.value)}
+                    placeholder="e.g. 1200" step={currency === "MYR" ? "0.01" : "1"}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               </div>
+              {currency !== "MYR" && myrAmount && (
+                <p className="text-xs text-slate-500">≈ RM {myrAmount}</p>
+              )}
               {splitType === "even" && myrAmount && (
                 <p className="text-xs text-slate-500">Each person pays RM {evenSplitAmount(parseFloat(myrAmount)).toFixed(2)}</p>
               )}
