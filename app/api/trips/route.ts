@@ -59,6 +59,9 @@ export async function POST(req: NextRequest) {
     foreign_currency: body.foreign_currency ?? "JPY",
     cash_rate: body.cash_rate ?? 1,
     wise_rate: body.wise_rate ?? 1,
+    foreign_currency_2: body.foreign_currency_2 ?? null,
+    cash_rate_2: body.cash_rate_2 ?? null,
+    wise_rate_2: body.wise_rate_2 ?? null,
     join_code,
     created_by_user_id: user.id,
   }).select().single();

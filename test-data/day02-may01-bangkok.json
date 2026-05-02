@@ -1,0 +1,151 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 2 - May 1, 2026 (Bangkok)",
+  "transactions": [
+    {
+      "date": "2026-05-01",
+      "category": "Food",
+      "currency": "THB",
+      "amount": 450,
+      "myr_amount": 56.25,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 14.06 },
+        { "name": "Willy", "amount": 14.06 },
+        { "name": "Mac", "amount": 14.06 },
+        { "name": "Cristo", "amount": 14.07 }
+      ],
+      "notes": "Breakfast at hotel"
+    },
+    {
+      "date": "2026-05-01",
+      "category": "Activity",
+      "currency": "THB",
+      "amount": 1600,
+      "myr_amount": 200,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50 },
+        { "name": "Willy", "amount": 50 },
+        { "name": "Mac", "amount": 50 },
+        { "name": "Cristo", "amount": 50 }
+      ],
+      "notes": "Grand Palace tickets"
+    },
+    {
+      "date": "2026-05-01",
+      "category": "Transport",
+      "currency": "THB",
+      "amount": 240,
+      "myr_amount": 30,
+      "paid_by": "Willy",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 7.5 },
+        { "name": "Willy", "amount": 7.5 },
+        { "name": "Mac", "amount": 7.5 },
+        { "name": "Cristo", "amount": 7.5 }
+      ],
+      "notes": "Tuk-tuk rides"
+    },
+    {
+      "date": "2026-05-01",
+      "category": "Food",
+      "currency": "THB",
+      "amount": 1200,
+      "myr_amount": 150,
+      "paid_by": "Mac",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 37.5 },
+        { "name": "Willy", "amount": 37.5 },
+        { "name": "Mac", "amount": 37.5 },
+        { "name": "Cristo", "amount": 37.5 }
+      ],
+      "notes": "Lunch at riverside restaurant"
+    },
+    {
+      "date": "2026-05-01",
+      "category": "Shopping",
+      "currency": "THB",
+      "amount": 800,
+      "myr_amount": 100,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "custom",
+      "split_participants": [
+        { "name": "Cristo", "amount": 100 }
+      ],
+      "notes": "Personal shopping - Cristo only"
+    },
+    {
+      "date": "2026-05-01",
+      "category": "Food",
+      "currency": "THB",
+      "amount": 960,
+      "myr_amount": 120,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30 },
+        { "name": "Willy", "amount": 30 },
+        { "name": "Mac", "amount": 30 },
+        { "name": "Cristo", "amount": 30 }
+      ],
+      "notes": "Dinner at night market"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-05-01 EOD",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR 1,636.25 (spent THB 350+1600+960 = MYR 363.75)",
+        "Cash MYR": "MYR 500",
+        "Cash THB": "THB 0"
+      },
+      "Willy": {
+        "TNG": "MYR 1,500",
+        "Credit Card": "MYR -300",
+        "Cash MYR": "MYR 300",
+        "Cash THB": "THB 0 (spent THB 240 = MYR 30)"
+      },
+      "Mac": {
+        "Credit Card": "MYR -150 (charged THB 1200)",
+        "Cash MYR": "MYR 400",
+        "Cash THB": "THB 0 (spent THB 800 = MYR 100)"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash THB": "THB 0 (spent THB 450+800+960 = MYR 276.25)"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool THB": "THB 0"
+    },
+    "settlement_status": {
+      "total_spent": "MYR 1,100 (Day 1+2 cumulative)",
+      "per_person_share": "MYR 275",
+      "balances": {
+        "Darren": "owes MYR -88.75 (paid 363.75, share 275)",
+        "Willy": "owes MYR -55 (paid 330, share 275)",
+        "Mac": "owes MYR 25 (paid 250, share 275)",
+        "Cristo": "owes MYR 118.75 (paid 156.25, share 275)"
+      },
+      "pending_settlements": "MYR 143.75"
+    }
+  }
+}

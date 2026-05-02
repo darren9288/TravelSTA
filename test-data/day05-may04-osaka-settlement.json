@@ -1,0 +1,143 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 5 - May 4, 2026 (Tokyo → Osaka)",
+  "transactions": [
+    {
+      "date": "2026-05-04",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 4000,
+      "myr_amount": 120,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30 },
+        { "name": "Willy", "amount": 30 },
+        { "name": "Mac", "amount": 30 },
+        { "name": "Cristo", "amount": 30 }
+      ],
+      "notes": "Breakfast before checkout"
+    },
+    {
+      "date": "2026-05-04",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 56000,
+      "myr_amount": 1680,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 420 },
+        { "name": "Willy", "amount": 420 },
+        { "name": "Mac", "amount": 420 },
+        { "name": "Cristo", "amount": 420 }
+      ],
+      "notes": "Shinkansen tickets Tokyo → Osaka"
+    },
+    {
+      "date": "2026-05-04",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 6400,
+      "myr_amount": 192,
+      "paid_by": "Willy",
+      "payment_type": "TNG",
+      "wallet": "TNG",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 48 },
+        { "name": "Willy", "amount": 48 },
+        { "name": "Mac", "amount": 48 },
+        { "name": "Cristo", "amount": 48 }
+      ],
+      "notes": "Lunch on Shinkansen"
+    },
+    {
+      "date": "2026-05-04",
+      "category": "Accommodation",
+      "currency": "JPY",
+      "amount": 16000,
+      "myr_amount": 480,
+      "paid_by": "Mac",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 120 },
+        { "name": "Willy", "amount": 120 },
+        { "name": "Mac", "amount": 120 },
+        { "name": "Cristo", "amount": 120 }
+      ],
+      "notes": "Hotel Osaka (2 nights)"
+    },
+    {
+      "date": "2026-05-04",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 8800,
+      "myr_amount": 264,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash JPY",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 66 },
+        { "name": "Willy", "amount": 66 },
+        { "name": "Mac", "amount": 66 },
+        { "name": "Cristo", "amount": 66 }
+      ],
+      "notes": "Dinner at Dotonbori"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-05-04 EOD - SETTLEMENT CHECKPOINT",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR -739.75 (spent JPY 56000+2400 = MYR 1800)",
+        "Cash MYR": "MYR 500",
+        "Cash JPY": "JPY 0"
+      },
+      "Willy": {
+        "TNG": "MYR 1,258 (spent THB 400 + JPY 6400 = MYR 242)",
+        "Credit Card": "MYR -1,290",
+        "Cash MYR": "MYR 300",
+        "Cash JPY": "JPY 0"
+      },
+      "Mac": {
+        "Credit Card": "MYR -1,026 (charged JPY 16000 = MYR 480)",
+        "Cash MYR": "MYR 400",
+        "Cash JPY": "JPY 0"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash JPY": "JPY 0 (spent JPY 4000+8800 = MYR 384)"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool JPY": "JPY 0"
+    },
+    "settlement_status": {
+      "total_spent": "MYR 6,279 (Day 1-5 cumulative)",
+      "per_person_share": "MYR 1,569.75",
+      "balances": {
+        "Darren": "owes MYR -230.25 (paid 1800, share 1569.75)",
+        "Willy": "owes MYR 487.75 (paid 1082, share 1569.75)",
+        "Mac": "owes MYR 408.75 (paid 1161, share 1569.75)",
+        "Cristo": "owes MYR -666.25 (paid 1160.75, share 1569.75)"
+      },
+      "action_required": "SETTLE ALL - End of Day 5",
+      "settlements_needed": [
+        "Willy pays Darren MYR 230.25",
+        "Mac pays Darren MYR 0 (Darren already settled)",
+        "Willy pays Cristo MYR 257.50",
+        "Mac pays Cristo MYR 408.75"
+      ]
+    },
+    "note": "After settlement, all balances should be zero. Day 6 starts fresh."
+  }
+}

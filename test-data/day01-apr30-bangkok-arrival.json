@@ -1,0 +1,100 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 1 - April 30, 2026 (Bangkok Arrival)",
+  "transactions": [
+    {
+      "date": "2026-04-30",
+      "category": "Airport Transfer",
+      "currency": "THB",
+      "amount": 350,
+      "myr_amount": 43.75,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 10.94 },
+        { "name": "Willy", "amount": 10.94 },
+        { "name": "Mac", "amount": 10.94 },
+        { "name": "Cristo", "amount": 10.93 }
+      ],
+      "notes": "Grab from airport to hotel"
+    },
+    {
+      "date": "2026-04-30",
+      "category": "Accommodation",
+      "currency": "THB",
+      "amount": 2400,
+      "myr_amount": 300,
+      "paid_by": "Willy",
+      "payment_type": "Credit Card",
+      "wallet": "Credit Card",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 75 },
+        { "name": "Willy", "amount": 75 },
+        { "name": "Mac", "amount": 75 },
+        { "name": "Cristo", "amount": 75 }
+      ],
+      "notes": "Hotel check-in (2 nights)"
+    },
+    {
+      "date": "2026-04-30",
+      "category": "Food",
+      "currency": "THB",
+      "amount": 800,
+      "myr_amount": 100,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 25 },
+        { "name": "Willy", "amount": 25 },
+        { "name": "Mac", "amount": 25 },
+        { "name": "Cristo", "amount": 25 }
+      ],
+      "notes": "Dinner at street food market"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-04-30 EOD",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR 1,956.25 (spent THB 350 = MYR 43.75)",
+        "Cash MYR": "MYR 500",
+        "Cash THB": "THB 0"
+      },
+      "Willy": {
+        "TNG": "MYR 1,500",
+        "Credit Card": "MYR -300 (charged THB 2400)",
+        "Cash MYR": "MYR 300",
+        "Cash THB": "THB 0"
+      },
+      "Mac": {
+        "Credit Card": "MYR 0",
+        "Cash MYR": "MYR 400",
+        "Cash THB": "THB 0 (spent THB 800 = MYR 100)"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash THB": "THB 0"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool THB": "THB 0"
+    },
+    "settlement_status": {
+      "total_spent": "MYR 443.75",
+      "per_person_share": "MYR 110.94",
+      "balances": {
+        "Darren": "owes MYR 67.19 (paid 43.75, share 110.94)",
+        "Willy": "owes MYR -189.06 (paid 300, share 110.94)",
+        "Mac": "owes MYR 10.94 (paid 100, share 110.94)",
+        "Cristo": "owes MYR 110.94 (paid 0, share 110.94)"
+      },
+      "pending_settlements": "MYR 189.07"
+    }
+  }
+}

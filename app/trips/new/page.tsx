@@ -7,6 +7,7 @@ import { Plus, Trash2, ChevronRight } from "lucide-react";
 
 type TravelerDraft = { name: string; color: string };
 type PoolDraft = { name: string; pool_currency: string };
+type WalletDraft = { traveler_index: number; name: string; currency: string; initial_balance: string };
 
 const CURRENCIES = ["JPY", "IDR", "THB", "SGD", "USD", "EUR", "GBP", "KRW", "AUD"];
 
@@ -22,6 +23,7 @@ export default function NewTripPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [currency, setCurrency] = useState("JPY");
+  const [currency2, setCurrency2] = useState("None");
 
   // Step 2
   const [travelers, setTravelers] = useState<TravelerDraft[]>([{ name: "", color: TRAVELER_COLORS[0] }]);
@@ -32,6 +34,11 @@ export default function NewTripPage() {
   // Step 4
   const [cashRate, setCashRate] = useState("");
   const [wiseRate, setWiseRate] = useState("");
+  const [cashRate2, setCashRate2] = useState("");
+  const [wiseRate2, setWiseRate2] = useState("");
+
+  // Step 5
+  const [wallets, setWallets] = useState<WalletDraft[]>([]);
 
   function addTraveler() {
     setTravelers([...travelers, { name: "", color: TRAVELER_COLORS[travelers.length % TRAVELER_COLORS.length] }]);
@@ -43,6 +50,16 @@ export default function NewTripPage() {
 
   function addPool() { setPools([...pools, { name: "", pool_currency: currency }]); }
   function removePool(i: number) { setPools(pools.filter((_, idx) => idx !== i)); }
+
+  function addWallet() {
+    setWallets([...wallets, { traveler_index: 0, name: "", currency: "MYR", initial_balance: "" }]);
+  }
+  function removeWallet(i: number) {
+    setWallets(wallets.filter((_, idx) => idx !== i));
+  }
+  function updateWallet(i: number, field: keyof WalletDraft, val: string | number) {
+    setWallets(wallets.map((w, idx) => idx === i ? { ...w, [field]: val } : w));
+  }
 
   async function handleCreate() {
     setSaving(true);
@@ -58,6 +75,9 @@ export default function NewTripPage() {
           foreign_currency: currency,
           cash_rate: parseFloat(cashRate) || 1,
           wise_rate: parseFloat(wiseRate) || 1,
+          foreign_currency_2: currency2 !== "None" ? currency2 : null,
+          cash_rate_2: currency2 !== "None" ? (parseFloat(cashRate2) || 1) : null,
+          wise_rate_2: currency2 !== "None" ? (parseFloat(wiseRate2) || 1) : null,
         }),
       });
       const trip = await tripRes.json();
@@ -68,12 +88,48 @@ export default function NewTripPage() {
         ...travelers.filter((t) => t.name.trim()).map((t) => ({ ...t, trip_id: trip.id, is_pool: false })),
         ...pools.filter((p) => p.name.trim()).map((p) => ({ name: p.name, color: "#22c55e", trip_id: trip.id, is_pool: true, pool_currency: p.pool_currency })),
       ];
+      let createdTravelers: any[] = [];
       if (allTravelers.length > 0) {
-        await fetch("/api/travelers", {
+        const travelerRes = await fetch("/api/travelers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(allTravelers),
         });
+        createdTravelers = await travelerRes.json();
+      }
+
+      // Create wallets with initial balances
+      const validTravelers = travelers.filter((t) => t.name.trim());
+      for (const wallet of wallets.filter((w) => w.name.trim())) {
+        const traveler = createdTravelers[wallet.traveler_index];
+        if (!traveler) continue;
+
+        const walletRes = await fetch("/api/wallets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trip_id: trip.id,
+            traveler_id: traveler.id,
+            name: wallet.name,
+            currency: wallet.currency,
+          }),
+        });
+        const createdWallet = await walletRes.json();
+
+        // Add initial balance if provided
+        if (wallet.initial_balance && parseFloat(wallet.initial_balance) > 0) {
+          await fetch("/api/wallet-topups", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              wallet_id: createdWallet.id,
+              trip_id: trip.id,
+              amount: parseFloat(wallet.initial_balance),
+              date: startDate || new Date().toISOString().slice(0, 10),
+              notes: "Initial balance",
+            }),
+          });
+        }
       }
 
       router.push(`/join/${trip.join_code}`);
@@ -89,7 +145,7 @@ export default function NewTripPage() {
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-lg mx-auto px-4 py-6">
           <div className="flex items-center gap-2 mb-6">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div key={s} className={`flex-1 h-1.5 rounded-full transition-colors ${s <= step ? "bg-emerald-500" : "bg-slate-700"}`} />
             ))}
           </div>
@@ -110,6 +166,11 @@ export default function NewTripPage() {
               <div><label className="text-xs text-slate-400 mb-1 block">Foreign Currency</label>
                 <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                   {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                </select></div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Second Foreign Currency (Optional)</label>
+                <select value={currency2} onChange={(e) => setCurrency2(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                  <option>None</option>
+                  {CURRENCIES.filter(c => c !== currency).map((c) => <option key={c}>{c}</option>)}
                 </select></div>
               <button onClick={() => { if (name.trim()) setStep(2); }} disabled={!name.trim()}
                 className="flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
@@ -160,7 +221,7 @@ export default function NewTripPage() {
                     placeholder="Pool name (e.g. Cash Pool)" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                   <select value={p.pool_currency} onChange={(e) => setPools(pools.map((x, idx) => idx === i ? { ...x, pool_currency: e.target.value } : x))}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                    <option>MYR</option><option>{currency}</option>
+                    <option>MYR</option><option>{currency}</option>{currency2 !== "None" && <option>{currency2}</option>}
                   </select>
                   {pools.length > 1 && <button onClick={() => removePool(i)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>}
                 </div>
@@ -187,9 +248,80 @@ export default function NewTripPage() {
               <div><label className="text-xs text-slate-400 mb-1 block">Wise Rate (1 MYR = ? {currency})</label>
                 <input type="number" value={wiseRate} onChange={(e) => setWiseRate(e.target.value)} placeholder="e.g. 34.2" step="0.01"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+
+              {currency2 !== "None" && (
+                <>
+                  <p className="text-sm text-slate-500 mt-2">How many {currency2} per 1 MYR?</p>
+                  <div><label className="text-xs text-slate-400 mb-1 block">Cash Rate (1 MYR = ? {currency2})</label>
+                    <input type="number" value={cashRate2} onChange={(e) => setCashRate2(e.target.value)} placeholder="e.g. 33.5" step="0.01"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                  <div><label className="text-xs text-slate-400 mb-1 block">Wise Rate (1 MYR = ? {currency2})</label>
+                    <input type="number" value={wiseRate2} onChange={(e) => setWiseRate2(e.target.value)} placeholder="e.g. 34.2" step="0.01"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+                </>
+              )}
+
               {error && <p className="text-sm text-red-400">{error}</p>}
               <div className="flex gap-2 mt-2">
                 <button onClick={() => setStep(3)} className="flex-1 py-2.5 border border-slate-600 text-slate-400 hover:text-white rounded-xl text-sm transition-colors">Back</button>
+                <button onClick={() => setStep(5)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition-colors">
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-xl font-bold text-white">Wallets (Optional)</h1>
+              <p className="text-sm text-slate-500">Create wallets with initial balances for travelers</p>
+              {wallets.map((w, i) => (
+                <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Owner</label>
+                      <select value={w.traveler_index} onChange={(e) => updateWallet(i, "traveler_index", parseInt(e.target.value))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        {travelers.filter(t => t.name.trim()).map((t, idx) => (
+                          <option key={idx} value={idx}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Wallet Name</label>
+                      <input value={w.name} onChange={(e) => updateWallet(i, "name", e.target.value)}
+                        placeholder="e.g. Cash, Wise"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                      <select value={w.currency} onChange={(e) => updateWallet(i, "currency", e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                        <option>MYR</option>
+                        <option>{currency}</option>
+                        {currency2 !== "None" && <option>{currency2}</option>}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Initial Balance</label>
+                      <input type="number" value={w.initial_balance} onChange={(e) => updateWallet(i, "initial_balance", e.target.value)}
+                        placeholder="0.00" step="0.01"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                    </div>
+                  </div>
+                  <button onClick={() => removeWallet(i)} className="self-end text-xs text-slate-500 hover:text-red-400 transition-colors">
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button onClick={addWallet} className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors px-1">
+                <Plus size={15} /> Add Wallet
+              </button>
+              {error && <p className="text-sm text-red-400">{error}</p>}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setStep(4)} className="flex-1 py-2.5 border border-slate-600 text-slate-400 hover:text-white rounded-xl text-sm transition-colors">Back</button>
                 <button onClick={handleCreate} disabled={saving}
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
                   {saving ? "Creating..." : "Create Trip 🎉"}

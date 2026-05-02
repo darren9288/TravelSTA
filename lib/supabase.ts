@@ -29,6 +29,9 @@ export type Trip = {
   foreign_currency: string;
   cash_rate: number;
   wise_rate: number;
+  foreign_currency_2?: string | null;
+  cash_rate_2?: number | null;
+  wise_rate_2?: number | null;
   join_code: string;
   created_at: string;
 };
@@ -51,6 +54,7 @@ export type Expense = {
   split_type: string;
   paid_by_id: string;
   payment_type: string;
+  currency: string;
   foreign_amount: number | null;
   myr_amount: number;
   notes: string | null;

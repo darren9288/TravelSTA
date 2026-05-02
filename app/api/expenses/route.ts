@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     split_type: body.split_type,
     paid_by_id: body.paid_by_id,
     payment_type: body.payment_type,
+    currency: body.currency ?? "MYR",
     foreign_amount: body.foreign_amount ?? null,
     myr_amount: body.myr_amount,
     notes: body.notes ?? null,

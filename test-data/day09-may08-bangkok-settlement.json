@@ -1,0 +1,148 @@
+{
+  "trip_name": "Bangkok-Tokyo Adventure 2026",
+  "day": "Day 9 - May 8, 2026 (Kyoto → Bangkok)",
+  "transactions": [
+    {
+      "date": "2026-05-08",
+      "category": "Food",
+      "currency": "JPY",
+      "amount": 4000,
+      "myr_amount": 120,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30 },
+        { "name": "Willy", "amount": 30 },
+        { "name": "Mac", "amount": 30 },
+        { "name": "Cristo", "amount": 30 }
+      ],
+      "notes": "Breakfast before checkout"
+    },
+    {
+      "date": "2026-05-08",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 6400,
+      "myr_amount": 192,
+      "paid_by": "Willy",
+      "payment_type": "TNG",
+      "wallet": "TNG",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 48 },
+        { "name": "Willy", "amount": 48 },
+        { "name": "Mac", "amount": 48 },
+        { "name": "Cristo", "amount": 48 }
+      ],
+      "notes": "Train Kyoto → Kansai Airport"
+    },
+    {
+      "date": "2026-05-08",
+      "category": "Food",
+      "currency": "THB",
+      "amount": 600,
+      "myr_amount": 75,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 18.75 },
+        { "name": "Willy", "amount": 18.75 },
+        { "name": "Mac", "amount": 18.75 },
+        { "name": "Cristo", "amount": 18.75 }
+      ],
+      "notes": "Dinner at Bangkok airport"
+    },
+    {
+      "date": "2026-05-08",
+      "category": "Transport",
+      "currency": "THB",
+      "amount": 320,
+      "myr_amount": 40,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash THB",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 10 },
+        { "name": "Willy", "amount": 10 },
+        { "name": "Mac", "amount": 10 },
+        { "name": "Cristo", "amount": 10 }
+      ],
+      "notes": "Taxi to Bangkok hotel"
+    },
+    {
+      "date": "2026-05-08",
+      "category": "Accommodation",
+      "currency": "THB",
+      "amount": 2000,
+      "myr_amount": 250,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 62.5 },
+        { "name": "Willy", "amount": 62.5 },
+        { "name": "Mac", "amount": 62.5 },
+        { "name": "Cristo", "amount": 62.5 }
+      ],
+      "notes": "Hotel Bangkok (1 night)"
+    }
+  ],
+  "eod_snapshot": {
+    "date": "2026-05-08 EOD - SETTLEMENT CHECKPOINT",
+    "wallets": {
+      "Darren": {
+        "Wise": "MYR -2,165.75 (spent JPY 4000 + THB 2000 = MYR 370)",
+        "Cash MYR": "MYR 500",
+        "Cash JPY": "JPY 0",
+        "Cash THB": "THB 0"
+      },
+      "Willy": {
+        "TNG": "MYR 586 (spent JPY 6400 = MYR 192)",
+        "Credit Card": "MYR -1,830",
+        "Cash MYR": "MYR 300",
+        "Cash JPY": "JPY 0",
+        "Cash THB": "THB 0"
+      },
+      "Mac": {
+        "Credit Card": "MYR -2,244",
+        "Cash MYR": "MYR 400",
+        "Cash JPY": "JPY 0",
+        "Cash THB": "THB 0 (spent THB 600 = MYR 75)"
+      },
+      "Cristo": {
+        "Cash MYR": "MYR 600",
+        "Cash JPY": "JPY 0",
+        "Cash THB": "THB 0 (spent THB 320 = MYR 40)"
+      }
+    },
+    "pool_wallets": {
+      "Cash Pool MYR": "MYR 0",
+      "Cash Pool THB": "THB 0",
+      "Cash Pool JPY": "JPY 0"
+    },
+    "settlement_status": {
+      "total_spent_day6_9": "MYR 5,177 (Day 6-9 cumulative)",
+      "per_person_share": "MYR 1,294.25",
+      "balances": {
+        "Darren": "owes MYR -131.75 (paid 1426, share 1294.25)",
+        "Willy": "owes MYR 82.25 (paid 1212, share 1294.25)",
+        "Mac": "owes MYR 91.25 (paid 1203, share 1294.25)",
+        "Cristo": "owes MYR -41.75 (paid 676, share 1294.25)"
+      },
+      "action_required": "SETTLE ALL - End of Day 9",
+      "settlements_needed": [
+        "Darren pays Cristo MYR 90 (Cristo owes 618.25 total)",
+        "Willy pays Darren MYR 82.25",
+        "Mac pays Darren MYR 91.25",
+        "Cristo pays remaining to Darren MYR 41.75"
+      ],
+      "note": "After settlement, balances reset for final day"
+    }
+  }
+}

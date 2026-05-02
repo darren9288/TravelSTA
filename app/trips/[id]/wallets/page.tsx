@@ -171,7 +171,7 @@ export default function WalletsPage() {
 
   const byTraveler: Record<string, WalletRow[]> = {};
   for (const w of wallets) { if (!byTraveler[w.traveler_id]) byTraveler[w.traveler_id] = []; byTraveler[w.traveler_id].push(w); }
-  const currencies = ["MYR", trip?.foreign_currency].filter(Boolean) as string[];
+  const currencies = ["MYR", trip?.foreign_currency, trip?.foreign_currency_2].filter(Boolean) as string[];
   const selectedWalletObj = selectedWallet ? wallets.find((w) => w.id === selectedWallet) : null;
 
   const typeColor: Record<WalletEvent["type"], string> = {
