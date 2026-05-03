@@ -68,10 +68,10 @@ export default function Nav({ tripId, tripName }: NavProps) {
 
   const links = [
     { href: `/trips/${tripId}`, icon: BarChart2, label: "Dashboard" },
+    { href: `/trips/${tripId}/itinerary`, icon: CalendarDays, label: "Itinerary" },
     { href: `/trips/${tripId}/expenses`, icon: Receipt, label: "Expenses" },
     { href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" },
     { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
-    { href: `/trips/${tripId}/itinerary`, icon: CalendarDays, label: "Itinerary" },
     { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Analytics" },
     { href: `/trips/${tripId}/pool`, icon: Banknote, label: "Pool" },
     { href: `/trips/${tripId}/wallets`, icon: Wallet, label: "Wallets" },
