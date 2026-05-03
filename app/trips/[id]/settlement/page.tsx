@@ -214,7 +214,7 @@ export default function SettlementPage() {
                           </button>
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
