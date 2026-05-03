@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor } from "@/lib/role";
 
 function lastDay(month: string) {
   return new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate();
@@ -48,6 +49,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = serverDb();
   const body = await req.json();
+  const denied = await requireEditor(body.trip_id);
+  if (denied) return denied;
 
   const { data: expense, error: expErr } = await supabase.from("expenses").insert({
     trip_id: body.trip_id,
@@ -85,6 +88,7 @@ export async function PUT(req: NextRequest) {
   const supabase = serverDb();
   const body = await req.json();
   const { id, splits, ...updates } = body;
+  if (body.trip_id) { const denied = await requireEditor(body.trip_id); if (denied) return denied; }
 
   const { data, error } = await supabase.from("expenses").update(updates).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -105,6 +109,9 @@ export async function DELETE(req: NextRequest) {
   const idParam = new URL(req.url).searchParams.get("id");
   const id = idParam ?? (await req.json().catch(() => ({}))).id;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  // Look up the trip_id so we can check the role
+  const { data: exp } = await supabase.from("expenses").select("trip_id").eq("id", id).single();
+  if (exp?.trip_id) { const denied = await requireEditor(exp.trip_id); if (denied) return denied; }
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });

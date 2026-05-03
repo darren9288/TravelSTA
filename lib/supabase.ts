@@ -34,6 +34,8 @@ export type Trip = {
   wise_rate_2?: number | null;
   join_code: string;
   created_at: string;
+  my_traveler_id?: string | null;
+  my_role?: string | null; // "admin" | "editor" | "viewer" | null
 };
 
 export type Traveler = {

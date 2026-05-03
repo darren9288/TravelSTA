@@ -15,6 +15,7 @@ export default function TripDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [totalSpent, setTotalSpent] = useState(0);
   const [myShare, setMyShare] = useState(0);
 
@@ -34,6 +35,7 @@ export default function TripDashboard() {
     setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
     setWallets(walletRes.wallets ?? []);
     setMyId(tripRes.my_traveler_id ?? null);
+    setMyRole(tripRes.my_role ?? null);
 
     setTotalSpent(statsRes.total ?? 0);
     const myTravelerStats = statsRes.byTraveler?.find((t: any) => t.id === tripRes.my_traveler_id);
@@ -121,9 +123,11 @@ export default function TripDashboard() {
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
-            <Link href={`/trips/${id}/add`} className="flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-colors">
-              <PlusCircle size={16} /> Add Expense
-            </Link>
+            {myRole !== "viewer" && (
+              <Link href={`/trips/${id}/add`} className="flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-colors">
+                <PlusCircle size={16} /> Add Expense
+              </Link>
+            )}
             <Link href={`/trips/${id}/settlement`} className="flex items-center gap-2 px-4 py-3 bg-slate-800 border border-slate-700 hover:border-slate-500 text-white rounded-xl font-medium text-sm transition-colors">
               <Banknote size={16} /> Settlement
             </Link>

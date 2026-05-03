@@ -183,15 +183,15 @@ export default function SettlementPage() {
                       );
                     })}
 
-                    {/* Confirm step */}
-                    {!confirm ? (
+                    {/* Confirm step — hidden for viewers */}
+                    {trip?.my_role !== "viewer" && !confirm ? (
                       <button
                         onClick={() => setConfirm(true)}
                         className="mt-1 w-full py-3 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition-colors"
                       >
                         <CheckCircle2 size={16} /> Settle All — Everyone Pays Now
                       </button>
-                    ) : (
+                    ) : trip?.my_role !== "viewer" && confirm ? (
                       <div className="mt-1 bg-slate-800 border border-amber-700/50 rounded-xl px-4 py-3 flex flex-col gap-3">
                         <p className="text-sm text-amber-300 font-medium">Confirm settlement?</p>
                         <p className="text-xs text-slate-400">

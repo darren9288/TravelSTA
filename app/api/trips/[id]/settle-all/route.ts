@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { calculateSettlement } from "@/lib/settlement";
 import { Traveler, Expense } from "@/lib/supabase";
+import { requireEditor } from "@/lib/role";
 
 type WalletSelection = {
   from_wallet_id: string | null;
@@ -11,6 +12,8 @@ type WalletSelection = {
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const tripId = params.id;
+  const denied = await requireEditor(tripId);
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
   const walletSelections: Record<number, WalletSelection> = body.walletSelections ?? {};
   const db = serverDb();

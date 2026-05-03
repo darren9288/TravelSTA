@@ -10,17 +10,19 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 
   const user = await getSessionUser();
   let my_traveler_id: string | null = null;
+  let my_role: string | null = null;
   if (user) {
     const { data: member } = await db
       .from("trip_members")
-      .select("traveler_id")
+      .select("traveler_id, role")
       .eq("trip_id", params.id)
       .eq("user_id", user.id)
       .single();
     my_traveler_id = member?.traveler_id ?? null;
+    my_role = member?.role ?? null;
   }
 
-  return NextResponse.json({ ...data, my_traveler_id });
+  return NextResponse.json({ ...data, my_traveler_id, my_role });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

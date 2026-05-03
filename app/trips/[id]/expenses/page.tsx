@@ -197,7 +197,9 @@ export default function ExpensesPage() {
                 <div className="flex flex-col gap-2">
                   {groups[date].map((e) => (
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
-                      wallets={wallets} onDelete={handleDelete} onEdit={openEdit} />
+                      wallets={wallets}
+                      onDelete={trip?.my_role !== "viewer" ? handleDelete : undefined}
+                      onEdit={trip?.my_role !== "viewer" ? openEdit : undefined} />
                   ))}
                 </div>
               </div>
