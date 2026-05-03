@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, Image } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link } from "lucide-react";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
 
 type Member = {
@@ -41,6 +41,10 @@ export default function SettingsPage() {
   // Appearance
   const { theme, setTheme } = useTheme();
   const [backgroundImageUrl, setBackgroundImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -124,6 +128,27 @@ export default function SettingsPage() {
     if (!confirm("Delete this trip? This cannot be undone.")) return;
     await fetch(`/api/trips/${id}`, { method: "DELETE" });
     router.push("/");
+  }
+
+  async function uploadBackground(file: File) {
+    if (file.size > 8 * 1024 * 1024) { setUploadError("Image must be under 8 MB."); return; }
+    setUploading(true); setUploadError("");
+    const form = new FormData();
+    form.append("file", file);
+    form.append("trip_id", id);
+    const res = await fetch("/api/upload-background", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) { setUploadError(data.error ?? "Upload failed"); }
+    else {
+      setBackgroundImageUrl(data.url);
+      // Save immediately so the layout picks it up
+      await fetch(`/api/trips/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ background_image_url: data.url }),
+      });
+    }
+    setUploading(false);
   }
 
   if (!trip) return null;
@@ -218,43 +243,96 @@ export default function SettingsPage() {
           {myRole !== "viewer" && (
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <Image size={14} className="text-emerald-400" />
+                <ImageIcon size={14} className="text-emerald-400" />
                 <h2 className="text-sm font-semibold text-white">Background Image</h2>
               </div>
-              <p className="text-xs text-slate-500">
-                Paste any image URL (e.g. from Google, Unsplash). Shows as a blurred background on all trip pages.
-              </p>
-              <div className="flex flex-col gap-2">
-                <input
-                  value={backgroundImageUrl}
-                  onChange={(e) => setBackgroundImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                {backgroundImageUrl.trim() && (
-                  <div className="relative rounded-xl overflow-hidden h-28 border border-slate-700">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={backgroundImageUrl.trim()}
-                      alt="Background preview"
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                    <div className="absolute inset-0 bg-slate-950/50 flex items-center justify-center">
-                      <span className="text-xs text-white/70">Preview</span>
-                    </div>
+
+              {/* Current preview */}
+              {backgroundImageUrl.trim() ? (
+                <div className="relative rounded-xl overflow-hidden h-32 border border-slate-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={backgroundImageUrl.trim()}
+                    alt="Background preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/40 flex items-end p-2 gap-2">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-white text-xs rounded-lg transition-colors"
+                    >
+                      <Upload size={12} /> Change
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setBackgroundImageUrl("");
+                        await fetch(`/api/trips/${id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ background_image_url: null }),
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/60 hover:bg-red-800/80 text-red-300 text-xs rounded-lg transition-colors"
+                    >
+                      Remove
+                    </button>
                   </div>
-                )}
-                {backgroundImageUrl.trim() && (
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {/* Upload button — primary */}
                   <button
-                    onClick={() => setBackgroundImageUrl("")}
-                    className="text-xs text-red-400 hover:text-red-300 transition-colors text-left"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-slate-600 hover:border-emerald-500 text-slate-400 hover:text-emerald-400 rounded-xl transition-colors disabled:opacity-50"
                   >
-                    Clear background image
+                    <Upload size={20} />
+                    <span className="text-sm font-medium">
+                      {uploading ? "Uploading…" : "Upload photo from device"}
+                    </span>
                   </button>
-                )}
-              </div>
-              <p className="text-xs text-slate-600">Changes saved when you click &quot;Save Changes&quot; above.</p>
+
+                  {/* URL option — secondary */}
+                  <button
+                    onClick={() => setShowUrlInput((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    <Link size={11} /> Or paste an image URL
+                  </button>
+                  {showUrlInput && (
+                    <div className="flex gap-2">
+                      <input
+                        value={backgroundImageUrl}
+                        onChange={(e) => setBackgroundImageUrl(e.target.value)}
+                        placeholder="https://images.unsplash.com/..."
+                        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        onClick={saveTrip}
+                        disabled={saving}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadBackground(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
           )}
 
