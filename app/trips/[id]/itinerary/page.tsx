@@ -67,6 +67,9 @@ export default function ItineraryPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [addingLink, setAddingLink] = useState(false);
 
+  // Category filter
+  const [filterCat, setFilterCat] = useState<Category | "all">("all");
+
   // Files / photo
   const photoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -227,13 +230,17 @@ export default function ItineraryPage() {
 
   const days = groupByDay(items);
 
+  const filteredDays = groupByDay(
+    filterCat === "all" ? items : items.filter((i) => i.category === filterCat)
+  );
+
   return (
     <>
       <Nav tripId={id} tripName={trip?.name} />
       <main className="md:ml-56 pb-28 md:pb-8 min-h-screen">
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
 
-          {/* Header */}
+          {/* Header row */}
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Itinerary</h1>
             {!isViewer && (
@@ -242,6 +249,24 @@ export default function ItineraryPage() {
                 <Plus size={14} /> Add Item
               </button>
             )}
+          </div>
+
+          {/* Category filter pills */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setFilterCat("all")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${filterCat === "all" ? "text-white bg-slate-700 border-slate-500" : "text-slate-500 border-slate-700 hover:text-slate-300"}`}>
+              All
+            </button>
+            {(Object.entries(CAT) as [Category, typeof CAT[Category]][]).map(([key, cfg]) => {
+              const Icon = cfg.icon;
+              return (
+                <button key={key} onClick={() => setFilterCat(filterCat === key ? "all" : key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${filterCat === key ? `${cfg.color} ${cfg.bg}` : "text-slate-500 border-slate-700 hover:text-slate-300"}`}>
+                  <Icon size={12} /> {cfg.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Add form */}
@@ -290,13 +315,13 @@ export default function ItineraryPage() {
             <div className={`flex-col gap-3 ${selectedId ? "hidden md:flex md:w-2/5 md:min-w-0" : "flex w-full"}`}>
               {loading ? (
                 [1, 2, 3].map((i) => <div key={i} className="h-24 bg-slate-800 rounded-2xl animate-pulse" />)
-              ) : days.length === 0 ? (
+              ) : filteredDays.length === 0 ? (
                 <div className="text-center py-16">
                   <p className="text-5xl mb-3">🗓️</p>
                   <p className="text-slate-500 text-sm">No itinerary yet.</p>
                   {!isViewer && <p className="text-slate-600 text-xs mt-1">Tap &quot;Add Item&quot; to start planning!</p>}
                 </div>
-              ) : days.map(([date, dayItems]) => {
+              ) : filteredDays.map(([date, dayItems]) => {
                 const isCollapsed = collapsed.has(date);
                 const startDate = trip?.start_date;
                 const dayNum = startDate
@@ -305,10 +330,11 @@ export default function ItineraryPage() {
 
                 return (
                   <div key={date} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+                    {/* Day header */}
                     <button onClick={() => setCollapsed((prev) => { const n = new Set(prev); n.has(date) ? n.delete(date) : n.add(date); return n; })}
                       className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700/30 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
                           <span className="text-xs font-bold text-emerald-400">{dayNum ?? date.slice(8)}</span>
                         </div>
                         <div className="text-left">
@@ -325,27 +351,42 @@ export default function ItineraryPage() {
                           const cfg = CAT[item.category];
                           const Icon = cfg.icon;
                           const isSelected = selectedId === item.id;
+                          const timeParts = item.time ? item.time.slice(0, 5) : null;
                           return (
                             <button key={item.id} onClick={() => setSelectedId(isSelected ? null : item.id)}
                               className={`w-full text-left px-4 py-3 transition-colors ${isSelected ? "bg-slate-700/40" : "hover:bg-slate-700/20"}`}>
                               <div className="flex items-center gap-3">
-                                <div className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
-                                  <Icon size={13} className={cfg.color} />
+                                {/* Time column — fixed width */}
+                                <span className="w-10 text-xs font-mono text-slate-500 flex-shrink-0 text-right leading-tight">
+                                  {timeParts ?? ""}
+                                </span>
+                                {/* Category icon */}
+                                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+                                  <Icon size={14} className={cfg.color} />
                                 </div>
+                                {/* Title + subtitle */}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-white truncate">{item.title}</p>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    {item.time && <span className="text-xs text-slate-500 font-mono">{item.time}</span>}
-                                    {item.photo_url && <span className="text-xs text-slate-600">📷</span>}
-                                    {item.links.length > 0 && <span className="text-xs text-slate-600">🔗{item.links.length}</span>}
-                                    {item.files.length > 0 && <span className="text-xs text-slate-600">📎{item.files.length}</span>}
-                                  </div>
+                                  <p className="text-sm font-semibold text-white truncate">{item.title}</p>
+                                  {item.notes && (
+                                    <p className="text-xs text-slate-500 truncate mt-0.5">{item.notes}</p>
+                                  )}
                                 </div>
-                                <ChevronDown size={14} className={`text-slate-600 flex-shrink-0 transition-transform ${isSelected ? "rotate-180" : ""}`} />
+                                {/* Category badge */}
+                                <span className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-full border font-medium ${cfg.color} ${cfg.bg}`}>
+                                  {cfg.label}
+                                </span>
                               </div>
                             </button>
                           );
                         })}
+                        {/* Add to this day */}
+                        {!isViewer && (
+                          <button
+                            onClick={() => { setAddDate(date); setShowAdd(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 hover:text-emerald-400 hover:bg-slate-700/20 transition-colors">
+                            <Plus size={13} /> Add to this day
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
