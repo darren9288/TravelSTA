@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor } from "@/lib/role";
 
 export async function GET(req: NextRequest) {
   const trip_id = new URL(req.url).searchParams.get("trip_id");
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
   if (!trip_id || !from_traveler_id || !to_traveler_id || !amount) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+  const denied = await requireEditor(trip_id); if (denied) return denied;
 
   const db = serverDb();
 
@@ -76,6 +78,8 @@ export async function DELETE(req: NextRequest) {
     .select("*")
     .eq("id", id)
     .single();
+
+  if (payment?.trip_id) { const denied = await requireEditor(payment.trip_id); if (denied) return denied; }
 
   // Delete the payment record
   const { error } = await db.from("settlement_payments").delete().eq("id", id);

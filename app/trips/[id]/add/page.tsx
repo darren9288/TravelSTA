@@ -48,7 +48,9 @@ export default function AddExpensePage() {
         fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
         fetch(`/api/wallets?trip_id=${id}`).then((r) => r.json()),
       ]);
-      setTrip(tripRes.error ? null : tripRes);
+      const tripData: Trip | null = tripRes.error ? null : tripRes;
+      setTrip(tripData);
+      if (tripData?.my_role === "viewer") { router.replace(`/trips/${id}`); return; }
       const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
       setTravelers(all);
       const me = tripRes.my_traveler_id ?? null;

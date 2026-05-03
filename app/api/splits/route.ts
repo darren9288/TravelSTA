@@ -1,9 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor, tripIdForSplit } from "@/lib/role";
 
 export async function PUT(req: NextRequest) {
   const { id, is_settled, from_wallet_id, to_wallet_id } = await req.json();
+  const tripId = await tripIdForSplit(id);
+  if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
   const update: Record<string, unknown> = { is_settled };
   if (is_settled) {
     update.from_wallet_id = from_wallet_id ?? null;
@@ -26,6 +29,7 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { trip_id, traveler_id, from_wallet_id, to_wallet_id } = await req.json();
   if (!trip_id || !traveler_id) return NextResponse.json({ error: "trip_id and traveler_id required" }, { status: 400 });
+  const denied = await requireEditor(trip_id); if (denied) return denied;
 
   const supabase = serverDb();
   const { data: expenses } = await supabase.from("expenses").select("id").eq("trip_id", trip_id);

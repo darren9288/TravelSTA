@@ -241,7 +241,7 @@ export default function PoolPage() {
         <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
           {e.sign === 1 ? "+" : "-"}{selectedPoolData?.isForeign ? `${selectedPoolObj?.pool_currency} ${Math.round(e.amount).toLocaleString()}` : `RM ${e.amount.toFixed(2)}`}
         </span>
-        {e.isTopup && (
+        {e.isTopup && trip?.my_role !== "viewer" && (
           <button onClick={() => openEdit(e.id)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-amber-400 transition-all flex-shrink-0">
             <Pencil size={11} />
           </button>
@@ -262,14 +262,16 @@ export default function PoolPage() {
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
               </button>
-              <button onClick={() => { setShowCreatePool((v) => !v); setShowForm(false); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors">
-                <Plus size={14} /> New Pool
-              </button>
-              <button onClick={() => { setShowForm((v) => !v); setShowCreatePool(false); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
-                <Plus size={14} /> Top Up
-              </button>
+              {trip?.my_role !== "viewer" && (<>
+                <button onClick={() => { setShowCreatePool((v) => !v); setShowForm(false); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors">
+                  <Plus size={14} /> New Pool
+                </button>
+                <button onClick={() => { setShowForm((v) => !v); setShowCreatePool(false); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
+                  <Plus size={14} /> Top Up
+                </button>
+              </>)}
             </div>
           </div>
 

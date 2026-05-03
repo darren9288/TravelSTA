@@ -135,33 +135,35 @@ export default function SettingsPage() {
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-white">Trip Details</h2>
             <div><label className="text-xs text-slate-400 mb-1 block">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+              <input value={name} onChange={(e) => setName(e.target.value)} readOnly={myRole === "viewer"}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
             <div><label className="text-xs text-slate-400 mb-1 block">Destination</label>
-              <input value={destination} onChange={(e) => setDestination(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+              <input value={destination} onChange={(e) => setDestination(e.target.value)} readOnly={myRole === "viewer"}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-slate-400 mb-1 block">Start Date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} readOnly={myRole === "viewer"}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
               <div><label className="text-xs text-slate-400 mb-1 block">End Date</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} readOnly={myRole === "viewer"}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-slate-400 mb-1 block">Cash Rate (1 MYR = ? {trip.foreign_currency})</label>
-                <input type="number" value={cashRate} onChange={(e) => setCashRate(e.target.value)} step="0.01"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+                <input type="number" value={cashRate} onChange={(e) => setCashRate(e.target.value)} step="0.01" readOnly={myRole === "viewer"}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
               <div><label className="text-xs text-slate-400 mb-1 block">Wise Rate (1 MYR = ? {trip.foreign_currency})</label>
-                <input type="number" value={wiseRate} onChange={(e) => setWiseRate(e.target.value)} step="0.01"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+                <input type="number" value={wiseRate} onChange={(e) => setWiseRate(e.target.value)} step="0.01" readOnly={myRole === "viewer"}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 read-only:opacity-60 read-only:cursor-default" /></div>
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
             {success && <p className="text-sm text-emerald-400">{success}</p>}
-            <button onClick={saveTrip} disabled={saving}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
+            {myRole !== "viewer" && (
+              <button onClick={saveTrip} disabled={saving}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            )}
           </div>
 
           {/* Join code */}
@@ -232,23 +234,25 @@ export default function SettingsPage() {
                 <span className="text-sm text-white flex-1">{t.name}</span>
               </div>
             ))}
-            {/* Add traveler */}
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex gap-1 flex-wrap">
-                {TRAVELER_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setNewColor(c)}
-                    className="w-5 h-5 rounded-full border-2 transition-all"
-                    style={{ backgroundColor: c, borderColor: newColor === c ? "white" : "transparent" }} />
-                ))}
+            {/* Add traveler — editors/admins only */}
+            {myRole !== "viewer" && (
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex gap-1 flex-wrap">
+                  {TRAVELER_COLORS.map((c) => (
+                    <button key={c} type="button" onClick={() => setNewColor(c)}
+                      className="w-5 h-5 rounded-full border-2 transition-all"
+                      style={{ backgroundColor: c, borderColor: newColor === c ? "white" : "transparent" }} />
+                  ))}
+                </div>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)}
+                  placeholder="New traveler name"
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                <button onClick={addTraveler} disabled={!newName.trim()}
+                  className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors">
+                  <Plus size={14} />
+                </button>
               </div>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)}
-                placeholder="New traveler name"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-              <button onClick={addTraveler} disabled={!newName.trim()}
-                className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors">
-                <Plus size={14} />
-              </button>
-            </div>
+            )}
           </div>
 
           {/* Pools */}
@@ -265,15 +269,17 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Danger zone */}
-          <div className="border border-red-900/50 rounded-2xl p-4">
-            <h2 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h2>
-            <p className="text-xs text-slate-500 mb-3">Permanently delete this trip and all its data.</p>
-            <button onClick={deleteTrip}
-              className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border border-red-800/50 hover:bg-red-900/50 text-red-400 text-sm rounded-lg transition-colors">
-              <Trash2 size={14} /> Delete Trip
-            </button>
-          </div>
+          {/* Danger zone — admin only */}
+          {myRole === "admin" && (
+            <div className="border border-red-900/50 rounded-2xl p-4">
+              <h2 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h2>
+              <p className="text-xs text-slate-500 mb-3">Permanently delete this trip and all its data.</p>
+              <button onClick={deleteTrip}
+                className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border border-red-800/50 hover:bg-red-900/50 text-red-400 text-sm rounded-lg transition-colors">
+                <Trash2 size={14} /> Delete Trip
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </>

@@ -28,3 +28,23 @@ export async function requireEditor(tripId: string): Promise<NextResponse | null
   }
   return null;
 }
+
+// ── Trip-ID lookup helpers ────────────────────────────────────────────────────
+
+/** Look up trip_id from a row in any table that has a trip_id column directly. */
+export async function tripIdFrom(
+  table: "wallets" | "wallet_topups" | "travelers" | "settlement_payments" | "pool_topups",
+  id: string
+): Promise<string | null> {
+  const { data } = await serverDb().from(table).select("trip_id").eq("id", id).single();
+  return (data as { trip_id?: string } | null)?.trip_id ?? null;
+}
+
+/** Look up trip_id for an expense_split (split → expense → trip). */
+export async function tripIdForSplit(splitId: string): Promise<string | null> {
+  const db = serverDb();
+  const { data: split } = await db.from("expense_splits").select("expense_id").eq("id", splitId).single();
+  if (!split?.expense_id) return null;
+  const { data: exp } = await db.from("expenses").select("trip_id").eq("id", split.expense_id).single();
+  return (exp as { trip_id?: string } | null)?.trip_id ?? null;
+}

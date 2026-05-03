@@ -51,7 +51,7 @@ export default function WalletsPage() {
       fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
     ]);
-    const tripData = tripRes.error ? null : tripRes;
+    const tripData: Trip | null = tripRes.error ? null : tripRes;
     setTrip(tripData);
     const allTravelers = Array.isArray(travelerRes) ? travelerRes : [];
     setTravelers(allTravelers.filter((t: Traveler) => !t.is_pool));
@@ -194,10 +194,12 @@ export default function WalletsPage() {
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Wallets</h1>
-            <button onClick={() => setShowCreate((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
-              <Plus size={14} /> New Wallet
-            </button>
+            {trip?.my_role !== "viewer" && (
+              <button onClick={() => setShowCreate((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors">
+                <Plus size={14} /> New Wallet
+              </button>
+            )}
           </div>
 
           {/* Create wallet form */}
@@ -305,14 +307,16 @@ export default function WalletsPage() {
                                 </p>
                                 <p className="text-xs text-slate-600">remaining</p>
                               </div>
-                              <button onClick={(e) => { e.stopPropagation(); setTopupWalletId(w.id); setTopupAmount(""); setTopupNotes(""); }}
-                                className="p-1.5 bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-400 rounded-lg transition-colors">
-                                <Plus size={13} />
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); deleteWallet(w.id); }}
-                                className="p-1.5 text-slate-600 hover:text-red-400 transition-colors">
-                                <Trash2 size={13} />
-                              </button>
+                              {trip?.my_role !== "viewer" && (<>
+                                <button onClick={(e) => { e.stopPropagation(); setTopupWalletId(w.id); setTopupAmount(""); setTopupNotes(""); }}
+                                  className="p-1.5 bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-400 rounded-lg transition-colors">
+                                  <Plus size={13} />
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteWallet(w.id); }}
+                                  className="p-1.5 text-slate-600 hover:text-red-400 transition-colors">
+                                  <Trash2 size={13} />
+                                </button>
+                              </>)}
                             </div>
                           </div>
                           {!selectedWallet && <p className="text-xs text-emerald-500 mt-1">Tap for history →</p>}
@@ -417,7 +421,7 @@ export default function WalletsPage() {
                                     <span className={`text-xs font-bold flex-shrink-0 ${e.sign === 1 ? "text-emerald-400" : "text-red-400"}`}>
                                       {e.sign === 1 ? "+" : "-"}{selectedWalletObj.currency === "MYR" ? `RM ${e.amount.toFixed(2)}` : `${selectedWalletObj.currency} ${Math.round(e.amount).toLocaleString()}`}
                                     </span>
-                                    {e.type === "topup" && (
+                                    {e.type === "topup" && trip?.my_role !== "viewer" && (
                                       <button onClick={() => setEditTopup({ id: e.id, amount: String(e.amount), date: e.date, notes: e.notes ?? "" })}
                                         className="p-1 text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0">
                                         <Pencil size={11} />

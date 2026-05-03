@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor, tripIdFrom } from "@/lib/role";
 
 export async function GET(req: NextRequest) {
   const wallet_id = new URL(req.url).searchParams.get("wallet_id");
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const denied = await requireEditor(body.trip_id); if (denied) return denied;
   const { data, error } = await serverDb().from("wallet_topups").insert({
     wallet_id: body.wallet_id,
     trip_id: body.trip_id,
@@ -31,6 +33,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const { id, amount, date, notes } = await req.json();
+  const tripId = await tripIdFrom("wallet_topups", id);
+  if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
   const { data, error } = await serverDb().from("wallet_topups")
     .update({ amount, date, notes: notes ?? null })
     .eq("id", id).select().single();
@@ -40,6 +44,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
+  const tripId = await tripIdFrom("wallet_topups", id);
+  if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
   const { error } = await serverDb().from("wallet_topups").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
