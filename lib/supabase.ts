@@ -36,6 +36,7 @@ export type Trip = {
   created_at: string;
   my_traveler_id?: string | null;
   my_role?: string | null; // "admin" | "editor" | "viewer" | null
+  background_image_url?: string | null;
 };
 
 export type Traveler = {

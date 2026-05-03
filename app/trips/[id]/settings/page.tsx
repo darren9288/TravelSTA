@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, Image } from "lucide-react";
+import { useTheme, THEMES } from "@/components/ThemeProvider";
 
 type Member = {
   user_id: string;
@@ -37,6 +38,10 @@ export default function SettingsPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string | null>(null);
 
+  // Appearance
+  const { theme, setTheme } = useTheme();
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState("");
+
   useEffect(() => {
     async function load() {
       const [tripRes, travelerRes, membersRes] = await Promise.all([
@@ -52,6 +57,7 @@ export default function SettingsPage() {
       setEndDate(tripRes.end_date ?? "");
       setCashRate(String(tripRes.cash_rate));
       setWiseRate(String(tripRes.wise_rate));
+      setBackgroundImageUrl(tripRes.background_image_url ?? "");
       setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
       if (!membersRes.error) {
         setMembers(membersRes.members ?? []);
@@ -73,6 +79,7 @@ export default function SettingsPage() {
         end_date: endDate || null,
         cash_rate: parseFloat(cashRate) || 1,
         wise_rate: parseFloat(wiseRate) || 1,
+        background_image_url: backgroundImageUrl.trim() || null,
       }),
     });
     const data = await res.json();
@@ -174,6 +181,82 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-500">Share this with travelers to let them join</p>
             </div>
           </div>
+
+          {/* Appearance — theme picker, available to everyone */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Palette size={14} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white">Appearance</h2>
+              <span className="text-xs text-slate-500 ml-auto">Saved on this device</span>
+            </div>
+            <p className="text-xs text-slate-500">Pick an accent color for the app.</p>
+            <div className="flex gap-3 flex-wrap">
+              {THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTheme(t.key)}
+                  title={t.label}
+                  className="flex flex-col items-center gap-1.5 group"
+                >
+                  <div
+                    className="w-8 h-8 rounded-full border-2 transition-all"
+                    style={{
+                      backgroundColor: t.color,
+                      borderColor: theme === t.key ? "white" : "transparent",
+                      boxShadow: theme === t.key ? `0 0 0 2px ${t.color}` : "none",
+                    }}
+                  />
+                  <span className={`text-xs transition-colors ${theme === t.key ? "text-white" : "text-slate-500 group-hover:text-slate-300"}`}>
+                    {t.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Background Image — editor/admin only */}
+          {myRole !== "viewer" && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Image size={14} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-white">Background Image</h2>
+              </div>
+              <p className="text-xs text-slate-500">
+                Paste any image URL (e.g. from Google, Unsplash). Shows as a blurred background on all trip pages.
+              </p>
+              <div className="flex flex-col gap-2">
+                <input
+                  value={backgroundImageUrl}
+                  onChange={(e) => setBackgroundImageUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                {backgroundImageUrl.trim() && (
+                  <div className="relative rounded-xl overflow-hidden h-28 border border-slate-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={backgroundImageUrl.trim()}
+                      alt="Background preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                    <div className="absolute inset-0 bg-slate-950/50 flex items-center justify-center">
+                      <span className="text-xs text-white/70">Preview</span>
+                    </div>
+                  </div>
+                )}
+                {backgroundImageUrl.trim() && (
+                  <button
+                    onClick={() => setBackgroundImageUrl("")}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors text-left"
+                  >
+                    Clear background image
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-600">Changes saved when you click &quot;Save Changes&quot; above.</p>
+            </div>
+          )}
 
           {/* Import/Export */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
