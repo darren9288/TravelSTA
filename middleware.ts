@@ -22,7 +22,15 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // If Supabase is unreachable (e.g. screenshot bot, cold start),
+    // fall through and let the redirect handle it gracefully.
+  }
+
   const path = request.nextUrl.pathname;
   const isAuthPage = path === "/login" || path === "/signup";
   const isProtected = path === "/" || path.startsWith("/trips") || path.startsWith("/join");
