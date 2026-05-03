@@ -82,7 +82,8 @@ export default function SettlementPage() {
   // Group history payments by date (created_at date)
   const historyByDate = history.reduce<Record<string, SettlementPayment[]>>((acc, p) => {
     const date = new Date(p.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
-    (acc[date] ??= []).push(p);
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(p);
     return acc;
   }, {});
 
