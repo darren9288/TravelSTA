@@ -80,12 +80,12 @@ export default function SettlementPage() {
   function wName(wid: string | null) { return wid ? wallets.find((w) => w.id === wid)?.name ?? "?" : null; }
 
   // Group history payments by date (created_at date)
-  const historyByDate = history.reduce<Record<string, SettlementPayment[]>>((acc, p) => {
+  const historyByDate = history.reduce((acc: Record<string, SettlementPayment[]>, p) => {
     const date = new Date(p.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
     if (!acc[date]) acc[date] = [];
     acc[date].push(p);
     return acc;
-  }, {});
+  }, {} as Record<string, SettlementPayment[]>);
 
   return (
     <>
