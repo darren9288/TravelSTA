@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
-import { RefreshCw, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { RefreshCw, Trash2, CheckCircle, XCircle, Upload } from "lucide-react";
 
 type LogEntry = {
   id: string;
@@ -17,7 +17,8 @@ type LogEntry = {
   error?: string;
 };
 
-// Global log store (survives re-renders, cleared on page refresh)
+type Traveler = { id: string; name: string };
+
 const LOG_KEY = "travelsta_dev_logs";
 
 function getLogs(): LogEntry[] {
@@ -27,7 +28,6 @@ function saveLogs(logs: LogEntry[]) {
   sessionStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(-100)));
 }
 
-// Patched fetch that logs to sessionStorage
 function installFetchInterceptor() {
   if (typeof window === "undefined") return;
   if ((window as unknown as { __fetchPatched?: boolean }).__fetchPatched) return;
@@ -66,6 +66,9 @@ function installFetchInterceptor() {
   };
 }
 
+// Placeholder names in the JSON → try to auto-match to traveler names
+const PLACEHOLDERS = ["DARREN", "WILLY", "MAC", "CRISTO"];
+
 export default function DevPage() {
   const { id } = useParams<{ id: string }>();
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -74,9 +77,28 @@ export default function DevPage() {
   const [rawData, setRawData] = useState<Record<string, unknown>>({});
   const [rawLoading, setRawLoading] = useState(false);
 
+  // Bulk import state
+  const [travelers, setTravelers] = useState<Traveler[]>([]);
+  const [jsonText, setJsonText] = useState("");
+  const [mapping, setMapping] = useState<Record<string, string>>({}); // placeholder → traveler_id
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ done: 0, total: 0, errors: 0 });
+  const [importDone, setImportDone] = useState(false);
+
   useEffect(() => {
     installFetchInterceptor();
     fetch(`/api/trips/${id}`).then((r) => r.json()).then((d) => setTrip(d.error ? null : d));
+    fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()).then((list: Traveler[]) => {
+      if (!Array.isArray(list)) return;
+      setTravelers(list);
+      // Auto-match: if traveler name contains the placeholder word, pre-select it
+      const autoMap: Record<string, string> = {};
+      for (const ph of PLACEHOLDERS) {
+        const match = list.find((t) => t.name.toUpperCase().includes(ph));
+        if (match) autoMap[ph] = match.id;
+      }
+      setMapping(autoMap);
+    });
     refresh();
     const interval = setInterval(refresh, 2000);
     return () => clearInterval(interval);
@@ -94,16 +116,53 @@ export default function DevPage() {
 
   async function loadRawData() {
     setRawLoading(true);
-    const [travelers, expenses, pools, topups, settlement] = await Promise.all([
+    const [travelers, expenses, topups, settlement] = await Promise.all([
       fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
       fetch(`/api/expenses?trip_id=${id}`).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
       fetch(`/api/pool?trip_id=${id}`).then((r) => r.json()),
       fetch(`/api/settlement?trip_id=${id}`).then((r) => r.json()),
     ]);
-    setRawData({ travelers, expenses, pools, topups, settlement });
+    setRawData({ travelers, expenses, topups, settlement });
     setRawLoading(false);
     refresh();
+  }
+
+  async function runImport() {
+    let rows: Record<string, unknown>[];
+    try {
+      const parsed = JSON.parse(jsonText);
+      rows = (Array.isArray(parsed) ? parsed : [parsed]).filter((r) => !r._note);
+    } catch {
+      alert("Invalid JSON — please check the pasted text.");
+      return;
+    }
+
+    setImporting(true);
+    setImportDone(false);
+    setImportProgress({ done: 0, total: rows.length, errors: 0 });
+
+    let errors = 0;
+    for (let i = 0; i < rows.length; i++) {
+      // Deep-clone and replace placeholders
+      let str = JSON.stringify(rows[i]);
+      str = str.replace(/TRIP_ID/g, id);
+      for (const ph of PLACEHOLDERS) {
+        const realId = mapping[ph] ?? "";
+        str = str.replace(new RegExp(`${ph}_ID`, "g"), realId);
+      }
+      const body = JSON.parse(str);
+
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) errors++;
+      setImportProgress({ done: i + 1, total: rows.length, errors });
+    }
+
+    setImporting(false);
+    setImportDone(true);
   }
 
   const statusColor = (s: number | null) => {
@@ -139,6 +198,66 @@ export default function DevPage() {
                 <Trash2 size={12} /> Clear
               </button>
             </div>
+          </div>
+
+          {/* Bulk Import */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex flex-col gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Bulk Import Test Data</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Paste the JSON array (e.g. bali-expenses.json). Traveler placeholders are auto-matched below.</p>
+            </div>
+
+            {/* Traveler mapping */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {PLACEHOLDERS.map((ph) => (
+                <div key={ph}>
+                  <label className="text-xs text-slate-400 mb-1 block font-mono">{ph}_ID</label>
+                  <select
+                    value={mapping[ph] ?? ""}
+                    onChange={(e) => setMapping((prev) => ({ ...prev, [ph]: e.target.value }))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                    <option value="">— unset —</option>
+                    {travelers.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            {/* JSON textarea */}
+            <textarea
+              value={jsonText}
+              onChange={(e) => { setJsonText(e.target.value); setImportDone(false); }}
+              placeholder='Paste JSON array here — e.g. contents of bali-expenses.json'
+              rows={6}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-y"
+            />
+
+            {/* Progress */}
+            {(importing || importDone) && (
+              <div className="flex flex-col gap-1">
+                <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all"
+                    style={{ width: importProgress.total ? `${(importProgress.done / importProgress.total) * 100}%` : "0%" }}
+                  />
+                </div>
+                <p className="text-xs text-slate-400">
+                  {importProgress.done} / {importProgress.total} imported
+                  {importProgress.errors > 0 && <span className="text-red-400 ml-2">· {importProgress.errors} errors</span>}
+                  {importDone && <span className="text-emerald-400 ml-2">· Done!</span>}
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={runImport}
+              disabled={importing || !jsonText.trim()}
+              className="flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+              <Upload size={14} />
+              {importing ? `Importing… (${importProgress.done}/${importProgress.total})` : "Import All Expenses"}
+            </button>
           </div>
 
           {/* Raw data loader */}
