@@ -83,7 +83,15 @@ export async function DELETE(req: NextRequest) {
   const denied = await requireEditor(trip_id);
   if (denied) return denied;
 
-  const { error } = await serverDb().from("itinerary_items").delete().eq("id", id);
+  const db = serverDb();
+
+  // Clean up any uploaded files for this itinerary item
+  const { data: files } = await db.storage.from("itinerary-files").list(id);
+  if (files?.length) {
+    await db.storage.from("itinerary-files").remove(files.map((f) => `${id}/${f.name}`));
+  }
+
+  const { error } = await db.from("itinerary_items").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

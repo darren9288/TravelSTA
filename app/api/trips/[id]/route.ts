@@ -35,7 +35,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-  const { error } = await serverDb().from("trips").delete().eq("id", params.id);
+  const db = serverDb();
+
+  // Delete trip background from storage
+  const { data: bgFiles } = await db.storage.from("trip-backgrounds").list(params.id);
+  if (bgFiles?.length) {
+    await db.storage.from("trip-backgrounds").remove(bgFiles.map((f) => `${params.id}/${f.name}`));
+  }
+
+  // Delete itinerary files from storage (organized per item_id folder)
+  const { data: items } = await db.from("itinerary_items").select("id").eq("trip_id", params.id);
+  if (items?.length) {
+    await Promise.all(
+      items.map(async (item) => {
+        const { data: files } = await db.storage.from("itinerary-files").list(item.id);
+        if (files?.length) {
+          await db.storage.from("itinerary-files").remove(files.map((f) => `${item.id}/${f.name}`));
+        }
+      })
+    );
+  }
+
+  const { error } = await db.from("trips").delete().eq("id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
