@@ -30,6 +30,7 @@ export default function ExpensesPage() {
   const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPaidBy, setFilterPaidBy] = useState("");
+  const [filterDate, setFilterDate] = useState("");
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -132,6 +133,7 @@ export default function ExpensesPage() {
   const filtered = expenses.filter((e) => {
     if (filterCategory && e.category !== filterCategory) return false;
     if (filterPaidBy && e.paid_by_id !== filterPaidBy) return false;
+    if (filterDate && e.date !== filterDate) return false;
     return true;
   });
 
@@ -161,6 +163,8 @@ export default function ExpensesPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
+            <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
             <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
               <option value="">All Categories</option>
@@ -171,8 +175,8 @@ export default function ExpensesPage() {
               <option value="">All Payers</option>
               {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            {(filterCategory || filterPaidBy) && (
-              <button onClick={() => { setFilterCategory(""); setFilterPaidBy(""); }}
+            {(filterCategory || filterPaidBy || filterDate) && (
+              <button onClick={() => { setFilterCategory(""); setFilterPaidBy(""); setFilterDate(""); }}
                 className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 transition-colors">Clear</button>
             )}
           </div>

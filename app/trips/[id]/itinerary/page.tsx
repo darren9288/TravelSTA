@@ -93,6 +93,18 @@ export default function ItineraryPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Auto-scroll to today if a matching day exists
+  useEffect(() => {
+    if (items.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const hasToday = items.some((i) => i.date === today);
+    if (hasToday) {
+      setTimeout(() => {
+        document.getElementById(`day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    }
+  }, [items]);
+
   useEffect(() => {
     if (selectedItem) {
       setNotesVal(selectedItem.notes ?? "");
@@ -329,7 +341,7 @@ export default function ItineraryPage() {
                   : null;
 
                 return (
-                  <div key={date} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+                  <div key={date} id={`day-${date}`} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
                     {/* Day header */}
                     <button onClick={() => setCollapsed((prev) => { const n = new Set(prev); n.has(date) ? n.delete(date) : n.add(date); return n; })}
                       className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700/30 transition-colors">
