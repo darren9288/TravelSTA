@@ -1,236 +1,152 @@
-# Test Data - Bangkok-Tokyo Adventure 2026
+# 10-Day Bali Trip — Test Data Verification Guide
 
-## Overview
-This test dataset simulates a 10-day multi-country trip with 4 travelers testing all TravelSTA features:
-- **Multi-currency support** (MYR, THB, JPY)
-- **Wallet tracking** (Wise, TNG, Credit Card, Cash in multiple currencies)
-- **Pool wallets** (shared expenses)
-- **Settlement checkpoints** (Day 5 and Day 9)
-- **Mixed split types** (even splits, custom splits, individual expenses)
-- **Import/Export functionality**
+## Scenario Overview
 
-## Trip Details
-- **Route**: KLIA → Bangkok → Tokyo → Osaka → Kyoto → Bangkok → KLIA
-- **Dates**: April 30 - May 9, 2026 (10 days)
-- **Travelers**: Darren, Willy, Mac, Cristo
-- **Total Expenses**: MYR 11,956 (≈ MYR 2,989 per person)
+**Trip:** Bali, Indonesia — 10 days (2025-06-01 to 2025-06-10)
+**Travelers:** Darren, Willy, Mac, Cristo
+**Wallets:**
+- Darren Cash MYR
+- Willy Cash MYR
+- Mac Cash MYR
+- Cristo TNG MYR
+- Pool (shared group wallet, MYR)
 
-## Setup Instructions
+---
 
-### 1. Create the Trip
-1. Go to "New Trip" in TravelSTA
-2. Fill in trip details:
-   - **Name**: Bangkok-Tokyo Adventure 2026
-   - **Destination**: Bangkok → Tokyo → Kyoto
-   - **Start Date**: 2026-04-30
-   - **End Date**: 2026-05-09
-   - **Foreign Currency 1**: THB (Thai Baht)
-     - Cash Rate: 8.0
-     - Wise Rate: 8.0
-   - **Foreign Currency 2**: JPY (Japanese Yen)
-     - Cash Rate: 30.0
-     - Wise Rate: 30.0
+## Initial Setup (before Day 1)
 
-### 2. Add Travelers
-Add 4 travelers:
-1. Darren
-2. Willy
-3. Mac
-4. Cristo
+### Wallet Top-ups
+| Wallet | Top-up Amount |
+|--------|--------------|
+| Darren Cash | RM 5,000.00 |
+| Willy Cash | RM 5,000.00 |
+| Mac Cash | RM 5,000.00 |
+| Cristo TNG | RM 3,000.00 |
 
-### 3. Create Wallets
+### Pool Contributions (Pool Top-up from each person's wallet)
+Each person contributes RM 500 to the Pool wallet.
+| From | Amount |
+|------|--------|
+| Darren Cash → Pool | RM 500.00 |
+| Willy Cash → Pool | RM 500.00 |
+| Mac Cash → Pool | RM 500.00 |
+| Cristo TNG → Pool | RM 500.00 |
 
-**Darren's Wallets:**
-- Wise (MYR 2,000)
-- Cash MYR (MYR 500)
-- Cash THB (THB 0)
-- Cash JPY (JPY 0)
+### Initial Wallet Balances (after pool contributions)
+| Wallet | Balance |
+|--------|---------|
+| Darren Cash | RM 4,500.00 |
+| Willy Cash | RM 4,500.00 |
+| Mac Cash | RM 4,500.00 |
+| Cristo TNG | RM 2,500.00 |
+| Pool | RM 2,000.00 |
 
-**Willy's Wallets:**
-- TNG (MYR 1,500)
-- Credit Card (MYR 0)
-- Cash MYR (MYR 300)
-- Cash THB (THB 0)
-- Cash JPY (JPY 0)
+---
 
-**Mac's Wallets:**
-- Credit Card (MYR 0)
-- TNG (MYR 120)
-- Cash MYR (MYR 400)
-- Cash THB (THB 0)
-- Cash JPY (JPY 0)
+## Day-by-Day Summary
 
-**Cristo's Wallets:**
-- Cash MYR (MYR 600)
-- Cash THB (THB 0)
-- Cash JPY (JPY 0)
+### Settlement Rounds
+| Round | After Day | Instructions |
+|-------|-----------|-------------|
+| Round 1 | Day 3 | Mac→Willy RM 125, Cristo→Darren RM 35, Cristo→Willy RM 150 |
+| Round 2 | Day 6 | Darren→Willy RM 155, Mac→Willy RM 95, Cristo→Willy RM 175 |
+| Round 3 | Day 9 | Mac→Darren RM 15, Mac→Willy RM 170, Cristo→Willy RM 125 |
+| Round 4 | Day 10 | Darren→Mac RM 40, Willy→Mac RM 40 |
 
-**Pool Wallets:**
-- Cash Pool MYR (MYR 0)
-- Cash Pool THB (THB 0)
-- Cash Pool JPY (JPY 0) - Will be used on Day 8
+### Expected EOD Wallet Balances
 
-### 4. Import Transaction Data
+| | Darren Cash | Willy Cash | Mac Cash | Cristo TNG | Pool |
+|--|-------------|------------|----------|------------|------|
+| **Setup** | 4,500.00 | 4,500.00 | 4,500.00 | 2,500.00 | 2,000.00 |
+| **EOD Day 1** | 4,420.00 | 4,380.00 | 4,300.00 | 2,500.00 | 1,600.00 |
+| **EOD Day 2** | 4,260.00 | 4,140.00 | 4,300.00 | 2,440.00 | 1,120.00 |
+| **EOD Day 3** | 4,060.00 | 3,820.00 | 4,220.00 | 2,280.00 | 1,120.00 |
+| **After R1** | 4,095.00 | 4,095.00 | 4,095.00 | 2,095.00 | 1,120.00 |
+| **Day 4 pool top-up** | 3,595.00 | 3,595.00 | 3,595.00 | 1,595.00 | 3,120.00 |
+| **EOD Day 4** | 3,495.00 | 3,475.00 | 3,395.00 | 1,595.00 | 2,520.00 |
+| **EOD Day 5** | 3,375.00 | 3,195.00 | 3,395.00 | 1,515.00 | 1,720.00 |
+| **EOD Day 6** | 3,375.00 | 2,795.00 | 3,315.00 | 1,395.00 | 1,080.00 |
+| **After R2** | 3,220.00 | 3,220.00 | 3,220.00 | 1,220.00 | 1,080.00 |
+| **EOD Day 7** | 3,140.00 | 2,820.00 | 3,100.00 | 1,220.00 | 720.00 |
+| **EOD Day 8** | 2,820.00 | 2,660.00 | 3,100.00 | 1,160.00 | 320.00 |
+| **Day 9 pool top-up** | 2,420.00 | 2,260.00 | 2,700.00 | 760.00 | 1,920.00 |
+| **EOD Day 9** | 2,420.00 | 2,140.00 | 2,620.00 | 560.00 | 1,440.00 |
+| **After R3** | 2,435.00 | 2,435.00 | 2,435.00 | 435.00 | 1,440.00 |
+| **EOD Day 10** | 2,355.00 | 2,355.00 | 2,235.00 | 315.00 | 1,160.00 |
+| **After R4 (FINAL)** | 2,315.00 | 2,315.00 | 2,315.00 | 315.00 | 1,160.00 |
 
-Import the JSON files **in order** from Day 1 to Day 10:
+### Final Verification
+- Total initial cash: RM 18,000 (5000+5000+5000+3000)
+- Total personal expenses: RM 5,140
+- Total pool expenses: RM 4,440
+- Total expenses: RM 9,580
+- Final cash remaining: RM 18,000 − RM 9,580 = **RM 8,420**
+- Sum of final balances: 2315+2315+2315+315+1160 = **RM 8,420** ✓
 
-1. `day01-apr30-bangkok-arrival.json` - 3 transactions
-2. `day02-may01-bangkok.json` - 6 transactions
-3. `day03-may02-bangkok-tokyo.json` - 5 transactions
-4. `day04-may03-tokyo.json` - 6 transactions
-5. `day05-may04-osaka-settlement.json` - 5 transactions + **SETTLEMENT CHECKPOINT**
-6. `day06-may05-osaka.json` - 6 transactions (fresh start after settlement)
-7. `day07-may06-kyoto.json` - 5 transactions
-8. `day08-may07-kyoto.json` - 6 transactions (includes pool-funded activities)
-9. `day09-may08-bangkok-settlement.json` - 5 transactions + **SETTLEMENT CHECKPOINT**
-10. `day10-may09-final.json` - 6 transactions (final day)
+---
 
-**Import Steps:**
-1. Go to trip page → Import/Export
-2. Select "JSON" format
-3. Upload each file
-4. Review preview and click "Import"
-5. Verify success message
+## Settlement Net Balances (check against settlement page)
 
-## What to Test
+### Before Round 1 (cumulative D1–D3)
+| Traveler | Paid | Share | Net |
+|----------|------|-------|-----|
+| Darren | RM 440.00 | RM 405.00 | **+RM 35.00** |
+| Willy | RM 680.00 | RM 405.00 | **+RM 275.00** |
+| Mac | RM 280.00 | RM 405.00 | **−RM 125.00** |
+| Cristo | RM 220.00 | RM 405.00 | **−RM 185.00** |
 
-### Day-by-Day Testing
+### Before Round 2 (cumulative D4–D6, fresh after R1)
+| Traveler | Paid | Share | Net |
+|----------|------|-------|-----|
+| Darren | RM 220.00 | RM 375.00 | **−RM 155.00** |
+| Willy | RM 800.00 | RM 375.00 | **+RM 425.00** |
+| Mac | RM 280.00 | RM 375.00 | **−RM 95.00** |
+| Cristo | RM 200.00 | RM 375.00 | **−RM 175.00** |
 
-**Day 1-2 (Bangkok):**
-- ✅ THB currency transactions
-- ✅ Multiple payment types (Wise, Credit Card, Cash)
-- ✅ Even splits across all travelers
-- ✅ Wallet balance tracking
+### Before Round 3 (cumulative D7–D9, fresh after R2)
+| Traveler | Paid | Share | Net |
+|----------|------|-------|-----|
+| Darren | RM 400.00 | RM 385.00 | **+RM 15.00** |
+| Willy | RM 680.00 | RM 385.00 | **+RM 295.00** |
+| Mac | RM 200.00 | RM 385.00 | **−RM 185.00** |
+| Cristo | RM 260.00 | RM 385.00 | **−RM 125.00** |
 
-**Day 3 (Bangkok → Tokyo):**
-- ✅ Currency switch from THB to JPY
-- ✅ Large expenses (flights, accommodation)
-- ✅ Settlement status building up
+### Before Round 4 (cumulative D10, fresh after R3)
+| Traveler | Paid | Share | Net |
+|----------|------|-------|-----|
+| Darren | RM 80.00 | RM 120.00 | **−RM 40.00** |
+| Willy | RM 80.00 | RM 120.00 | **−RM 40.00** |
+| Mac | RM 200.00 | RM 120.00 | **+RM 80.00** |
+| Cristo | RM 120.00 | RM 120.00 | **RM 0.00** |
 
-**Day 4 (Tokyo):**
-- ✅ Custom splits (Disney merchandise - Cristo opted out)
-- ✅ Individual expenses
-- ✅ Multiple transactions per day
+---
 
-**Day 5 (Tokyo → Osaka) - SETTLEMENT:**
-- ✅ High-value transaction (Shinkansen tickets)
-- ✅ **First settlement checkpoint**
-- ✅ Test "Settle All" feature
-- ✅ Verify wallet-to-wallet transfers
-- ✅ Check settlement history
-- ✅ Confirm splits are locked after settlement
+## How to Use This Test Data
 
-**Day 6-7 (Osaka → Kyoto):**
-- ✅ Fresh balances after settlement
-- ✅ Mixed payment methods
-- ✅ Custom splits (electronics, kimono shopping)
+1. **Initial Setup:** Create the trip, add 4 travelers, create 5 wallets (Darren Cash, Willy Cash, Mac Cash, Cristo TNG, Pool). Top up wallets as shown above. Add pool contributions via pool top-up.
 
-**Day 8 (Kyoto):**
-- ✅ **Pool wallet usage** (Japan Fund pays for activities)
-- ✅ Pool expenses auto-settled
-- ✅ Verify pool balance tracking
+2. **Import each day:** Enter expenses from `day-XX.json` files in order. After entering a day's expenses, check the wallet balances match the EOD table above.
 
-**Day 9 (Kyoto → Bangkok) - SETTLEMENT:**
-- ✅ Currency switch back to THB
-- ✅ **Second settlement checkpoint**
-- ✅ Test settlement with negative balances
-- ✅ Verify all balances reset
+3. **Settlement Rounds:** After Day 3, 6, 9, and 10, run "Settle All" and check:
+   - Settlement page shows the correct instructions (table above)
+   - All net balances reset to RM 0.00 after settling
+   - Wallet balances match the "After RX" row in the table above
 
-**Day 10 (Bangkok → KLIA - Final):**
-- ✅ MYR currency transactions (back home)
-- ✅ Final expenses
-- ✅ Trip summary statistics
+4. **Pool top-ups on Day 4 and Day 9:** Before entering that day's expenses, first record the pool top-up transaction from each person's wallet.
 
-### Feature Testing Checklist
+---
 
-#### Multi-Currency
-- [ ] Expenses in MYR, THB, and JPY all display correctly
-- [ ] Currency conversion uses correct rates (Cash vs Wise)
-- [ ] Dashboard shows totals in MYR
-- [ ] Export includes currency field
+## Day-by-Day Expense Files
 
-#### Wallets
-- [ ] Each traveler's wallet balances update correctly
-- [ ] Credit card shows negative balance (debt)
-- [ ] Cash wallets decrease with spending
-- [ ] Wise/TNG balances track correctly
-
-#### Pool Wallets
-- [ ] Pool-funded expenses (Day 8) split correctly
-- [ ] Pool wallet balance shows in dashboard
-- [ ] Pool expenses marked as auto-settled
-
-#### Settlements
-- [ ] Settlement page shows correct balances
-- [ ] "Settle All" button works
-- [ ] Wallet-to-wallet selection available
-- [ ] Settlement history displays correctly
-- [ ] Splits locked after settlement (cannot edit)
-- [ ] Balances reset after settlement
-
-#### Import/Export
-- [ ] JSON import works for all 10 files
-- [ ] Duplicate detection works (try re-importing)
-- [ ] Export includes all fields (currency, wallet, etc.)
-- [ ] CSV export/import also works
-
-#### Dashboard
-- [ ] Total spent shows MYR 11,956
-- [ ] Per person share shows ≈ MYR 2,989
-- [ ] Recent expenses display correctly
-- [ ] Statistics accurate
-
-## Expected Results
-
-### Settlement Checkpoints
-
-**Day 5 Settlement (After MYR 6,279 spent):**
-- Darren: Paid MYR 1,800 | Share MYR 1,569.75 | **Owed MYR 230.25**
-- Willy: Paid MYR 1,082 | Share MYR 1,569.75 | Owes MYR 487.75
-- Mac: Paid MYR 1,161 | Share MYR 1,569.75 | Owes MYR 408.75
-- Cristo: Paid MYR 1,160.75 | Share MYR 1,569.75 | **Owed MYR 409**
-
-**Day 9 Settlement (After MYR 5,177 spent since Day 6):**
-- Darren: Paid MYR 1,426 | Share MYR 1,294.25 | **Owed MYR 131.75**
-- Willy: Paid MYR 1,212 | Share MYR 1,294.25 | Owes MYR 82.25
-- Mac: Paid MYR 1,203 | Share MYR 1,294.25 | Owes MYR 91.25
-- Cristo: Paid MYR 676 | Share MYR 1,294.25 | Owes MYR 618.25
-
-### Final Statistics
-- **Total Transactions**: 48
-- **Total Spent**: MYR 11,956
-- **Per Person**: MYR 2,989
-- **Currencies Used**: 3 (MYR, THB, JPY)
-- **Settlements**: 2 (Day 5, Day 9)
-- **Pool Funded**: MYR 840 (Day 8)
-
-## Troubleshooting
-
-### Import Errors
-- **"Traveler not found"**: Ensure all 4 travelers are added first
-- **"Wallet not found"**: Create all wallets before importing
-- **"Currency not allowed"**: Check trip has THB and JPY configured
-- **Duplicate warnings**: Normal if re-importing same file
-
-### Settlement Issues
-- **Cannot edit splits**: Expected after settlement (locked)
-- **Balances don't match**: Check if all transactions imported
-- **Wallet selection missing**: Ensure wallets exist for both payer and payee
-
-### Display Issues
-- **Wrong currency symbol**: Check expense currency field
-- **Incorrect totals**: Verify conversion rates match (THB: 8, JPY: 30)
-
-## Notes
-- All amounts are in the transaction's currency, with MYR equivalent calculated
-- Pool expenses (Day 8) are automatically settled and don't affect individual balances
-- Settlement locks all previous splits - they cannot be edited after settlement
-- Wallet balances are tracked separately from settlement balances
-- Credit card balances can go negative (representing debt)
-
-## Support
-If you encounter issues, check:
-1. All travelers and wallets are created
-2. Trip currencies are configured correctly (THB and JPY)
-3. Files are imported in order (Day 1 → Day 10)
-4. Database migrations 008 and 009 are applied
+| File | Description |
+|------|-------------|
+| day-01.json | Arrival day — airport, lunch, groceries, welcome dinner (pool) |
+| day-02.json | Sightseeing — breakfast, museum, lunch, activities (pool) |
+| day-03.json | Beach day — breakfast, water sports, lunch, dinner |
+| day-04.json | Temples — *pool top-up first*, temple entry, lunch, cultural show, cooking class (pool) |
+| day-05.json | Shopping — breakfast, souvenirs, lunch, sunset cruise (pool) |
+| day-06.json | Water park — breakfast, water park, lunch, dinner buffet (pool) |
+| day-07.json | Spa & relax — breakfast, spa, lunch, group lunch (pool) |
+| day-08.json | Day trip — breakfast, day trip, lunch, beach BBQ (pool) |
+| day-09.json | Last full day — *pool top-up first*, breakfast, shopping, lunch, cooking class (pool) |
+| day-10.json | Departure — breakfast, duty free, lunch, snacks, airport transfer (pool) |

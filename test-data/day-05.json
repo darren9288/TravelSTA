@@ -1,0 +1,68 @@
+{
+  "day": 5,
+  "date": "2025-06-05",
+  "label": "Shopping & Sunset Cruise",
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Morning Breakfast",
+      "category": "Food",
+      "date": "2025-06-05",
+      "amount_myr": 80.00,
+      "paid_by": "Cristo",
+      "wallet": "Cristo TNG",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 20.00
+    },
+    {
+      "no": 2,
+      "description": "Souvenir Shopping (Seminyak Market)",
+      "category": "Shopping",
+      "date": "2025-06-05",
+      "amount_myr": 280.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 70.00
+    },
+    {
+      "no": 3,
+      "description": "Lunch at Rice Terrace Café",
+      "category": "Food",
+      "date": "2025-06-05",
+      "amount_myr": 120.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 30.00
+    },
+    {
+      "no": 4,
+      "description": "Sunset Cruise (Dinner on Boat)",
+      "category": "Activities",
+      "date": "2025-06-05",
+      "amount_myr": 800.00,
+      "paid_by": "Pool",
+      "wallet": "Pool",
+      "split": "pool_expense"
+    }
+  ],
+  "eod_verification": {
+    "note": "Check these wallet balances after entering all Day 5 expenses",
+    "Darren Cash": "RM 3,375.00",
+    "Willy Cash": "RM 3,195.00",
+    "Mac Cash": "RM 3,395.00",
+    "Cristo TNG": "RM 1,515.00",
+    "Pool": "RM 1,720.00"
+  },
+  "settlement_check": {
+    "note": "Cumulative net balances D4+D5 (fresh after R1). Total personal D4+D5: RM 900, share RM 225 each.",
+    "Darren": "−RM 5.00 (paid RM 220, share RM 225)",
+    "Willy": "+RM 175.00 (paid RM 400, share RM 225)",
+    "Mac": "−RM 25.00 (paid RM 200, share RM 225)",
+    "Cristo": "−RM 145.00 (paid RM 80, share RM 225)"
+  }
+}

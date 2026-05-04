@@ -1,0 +1,91 @@
+{
+  "day": 3,
+  "date": "2025-06-03",
+  "label": "Beach Day — SETTLE AFTER THIS DAY",
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Beach Breakfast",
+      "category": "Food",
+      "date": "2025-06-03",
+      "amount_myr": 80.00,
+      "paid_by": "Mac",
+      "wallet": "Mac Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 20.00
+    },
+    {
+      "no": 2,
+      "description": "Water Sports (Jet Ski + Parasailing)",
+      "category": "Activities",
+      "date": "2025-06-03",
+      "amount_myr": 320.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 80.00
+    },
+    {
+      "no": 3,
+      "description": "Seafood Lunch",
+      "category": "Food",
+      "date": "2025-06-03",
+      "amount_myr": 160.00,
+      "paid_by": "Cristo",
+      "wallet": "Cristo TNG",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 40.00
+    },
+    {
+      "no": 4,
+      "description": "Rooftop Dinner",
+      "category": "Food",
+      "date": "2025-06-03",
+      "amount_myr": 200.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 50.00
+    }
+  ],
+  "eod_verification": {
+    "note": "Balances BEFORE settlement (just after entering expenses)",
+    "Darren Cash": "RM 4,060.00",
+    "Willy Cash": "RM 3,820.00",
+    "Mac Cash": "RM 4,220.00",
+    "Cristo TNG": "RM 2,280.00",
+    "Pool": "RM 1,120.00"
+  },
+  "settlement_check": {
+    "note": "Cumulative net balances D1+D2+D3 (total personal RM 1,620, share RM 405 each). Verify this on the settlement page BEFORE clicking Settle All.",
+    "Darren": "+RM 35.00 (paid RM 440, share RM 405)",
+    "Willy": "+RM 275.00 (paid RM 680, share RM 405)",
+    "Mac": "−RM 125.00 (paid RM 280, share RM 405)",
+    "Cristo": "−RM 185.00 (paid RM 220, share RM 405)"
+  },
+  "settlement_round_1": {
+    "action": "Click SETTLE ALL on the settlement page",
+    "wallet_selections": {
+      "Mac → Willy": "Mac Cash → Willy Cash",
+      "Cristo → Darren": "Cristo TNG → Darren Cash",
+      "Cristo → Willy": "Cristo TNG → Willy Cash"
+    },
+    "expected_instructions": [
+      "Mac → Willy: RM 125.00",
+      "Cristo → Darren: RM 35.00",
+      "Cristo → Willy: RM 150.00"
+    ],
+    "after_settlement_balances": {
+      "note": "All net balances should be RM 0.00 after settlement. Check wallet balances:",
+      "Darren Cash": "RM 4,095.00",
+      "Willy Cash": "RM 4,095.00",
+      "Mac Cash": "RM 4,095.00",
+      "Cristo TNG": "RM 2,095.00",
+      "Pool": "RM 1,120.00"
+    }
+  }
+}

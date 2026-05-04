@@ -1,0 +1,68 @@
+{
+  "day": 7,
+  "date": "2025-06-07",
+  "label": "Spa & Relaxation Day",
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Breakfast (Smoothie Bowls)",
+      "category": "Food",
+      "date": "2025-06-07",
+      "amount_myr": 80.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 20.00
+    },
+    {
+      "no": 2,
+      "description": "Traditional Balinese Spa (2 hours)",
+      "category": "Activities",
+      "date": "2025-06-07",
+      "amount_myr": 400.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 100.00
+    },
+    {
+      "no": 3,
+      "description": "Café Lunch",
+      "category": "Food",
+      "date": "2025-06-07",
+      "amount_myr": 120.00,
+      "paid_by": "Mac",
+      "wallet": "Mac Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 30.00
+    },
+    {
+      "no": 4,
+      "description": "Group Dinner (Pool)",
+      "category": "Food",
+      "date": "2025-06-07",
+      "amount_myr": 360.00,
+      "paid_by": "Pool",
+      "wallet": "Pool",
+      "split": "pool_expense"
+    }
+  ],
+  "eod_verification": {
+    "note": "Check wallet balances after all Day 7 expenses",
+    "Darren Cash": "RM 3,140.00",
+    "Willy Cash": "RM 2,820.00",
+    "Mac Cash": "RM 3,100.00",
+    "Cristo TNG": "RM 1,220.00",
+    "Pool": "RM 720.00"
+  },
+  "settlement_check": {
+    "note": "Cumulative net balances fresh from D7 only. Total personal D7: RM 600, share RM 150 each.",
+    "Darren": "−RM 70.00 (paid RM 80, share RM 150)",
+    "Willy": "+RM 250.00 (paid RM 400, share RM 150)",
+    "Mac": "−RM 30.00 (paid RM 120, share RM 150)",
+    "Cristo": "−RM 150.00 (paid RM 0, share RM 150)"
+  }
+}

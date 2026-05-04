@@ -1,0 +1,69 @@
+{
+  "day": 1,
+  "date": "2025-06-01",
+  "label": "Arrival Day",
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Airport Taxi",
+      "category": "Transport",
+      "date": "2025-06-01",
+      "amount_myr": 80.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 20.00
+    },
+    {
+      "no": 2,
+      "description": "Hawker Lunch",
+      "category": "Food",
+      "date": "2025-06-01",
+      "amount_myr": 120.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 30.00
+    },
+    {
+      "no": 3,
+      "description": "Groceries & Supplies",
+      "category": "Shopping",
+      "date": "2025-06-01",
+      "amount_myr": 200.00,
+      "paid_by": "Mac",
+      "wallet": "Mac Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 50.00
+    },
+    {
+      "no": 4,
+      "description": "Welcome Dinner",
+      "category": "Food",
+      "date": "2025-06-01",
+      "amount_myr": 400.00,
+      "paid_by": "Pool",
+      "wallet": "Pool",
+      "split": "pool_expense",
+      "notes": "Enter as pool expense (not split among travelers)"
+    }
+  ],
+  "eod_verification": {
+    "note": "Check these wallet balances after entering all Day 1 expenses",
+    "Darren Cash": "RM 4,420.00",
+    "Willy Cash": "RM 4,380.00",
+    "Mac Cash": "RM 4,300.00",
+    "Cristo TNG": "RM 2,500.00",
+    "Pool": "RM 1,600.00"
+  },
+  "settlement_check": {
+    "note": "Settlement page net balances (cumulative, all unsettled)",
+    "Darren": "−RM 20.00 (paid RM 80, share RM 100)",
+    "Willy": "+RM 20.00 (paid RM 120, share RM 100)",
+    "Mac": "+RM 100.00 (paid RM 200, share RM 100)",
+    "Cristo": "−RM 100.00 (paid RM 0, share RM 100)"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "day": 2,
+  "date": "2025-06-02",
+  "label": "Sightseeing",
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Breakfast at Café",
+      "category": "Food",
+      "date": "2025-06-02",
+      "amount_myr": 60.00,
+      "paid_by": "Cristo",
+      "wallet": "Cristo TNG",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 15.00
+    },
+    {
+      "no": 2,
+      "description": "Museum Entry Tickets",
+      "category": "Activities",
+      "date": "2025-06-02",
+      "amount_myr": 240.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 60.00
+    },
+    {
+      "no": 3,
+      "description": "Warung Lunch",
+      "category": "Food",
+      "date": "2025-06-02",
+      "amount_myr": 160.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 40.00
+    },
+    {
+      "no": 4,
+      "description": "Activities Booking (Klook)",
+      "category": "Activities",
+      "date": "2025-06-02",
+      "amount_myr": 480.00,
+      "paid_by": "Pool",
+      "wallet": "Pool",
+      "split": "pool_expense",
+      "notes": "Enter as pool expense"
+    }
+  ],
+  "eod_verification": {
+    "note": "Check these wallet balances after entering all Day 2 expenses",
+    "Darren Cash": "RM 4,260.00",
+    "Willy Cash": "RM 4,140.00",
+    "Mac Cash": "RM 4,300.00",
+    "Cristo TNG": "RM 2,440.00",
+    "Pool": "RM 1,120.00"
+  },
+  "settlement_check": {
+    "note": "Cumulative net balances D1+D2 (total personal RM 860, share RM 215 each)",
+    "Darren": "+RM 25.00 (paid RM 240, share RM 215)",
+    "Willy": "+RM 145.00 (paid RM 360, share RM 215)",
+    "Mac": "−RM 15.00 (paid RM 200, share RM 215)",
+    "Cristo": "−RM 155.00 (paid RM 60, share RM 215)"
+  }
+}

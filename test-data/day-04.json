@@ -1,0 +1,85 @@
+{
+  "day": 4,
+  "date": "2025-06-04",
+  "label": "Temples & Culture — POOL TOP-UP FIRST",
+  "pool_topup": {
+    "action": "BEFORE entering expenses, add pool top-up from each wallet",
+    "amount_each": 500.00,
+    "transactions": [
+      { "from": "Darren Cash", "to": "Pool", "amount": 500.00 },
+      { "from": "Willy Cash", "to": "Pool", "amount": 500.00 },
+      { "from": "Mac Cash", "to": "Pool", "amount": 500.00 },
+      { "from": "Cristo TNG", "to": "Pool", "amount": 500.00 }
+    ],
+    "pool_balance_after_topup": "RM 3,120.00",
+    "wallet_balances_after_topup": {
+      "Darren Cash": "RM 3,595.00",
+      "Willy Cash": "RM 3,595.00",
+      "Mac Cash": "RM 3,595.00",
+      "Cristo TNG": "RM 1,595.00"
+    }
+  },
+  "expenses": [
+    {
+      "no": 1,
+      "description": "Temple Entry Fees",
+      "category": "Activities",
+      "date": "2025-06-04",
+      "amount_myr": 100.00,
+      "paid_by": "Darren",
+      "wallet": "Darren Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 25.00
+    },
+    {
+      "no": 2,
+      "description": "Lunch at Ubud Market",
+      "category": "Food",
+      "date": "2025-06-04",
+      "amount_myr": 120.00,
+      "paid_by": "Willy",
+      "wallet": "Willy Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 30.00
+    },
+    {
+      "no": 3,
+      "description": "Kecak Cultural Show",
+      "category": "Activities",
+      "date": "2025-06-04",
+      "amount_myr": 200.00,
+      "paid_by": "Mac",
+      "wallet": "Mac Cash",
+      "split": "even",
+      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
+      "each_share": 50.00
+    },
+    {
+      "no": 4,
+      "description": "Balinese Cooking Class",
+      "category": "Activities",
+      "date": "2025-06-04",
+      "amount_myr": 600.00,
+      "paid_by": "Pool",
+      "wallet": "Pool",
+      "split": "pool_expense"
+    }
+  ],
+  "eod_verification": {
+    "note": "Check these wallet balances after pool top-up AND all Day 4 expenses",
+    "Darren Cash": "RM 3,495.00",
+    "Willy Cash": "RM 3,475.00",
+    "Mac Cash": "RM 3,395.00",
+    "Cristo TNG": "RM 1,595.00",
+    "Pool": "RM 2,520.00"
+  },
+  "settlement_check": {
+    "note": "Net balances FRESH from D4 only (previous round settled). Total personal D4: RM 420, share RM 105 each.",
+    "Darren": "−RM 5.00 (paid RM 100, share RM 105)",
+    "Willy": "+RM 15.00 (paid RM 120, share RM 105)",
+    "Mac": "+RM 95.00 (paid RM 200, share RM 105)",
+    "Cristo": "−RM 105.00 (paid RM 0, share RM 105)"
+  }
+}
