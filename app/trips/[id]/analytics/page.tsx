@@ -6,6 +6,7 @@ import { Trip } from "@/lib/supabase";
 import CategoryPie from "@/components/charts/CategoryPie";
 import DailyBar from "@/components/charts/DailyBar";
 import TravelerBar from "@/components/charts/TravelerBar";
+import CumulativeLine from "@/components/charts/CumulativeLine";
 import { RefreshCw } from "lucide-react";
 
 type StatsData = {
@@ -72,6 +73,12 @@ export default function AnalyticsPage() {
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">Daily Spending</h2>
                 <DailyBar data={stats.byDay} />
+              </div>
+
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+                <h2 className="text-sm font-semibold text-slate-400 mb-1">Cumulative Spend</h2>
+                <p className="text-xs text-slate-600 mb-3">Solid line = running total · dashed = daily</p>
+                <CumulativeLine data={stats.byDay} />
               </div>
 
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
