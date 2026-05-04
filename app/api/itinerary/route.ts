@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     trip_id: body.trip_id,
     date: body.date,
     time: body.time || null,
+    end_time: body.end_time || null,
     title: body.title,
     category: body.category ?? "activity",
     notes: body.notes ?? null,
@@ -64,6 +65,7 @@ export async function PUT(req: NextRequest) {
     .update({
       date: body.date,
       time: body.time || null,
+      end_time: body.end_time || null,
       title: body.title,
       category: body.category,
       notes: body.notes ?? null,

@@ -13,7 +13,7 @@ type Category = "flight" | "hotel" | "activity" | "food" | "transport" | "other"
 type ItineraryLink = { id: string; item_id: string; label: string | null; url: string };
 type ItineraryFile = { id: string; item_id: string; name: string; url: string; mime_type: string | null };
 type ItineraryItem = {
-  id: string; trip_id: string; date: string; time: string | null;
+  id: string; trip_id: string; date: string; time: string | null; end_time: string | null;
   title: string; category: Category; notes: string | null; photo_url: string | null;
   links: ItineraryLink[]; files: ItineraryFile[];
 };
@@ -52,9 +52,16 @@ export default function ItineraryPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
   const [addTime, setAddTime] = useState("");
+  const [addEndTime, setAddEndTime] = useState("");
   const [addTitle, setAddTitle] = useState("");
   const [addCat, setAddCat] = useState<Category>("activity");
   const [adding, setAdding] = useState(false);
+
+  // Inline time edit in detail panel
+  const [editingTimes, setEditingTimes] = useState(false);
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [savingTimes, setSavingTimes] = useState(false);
 
   // Notes edit
   const [editNotes, setEditNotes] = useState(false);
@@ -109,6 +116,7 @@ export default function ItineraryPage() {
     if (selectedItem) {
       setNotesVal(selectedItem.notes ?? "");
       setEditNotes(false);
+      setEditingTimes(false);
       setShowAddLink(false);
       setUploadError("");
     }
@@ -124,14 +132,14 @@ export default function ItineraryPage() {
     const res = await fetch("/api/itinerary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip_id: id, date: addDate, time: addTime || null, title: addTitle.trim(), category: addCat }),
+      body: JSON.stringify({ trip_id: id, date: addDate, time: addTime || null, end_time: addEndTime || null, title: addTitle.trim(), category: addCat }),
     });
     if (res.ok) {
       const item = await res.json();
       setItems((prev) =>
         [...prev, item].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
       );
-      setAddTitle(""); setAddTime(""); setShowAdd(false);
+      setAddTitle(""); setAddTime(""); setAddEndTime(""); setShowAdd(false);
       setSelectedId(item.id);
     }
     setAdding(false);
@@ -159,6 +167,19 @@ export default function ItineraryPage() {
     patch({ ...selectedItem, notes: notesVal });
     setEditNotes(false);
     setSavingNotes(false);
+  }
+
+  async function saveTimes() {
+    if (!selectedItem) return;
+    setSavingTimes(true);
+    await fetch("/api/itinerary", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...selectedItem, trip_id: id, time: editStartTime || null, end_time: editEndTime || null }),
+    });
+    patch({ ...selectedItem, time: editStartTime || null, end_time: editEndTime || null });
+    setEditingTimes(false);
+    setSavingTimes(false);
   }
 
   async function addLink() {
@@ -285,12 +306,15 @@ export default function ItineraryPage() {
           {showAdd && !isViewer && (
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
               <h2 className="text-sm font-semibold text-white">New Item</h2>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
                   <input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Time <span className="text-slate-600">optional</span></label>
+                <div><label className="text-xs text-slate-400 mb-1 block">Start <span className="text-slate-600">opt</span></label>
                   <input type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">End <span className="text-slate-600">opt</span></label>
+                  <input type="time" value={addEndTime} onChange={(e) => setAddEndTime(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
               </div>
               <div><label className="text-xs text-slate-400 mb-1 block">Title</label>
@@ -447,12 +471,45 @@ export default function ItineraryPage() {
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ""; }} />
 
                 {/* Meta bar */}
-                <div className="px-4 py-2.5 flex items-center gap-3 border-b border-slate-700/30">
-                  <Clock size={12} className="text-slate-500 flex-shrink-0" />
-                  <span className="text-xs text-slate-400">{fmtDate(selectedItem.date)}{selectedItem.time ? ` · ${selectedItem.time}` : ""}</span>
-                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${CAT[selectedItem.category].color} ${CAT[selectedItem.category].bg}`}>
-                    {CAT[selectedItem.category].label}
-                  </span>
+                <div className="px-4 py-2.5 border-b border-slate-700/30">
+                  {editingTimes ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Clock size={12} className="text-slate-500 flex-shrink-0" />
+                      <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)}
+                        placeholder="Start"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 w-28" />
+                      <span className="text-slate-600 text-xs">→</span>
+                      <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)}
+                        placeholder="End"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 w-28" />
+                      <button onClick={saveTimes} disabled={savingTimes}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
+                        <Check size={11} /> {savingTimes ? "…" : "Save"}
+                      </button>
+                      <button onClick={() => setEditingTimes(false)}
+                        className="p-1 text-slate-500 hover:text-white transition-colors">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <Clock size={12} className="text-slate-500 flex-shrink-0" />
+                      <span className="text-xs text-slate-400 flex-1">
+                        {fmtDate(selectedItem.date)}
+                        {selectedItem.time ? ` · ${selectedItem.time.slice(0, 5)}` : ""}
+                        {selectedItem.end_time ? ` – ${selectedItem.end_time.slice(0, 5)}` : ""}
+                      </span>
+                      {!isViewer && (
+                        <button onClick={() => { setEditStartTime(selectedItem.time?.slice(0, 5) ?? ""); setEditEndTime(selectedItem.end_time?.slice(0, 5) ?? ""); setEditingTimes(true); }}
+                          className="p-1 text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0">
+                          <Pencil size={11} />
+                        </button>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${CAT[selectedItem.category].color} ${CAT[selectedItem.category].bg}`}>
+                        {CAT[selectedItem.category].label}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Scrollable sections */}
