@@ -55,35 +55,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  // 4. Lock and settle all remaining unsettled splits with wallet info
+  // 4. Mark ALL unsettled splits as settled.
+  // Net transfers are already recorded in settlement_payments above.
+  // The per-split wallet tracking is not used for balance calculation — settlement_payments is.
   if (expenseIds.length > 0) {
-    for (let i = 0; i < instructions.length; i++) {
-      const inst = instructions[i];
-      const selection = walletSelections[i] ?? { from_wallet_id: null, to_wallet_id: null };
-
-      // Find all unsettled splits where the payer owes the receiver
-      const { data: toExpenses } = await db
-        .from("expenses")
-        .select("id")
-        .eq("trip_id", tripId)
-        .eq("paid_by_id", inst.to.id);
-
-      const toExpenseIds = (toExpenses ?? []).map((e: { id: string }) => e.id);
-
-      if (toExpenseIds.length > 0) {
-        await db
-          .from("expense_splits")
-          .update({
-            is_settled: true,
-            locked: true,
-            from_wallet_id: selection.from_wallet_id,
-            to_wallet_id: selection.to_wallet_id,
-          })
-          .in("expense_id", toExpenseIds)
-          .eq("traveler_id", inst.from.id)
-          .eq("is_settled", false);
-      }
-    }
+    await db
+      .from("expense_splits")
+      .update({ is_settled: true, locked: true })
+      .in("expense_id", expenseIds)
+      .eq("is_settled", false);
   }
 
   return NextResponse.json({ success: true });

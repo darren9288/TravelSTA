@@ -32,17 +32,11 @@ export async function GET(req: NextRequest) {
     ? (wallet.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1))
     : 1;
 
-  const [{ data: topups }, { data: expenses }, { data: splitsOut }, { data: splitsIn }, { data: travelers }] = await Promise.all([
+  const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }] = await Promise.all([
     db.from("wallet_topups").select("id, amount, date, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("expenses").select("id, date, myr_amount, foreign_amount, category, notes, created_at").eq("wallet_id", wallet_id).order("date"),
-    db.from("expense_splits")
-      .select("id, amount, expense_id, expenses!inner(date, category, notes, paid_by_id, created_at)")
-      .eq("from_wallet_id", wallet_id)
-      .eq("is_settled", true),
-    db.from("expense_splits")
-      .select("id, amount, expense_id, traveler_id, expenses!inner(date, category, notes, created_at)")
-      .eq("to_wallet_id", wallet_id)
-      .eq("is_settled", true),
+    db.from("settlement_payments").select("id, amount, to_traveler_id, created_at").eq("from_wallet_id", wallet_id),
+    db.from("settlement_payments").select("id, amount, from_traveler_id, created_at").eq("to_wallet_id", wallet_id),
     db.from("travelers").select("id, name").eq("trip_id", trip_id),
   ]);
 
@@ -58,18 +52,17 @@ export async function GET(req: NextRequest) {
     const amt = isForeign ? Number(e.foreign_amount ?? 0) : Number(e.myr_amount);
     events.push({ id: e.id, type: "expense", date: e.date, created_at: e.created_at, amount: amt, sign: -1, description: e.category, category: e.category, notes: e.notes });
   }
-  for (const s of splitsOut ?? []) {
-    const exp = (s as unknown as { expenses: { date: string; category: string; notes: string | null; paid_by_id: string; created_at: string } }).expenses;
+  for (const s of settlementsOut ?? []) {
+    const date = s.created_at.slice(0, 10);
     const amt = Number(s.amount) * rate;
-    const toName = travelerMap[exp?.paid_by_id] ?? null;
-    events.push({ id: s.id, type: "settlement_out", date: exp?.date ?? "", created_at: exp?.created_at ?? "", amount: amt, sign: -1, description: "Settlement paid", category: exp?.category, notes: exp?.notes, counterpart: toName });
+    const toName = travelerMap[(s as unknown as { to_traveler_id: string }).to_traveler_id] ?? null;
+    events.push({ id: s.id, type: "settlement_out", date, created_at: s.created_at, amount: amt, sign: -1, description: "Settlement paid", counterpart: toName });
   }
-  for (const s of splitsIn ?? []) {
-    const exp = (s as unknown as { expenses: { date: string; category: string; notes: string | null; created_at: string } }).expenses;
-    const travelerId = (s as unknown as { traveler_id: string }).traveler_id;
+  for (const s of settlementsIn ?? []) {
+    const date = s.created_at.slice(0, 10);
     const amt = Number(s.amount) * rate;
-    const fromName = travelerMap[travelerId] ?? null;
-    events.push({ id: s.id, type: "settlement_in", date: exp?.date ?? "", created_at: exp?.created_at ?? "", amount: amt, sign: 1, description: "Settlement received", category: exp?.category, notes: exp?.notes, counterpart: fromName });
+    const fromName = travelerMap[(s as unknown as { from_traveler_id: string }).from_traveler_id] ?? null;
+    events.push({ id: s.id, type: "settlement_in", date, created_at: s.created_at, amount: amt, sign: 1, description: "Settlement received", counterpart: fromName });
   }
 
   events.sort((a, b) => {
