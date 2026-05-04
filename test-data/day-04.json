@@ -2,84 +2,83 @@
   "day": 4,
   "date": "2025-06-04",
   "label": "Temples & Culture — POOL TOP-UP FIRST",
-  "pool_topup": {
-    "action": "BEFORE entering expenses, add pool top-up from each wallet",
-    "amount_each": 500.00,
-    "transactions": [
-      { "from": "Darren Cash", "to": "Pool", "amount": 500.00 },
-      { "from": "Willy Cash", "to": "Pool", "amount": 500.00 },
-      { "from": "Mac Cash", "to": "Pool", "amount": 500.00 },
-      { "from": "Cristo TNG", "to": "Pool", "amount": 500.00 }
-    ],
-    "pool_balance_after_topup": "RM 3,120.00",
-    "wallet_balances_after_topup": {
-      "Darren Cash": "RM 3,595.00",
-      "Willy Cash": "RM 3,595.00",
-      "Mac Cash": "RM 3,595.00",
-      "Cristo TNG": "RM 1,595.00"
-    }
-  },
-  "expenses": [
+  "pre_import_steps": [
+    "Pool top-up FIRST: RM500 from Darren Cash, RM500 from Willy Cash, RM500 from Mac Cash, RM500 from Cristo TNG",
+    "Pool balance after top-up: RM 3,120.00",
+    "Wallet balances after top-up: Darren RM3595, Willy RM3595, Mac RM3595, Cristo RM1595"
+  ],
+  "pool_expenses_enter_manually": [
+    { "description": "Balinese Cooking Class", "amount": 600.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Temple Entry Fees",
-      "category": "Activities",
       "date": "2025-06-04",
-      "amount_myr": 100.00,
+      "category": "Activities",
+      "currency": "MYR",
+      "amount": 100.00,
+      "myr_amount": 100.00,
       "paid_by": "Darren",
+      "payment_type": "Cash",
       "wallet": "Darren Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 25.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 25.00 },
+        { "name": "Willy", "amount": 25.00 },
+        { "name": "Mac", "amount": 25.00 },
+        { "name": "Cristo", "amount": 25.00 }
+      ],
+      "notes": "Temple Entry Fees"
     },
     {
-      "no": 2,
-      "description": "Lunch at Ubud Market",
+      "date": "2025-06-04",
       "category": "Food",
-      "date": "2025-06-04",
-      "amount_myr": 120.00,
+      "currency": "MYR",
+      "amount": 120.00,
+      "myr_amount": 120.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 30.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30.00 },
+        { "name": "Willy", "amount": 30.00 },
+        { "name": "Mac", "amount": 30.00 },
+        { "name": "Cristo", "amount": 30.00 }
+      ],
+      "notes": "Lunch at Ubud Market"
     },
     {
-      "no": 3,
-      "description": "Kecak Cultural Show",
-      "category": "Activities",
       "date": "2025-06-04",
-      "amount_myr": 200.00,
+      "category": "Activities",
+      "currency": "MYR",
+      "amount": 200.00,
+      "myr_amount": 200.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 50.00
-    },
-    {
-      "no": 4,
-      "description": "Balinese Cooking Class",
-      "category": "Activities",
-      "date": "2025-06-04",
-      "amount_myr": 600.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50.00 },
+        { "name": "Willy", "amount": 50.00 },
+        { "name": "Mac", "amount": 50.00 },
+        { "name": "Cristo", "amount": 50.00 }
+      ],
+      "notes": "Kecak Cultural Show"
     }
   ],
   "eod_verification": {
-    "note": "Check these wallet balances after pool top-up AND all Day 4 expenses",
+    "note": "After pool top-up AND all Day 4 expenses",
     "Darren Cash": "RM 3,495.00",
     "Willy Cash": "RM 3,475.00",
     "Mac Cash": "RM 3,395.00",
     "Cristo TNG": "RM 1,595.00",
     "Pool": "RM 2,520.00"
   },
-  "settlement_check": {
-    "note": "Net balances FRESH from D4 only (previous round settled). Total personal D4: RM 420, share RM 105 each.",
-    "Darren": "−RM 5.00 (paid RM 100, share RM 105)",
-    "Willy": "+RM 15.00 (paid RM 120, share RM 105)",
-    "Mac": "+RM 95.00 (paid RM 200, share RM 105)",
-    "Cristo": "−RM 105.00 (paid RM 0, share RM 105)"
+  "settlement_net_balances": {
+    "note": "Fresh from D4 only (R1 settled). Total personal D4: RM 420, share RM 105",
+    "Darren": "-RM 5.00",
+    "Willy": "+RM 15.00",
+    "Mac": "+RM 95.00",
+    "Cristo": "-RM 105.00"
   }
 }

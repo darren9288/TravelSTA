@@ -2,68 +2,82 @@
   "day": 1,
   "date": "2025-06-01",
   "label": "Arrival Day",
-  "expenses": [
+  "pre_import_steps": [
+    "Ensure all 4 travelers exist: Darren, Willy, Mac, Cristo",
+    "Ensure wallets exist: Darren Cash, Willy Cash, Mac Cash, Cristo TNG, Pool",
+    "Top up: Darren Cash +RM5000, Willy Cash +RM5000, Mac Cash +RM5000, Cristo TNG +RM3000",
+    "Pool top-up: RM500 from each wallet → Pool = RM2000"
+  ],
+  "pool_expenses_enter_manually": [
+    { "description": "Welcome Dinner", "amount": 400.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Airport Taxi",
+      "date": "2025-06-01",
       "category": "Transport",
-      "date": "2025-06-01",
-      "amount_myr": 80.00,
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Darren",
+      "payment_type": "Cash",
       "wallet": "Darren Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "Airport Taxi"
     },
     {
-      "no": 2,
-      "description": "Hawker Lunch",
-      "category": "Food",
       "date": "2025-06-01",
-      "amount_myr": 120.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 120.00,
+      "myr_amount": 120.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 30.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30.00 },
+        { "name": "Willy", "amount": 30.00 },
+        { "name": "Mac", "amount": 30.00 },
+        { "name": "Cristo", "amount": 30.00 }
+      ],
+      "notes": "Hawker Lunch"
     },
     {
-      "no": 3,
-      "description": "Groceries & Supplies",
+      "date": "2025-06-01",
       "category": "Shopping",
-      "date": "2025-06-01",
-      "amount_myr": 200.00,
+      "currency": "MYR",
+      "amount": 200.00,
+      "myr_amount": 200.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 50.00
-    },
-    {
-      "no": 4,
-      "description": "Welcome Dinner",
-      "category": "Food",
-      "date": "2025-06-01",
-      "amount_myr": 400.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense",
-      "notes": "Enter as pool expense (not split among travelers)"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50.00 },
+        { "name": "Willy", "amount": 50.00 },
+        { "name": "Mac", "amount": 50.00 },
+        { "name": "Cristo", "amount": 50.00 }
+      ],
+      "notes": "Groceries & Supplies"
     }
   ],
   "eod_verification": {
-    "note": "Check these wallet balances after entering all Day 1 expenses",
     "Darren Cash": "RM 4,420.00",
     "Willy Cash": "RM 4,380.00",
     "Mac Cash": "RM 4,300.00",
     "Cristo TNG": "RM 2,500.00",
     "Pool": "RM 1,600.00"
   },
-  "settlement_check": {
-    "note": "Settlement page net balances (cumulative, all unsettled)",
-    "Darren": "−RM 20.00 (paid RM 80, share RM 100)",
-    "Willy": "+RM 20.00 (paid RM 120, share RM 100)",
-    "Mac": "+RM 100.00 (paid RM 200, share RM 100)",
-    "Cristo": "−RM 100.00 (paid RM 0, share RM 100)"
+  "settlement_net_balances": {
+    "Darren": "-RM 20.00",
+    "Willy": "+RM 20.00",
+    "Mac": "+RM 100.00",
+    "Cristo": "-RM 100.00"
   }
 }

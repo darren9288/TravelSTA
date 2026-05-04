@@ -2,85 +2,103 @@
   "day": 3,
   "date": "2025-06-03",
   "label": "Beach Day — SETTLE AFTER THIS DAY",
-  "expenses": [
+  "pool_expenses_enter_manually": [],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Beach Breakfast",
-      "category": "Food",
       "date": "2025-06-03",
-      "amount_myr": 80.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "Beach Breakfast"
     },
     {
-      "no": 2,
-      "description": "Water Sports (Jet Ski + Parasailing)",
+      "date": "2025-06-03",
       "category": "Activities",
-      "date": "2025-06-03",
-      "amount_myr": 320.00,
+      "currency": "MYR",
+      "amount": 320.00,
+      "myr_amount": 320.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 80.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 80.00 },
+        { "name": "Willy", "amount": 80.00 },
+        { "name": "Mac", "amount": 80.00 },
+        { "name": "Cristo", "amount": 80.00 }
+      ],
+      "notes": "Water Sports (Jet Ski + Parasailing)"
     },
     {
-      "no": 3,
-      "description": "Seafood Lunch",
-      "category": "Food",
       "date": "2025-06-03",
-      "amount_myr": 160.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 160.00,
+      "myr_amount": 160.00,
       "paid_by": "Cristo",
+      "payment_type": "TNG",
       "wallet": "Cristo TNG",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 40.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 40.00 },
+        { "name": "Willy", "amount": 40.00 },
+        { "name": "Mac", "amount": 40.00 },
+        { "name": "Cristo", "amount": 40.00 }
+      ],
+      "notes": "Seafood Lunch"
     },
     {
-      "no": 4,
-      "description": "Rooftop Dinner",
-      "category": "Food",
       "date": "2025-06-03",
-      "amount_myr": 200.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 200.00,
+      "myr_amount": 200.00,
       "paid_by": "Darren",
+      "payment_type": "Cash",
       "wallet": "Darren Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 50.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50.00 },
+        { "name": "Willy", "amount": 50.00 },
+        { "name": "Mac", "amount": 50.00 },
+        { "name": "Cristo", "amount": 50.00 }
+      ],
+      "notes": "Rooftop Dinner"
     }
   ],
   "eod_verification": {
-    "note": "Balances BEFORE settlement (just after entering expenses)",
+    "note": "Balances BEFORE settlement",
     "Darren Cash": "RM 4,060.00",
     "Willy Cash": "RM 3,820.00",
     "Mac Cash": "RM 4,220.00",
     "Cristo TNG": "RM 2,280.00",
     "Pool": "RM 1,120.00"
   },
-  "settlement_check": {
-    "note": "Cumulative net balances D1+D2+D3 (total personal RM 1,620, share RM 405 each). Verify this on the settlement page BEFORE clicking Settle All.",
-    "Darren": "+RM 35.00 (paid RM 440, share RM 405)",
-    "Willy": "+RM 275.00 (paid RM 680, share RM 405)",
-    "Mac": "−RM 125.00 (paid RM 280, share RM 405)",
-    "Cristo": "−RM 185.00 (paid RM 220, share RM 405)"
+  "settlement_net_balances": {
+    "note": "Cumulative D1+D2+D3 — total personal RM 1,620, share RM 405. Verify on settlement page BEFORE clicking Settle All.",
+    "Darren": "+RM 35.00",
+    "Willy": "+RM 275.00",
+    "Mac": "-RM 125.00",
+    "Cristo": "-RM 185.00"
   },
   "settlement_round_1": {
-    "action": "Click SETTLE ALL on the settlement page",
-    "wallet_selections": {
-      "Mac → Willy": "Mac Cash → Willy Cash",
-      "Cristo → Darren": "Cristo TNG → Darren Cash",
-      "Cristo → Willy": "Cristo TNG → Willy Cash"
-    },
     "expected_instructions": [
-      "Mac → Willy: RM 125.00",
-      "Cristo → Darren: RM 35.00",
-      "Cristo → Willy: RM 150.00"
+      "Mac → Willy: RM 125.00  (Mac Cash → Willy Cash)",
+      "Cristo → Darren: RM 35.00  (Cristo TNG → Darren Cash)",
+      "Cristo → Willy: RM 150.00  (Cristo TNG → Willy Cash)"
     ],
-    "after_settlement_balances": {
-      "note": "All net balances should be RM 0.00 after settlement. Check wallet balances:",
+    "balances_after_settlement": {
       "Darren Cash": "RM 4,095.00",
       "Willy Cash": "RM 4,095.00",
       "Mac Cash": "RM 4,095.00",

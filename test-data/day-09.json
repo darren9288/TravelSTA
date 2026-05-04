@@ -1,101 +1,93 @@
 {
   "day": 9,
   "date": "2025-06-09",
-  "label": "Last Full Day — POOL TOP-UP FIRST, SETTLE AFTER THIS DAY",
-  "pool_topup": {
-    "action": "BEFORE entering expenses, add pool top-up (pool is running low)",
-    "amount_each": 400.00,
-    "transactions": [
-      { "from": "Darren Cash", "to": "Pool", "amount": 400.00 },
-      { "from": "Willy Cash", "to": "Pool", "amount": 400.00 },
-      { "from": "Mac Cash", "to": "Pool", "amount": 400.00 },
-      { "from": "Cristo TNG", "to": "Pool", "amount": 400.00 }
-    ],
-    "pool_balance_after_topup": "RM 1,920.00",
-    "wallet_balances_after_topup": {
-      "Darren Cash": "RM 2,420.00",
-      "Willy Cash": "RM 2,260.00",
-      "Mac Cash": "RM 2,700.00",
-      "Cristo TNG": "RM 760.00"
-    }
-  },
-  "expenses": [
+  "label": "Last Full Day — POOL TOP-UP FIRST, SETTLE AFTER",
+  "pre_import_steps": [
+    "Pool top-up FIRST (pool is nearly empty): RM400 from Darren Cash, RM400 from Willy Cash, RM400 from Mac Cash, RM400 from Cristo TNG",
+    "Pool balance after top-up: RM 1,920.00",
+    "Wallet balances after top-up: Darren RM2420, Willy RM2260, Mac RM2700, Cristo RM760"
+  ],
+  "pool_expenses_enter_manually": [
+    { "description": "Balinese Cooking Class Farewell", "amount": 480.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Breakfast (Eggs Benedict)",
-      "category": "Food",
       "date": "2025-06-09",
-      "amount_myr": 80.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "Breakfast (Eggs Benedict)"
     },
     {
-      "no": 2,
-      "description": "Last-Minute Shopping (Kuta)",
+      "date": "2025-06-09",
       "category": "Shopping",
-      "date": "2025-06-09",
-      "amount_myr": 200.00,
+      "currency": "MYR",
+      "amount": 200.00,
+      "myr_amount": 200.00,
       "paid_by": "Cristo",
+      "payment_type": "TNG",
       "wallet": "Cristo TNG",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 50.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50.00 },
+        { "name": "Willy", "amount": 50.00 },
+        { "name": "Mac", "amount": 50.00 },
+        { "name": "Cristo", "amount": 50.00 }
+      ],
+      "notes": "Last-Minute Shopping (Kuta)"
     },
     {
-      "no": 3,
-      "description": "Farewell Lunch",
+      "date": "2025-06-09",
       "category": "Food",
-      "date": "2025-06-09",
-      "amount_myr": 120.00,
+      "currency": "MYR",
+      "amount": 120.00,
+      "myr_amount": 120.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 30.00
-    },
-    {
-      "no": 4,
-      "description": "Balinese Cooking Class Farewell (Pool)",
-      "category": "Activities",
-      "date": "2025-06-09",
-      "amount_myr": 480.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30.00 },
+        { "name": "Willy", "amount": 30.00 },
+        { "name": "Mac", "amount": 30.00 },
+        { "name": "Cristo", "amount": 30.00 }
+      ],
+      "notes": "Farewell Lunch"
     }
   ],
   "eod_verification": {
-    "note": "Balances BEFORE settlement (after pool top-up AND all Day 9 expenses)",
+    "note": "After pool top-up AND all Day 9 expenses, BEFORE settlement",
     "Darren Cash": "RM 2,420.00",
     "Willy Cash": "RM 2,140.00",
     "Mac Cash": "RM 2,620.00",
     "Cristo TNG": "RM 560.00",
     "Pool": "RM 1,440.00"
   },
-  "settlement_check": {
-    "note": "Cumulative net balances D7+D8+D9 (fresh after R2). Total personal: RM 1,540, share RM 385 each. Verify BEFORE clicking Settle All.",
-    "Darren": "+RM 15.00 (paid RM 400, share RM 385)",
-    "Willy": "+RM 295.00 (paid RM 680, share RM 385)",
-    "Mac": "−RM 185.00 (paid RM 200, share RM 385)",
-    "Cristo": "−RM 125.00 (paid RM 260, share RM 385)"
+  "settlement_net_balances": {
+    "note": "Cumulative D7+D8+D9. Total personal RM 1,540, share RM 385. Verify BEFORE Settle All.",
+    "Darren": "+RM 15.00",
+    "Willy": "+RM 295.00",
+    "Mac": "-RM 185.00",
+    "Cristo": "-RM 125.00"
   },
   "settlement_round_3": {
-    "action": "Click SETTLE ALL on the settlement page",
-    "wallet_selections": {
-      "Mac → Darren": "Mac Cash → Darren Cash",
-      "Mac → Willy": "Mac Cash → Willy Cash",
-      "Cristo → Willy": "Cristo TNG → Willy Cash"
-    },
     "expected_instructions": [
-      "Mac → Darren: RM 15.00",
-      "Mac → Willy: RM 170.00",
-      "Cristo → Willy: RM 125.00"
+      "Mac → Darren: RM 15.00  (Mac Cash → Darren Cash)",
+      "Mac → Willy: RM 170.00  (Mac Cash → Willy Cash)",
+      "Cristo → Willy: RM 125.00  (Cristo TNG → Willy Cash)"
     ],
-    "after_settlement_balances": {
-      "note": "All net balances should be RM 0.00. Check wallet balances:",
+    "balances_after_settlement": {
       "Darren Cash": "RM 2,435.00",
       "Willy Cash": "RM 2,435.00",
       "Mac Cash": "RM 2,435.00",

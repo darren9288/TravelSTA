@@ -2,67 +2,77 @@
   "day": 8,
   "date": "2025-06-08",
   "label": "Island Day Trip",
-  "expenses": [
+  "pool_expenses_enter_manually": [
+    { "description": "Farewell Beach BBQ", "amount": 400.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Breakfast (Nasi Lemak)",
-      "category": "Food",
       "date": "2025-06-08",
-      "amount_myr": 60.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 60.00,
+      "myr_amount": 60.00,
       "paid_by": "Cristo",
+      "payment_type": "TNG",
       "wallet": "Cristo TNG",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 15.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 15.00 },
+        { "name": "Willy", "amount": 15.00 },
+        { "name": "Mac", "amount": 15.00 },
+        { "name": "Cristo", "amount": 15.00 }
+      ],
+      "notes": "Breakfast (Nasi Lemak)"
     },
     {
-      "no": 2,
-      "description": "Nusa Penida Day Trip (boat + entry)",
+      "date": "2025-06-08",
       "category": "Activities",
-      "date": "2025-06-08",
-      "amount_myr": 320.00,
+      "currency": "MYR",
+      "amount": 320.00,
+      "myr_amount": 320.00,
       "paid_by": "Darren",
+      "payment_type": "Cash",
       "wallet": "Darren Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 80.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 80.00 },
+        { "name": "Willy", "amount": 80.00 },
+        { "name": "Mac", "amount": 80.00 },
+        { "name": "Cristo", "amount": 80.00 }
+      ],
+      "notes": "Nusa Penida Day Trip (boat + entry)"
     },
     {
-      "no": 3,
-      "description": "Lunch on Island",
-      "category": "Food",
       "date": "2025-06-08",
-      "amount_myr": 160.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 160.00,
+      "myr_amount": 160.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 40.00
-    },
-    {
-      "no": 4,
-      "description": "Farewell Beach BBQ",
-      "category": "Food",
-      "date": "2025-06-08",
-      "amount_myr": 400.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 40.00 },
+        { "name": "Willy", "amount": 40.00 },
+        { "name": "Mac", "amount": 40.00 },
+        { "name": "Cristo", "amount": 40.00 }
+      ],
+      "notes": "Lunch on Island"
     }
   ],
   "eod_verification": {
-    "note": "Check wallet balances after all Day 8 expenses",
     "Darren Cash": "RM 2,820.00",
     "Willy Cash": "RM 2,660.00",
     "Mac Cash": "RM 3,100.00",
     "Cristo TNG": "RM 1,160.00",
     "Pool": "RM 320.00"
   },
-  "settlement_check": {
-    "note": "Cumulative net balances D7+D8 (fresh after R2). Total personal D7+D8: RM 1,140, share RM 285 each.",
-    "Darren": "+RM 115.00 (paid RM 400, share RM 285)",
-    "Willy": "+RM 275.00 (paid RM 560, share RM 285)",
-    "Mac": "−RM 165.00 (paid RM 120, share RM 285)",
-    "Cristo": "−RM 225.00 (paid RM 60, share RM 285)"
+  "settlement_net_balances": {
+    "note": "Cumulative D7+D8. Total personal RM 1,140, share RM 285",
+    "Darren": "+RM 115.00",
+    "Willy": "+RM 275.00",
+    "Mac": "-RM 165.00",
+    "Cristo": "-RM 225.00"
   }
 }

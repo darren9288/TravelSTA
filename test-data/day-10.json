@@ -1,108 +1,111 @@
 {
   "day": 10,
   "date": "2025-06-10",
-  "label": "Departure Day — FINAL SETTLE AFTER THIS DAY",
-  "expenses": [
+  "label": "Departure Day — FINAL SETTLE AFTER",
+  "pool_expenses_enter_manually": [
+    { "description": "Airport Transfer (GrabCar x2)", "amount": 280.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Airport Breakfast",
-      "category": "Food",
       "date": "2025-06-10",
-      "amount_myr": 80.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Darren",
+      "payment_type": "Cash",
       "wallet": "Darren Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "Airport Breakfast"
     },
     {
-      "no": 2,
-      "description": "Duty Free Gifts & Snacks",
+      "date": "2025-06-10",
       "category": "Shopping",
-      "date": "2025-06-10",
-      "amount_myr": 200.00,
+      "currency": "MYR",
+      "amount": 200.00,
+      "myr_amount": 200.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 50.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 50.00 },
+        { "name": "Willy", "amount": 50.00 },
+        { "name": "Mac", "amount": 50.00 },
+        { "name": "Cristo", "amount": 50.00 }
+      ],
+      "notes": "Duty Free Gifts & Snacks"
     },
     {
-      "no": 3,
-      "description": "Lunch at Airport",
-      "category": "Food",
       "date": "2025-06-10",
-      "amount_myr": 120.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 120.00,
+      "myr_amount": 120.00,
       "paid_by": "Cristo",
+      "payment_type": "TNG",
       "wallet": "Cristo TNG",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 30.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30.00 },
+        { "name": "Willy", "amount": 30.00 },
+        { "name": "Mac", "amount": 30.00 },
+        { "name": "Cristo", "amount": 30.00 }
+      ],
+      "notes": "Lunch at Airport"
     },
     {
-      "no": 4,
-      "description": "In-flight Snacks & Drinks",
+      "date": "2025-06-10",
       "category": "Food",
-      "date": "2025-06-10",
-      "amount_myr": 80.00,
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
-    },
-    {
-      "no": 5,
-      "description": "Airport Transfer (GrabCar x2)",
-      "category": "Transport",
-      "date": "2025-06-10",
-      "amount_myr": 280.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "In-flight Snacks & Drinks"
     }
   ],
   "eod_verification": {
-    "note": "Balances BEFORE final settlement",
+    "note": "BEFORE final settlement",
     "Darren Cash": "RM 2,355.00",
     "Willy Cash": "RM 2,355.00",
     "Mac Cash": "RM 2,235.00",
     "Cristo TNG": "RM 315.00",
     "Pool": "RM 1,160.00"
   },
-  "settlement_check": {
-    "note": "Cumulative net balances D10 only (fresh after R3). Total personal D10: RM 480, share RM 120 each. Verify BEFORE clicking Settle All.",
-    "Darren": "−RM 40.00 (paid RM 80, share RM 120)",
-    "Willy": "−RM 40.00 (paid RM 80, share RM 120)",
-    "Mac": "+RM 80.00 (paid RM 200, share RM 120)",
-    "Cristo": "RM 0.00 (paid RM 120, share RM 120 — exactly even!)"
+  "settlement_net_balances": {
+    "note": "D10 only (fresh after R3). Total personal RM 480, share RM 120. Cristo is exactly even!",
+    "Darren": "-RM 40.00",
+    "Willy": "-RM 40.00",
+    "Mac": "+RM 80.00",
+    "Cristo": "RM 0.00"
   },
   "settlement_round_4_final": {
-    "action": "Click SETTLE ALL on the settlement page — FINAL SETTLEMENT",
-    "wallet_selections": {
-      "Darren → Mac": "Darren Cash → Mac Cash",
-      "Willy → Mac": "Willy Cash → Mac Cash"
-    },
     "expected_instructions": [
-      "Darren → Mac: RM 40.00",
-      "Willy → Mac: RM 40.00"
+      "Darren → Mac: RM 40.00  (Darren Cash → Mac Cash)",
+      "Willy → Mac: RM 40.00  (Willy Cash → Mac Cash)"
     ],
-    "after_settlement_balances": {
-      "note": "FINAL STATE — All net balances RM 0.00. Verify wallet balances:",
+    "balances_after_settlement": {
       "Darren Cash": "RM 2,315.00",
       "Willy Cash": "RM 2,315.00",
       "Mac Cash": "RM 2,315.00",
       "Cristo TNG": "RM 315.00",
       "Pool": "RM 1,160.00"
     },
-    "final_verification": {
-      "total_initial_topup": "RM 18,000.00 (5000+5000+5000+3000)",
-      "total_personal_expenses": "RM 5,140.00",
-      "total_pool_expenses": "RM 4,440.00",
-      "total_expenses": "RM 9,580.00",
-      "expected_remaining": "RM 8,420.00",
-      "sum_of_final_balances": "RM 2,315 + RM 2,315 + RM 2,315 + RM 315 + RM 1,160 = RM 8,420.00 ✓",
-      "interesting_note": "Cristo TNG ends at RM 315 (vs RM 2,315 for others) because Cristo started with RM 3,000 less and contributed to pool equally — so Cristo effectively funded less personal wallet."
-    }
+    "final_check": "Sum of all balances = 2315+2315+2315+315+1160 = RM 8,420 = RM 18,000 initial − RM 9,580 expenses ✓"
   }
 }

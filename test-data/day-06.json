@@ -2,52 +2,63 @@
   "day": 6,
   "date": "2025-06-06",
   "label": "Water Park — SETTLE AFTER THIS DAY",
-  "expenses": [
+  "pool_expenses_enter_manually": [
+    { "description": "Seafood Dinner Buffet", "amount": 640.00, "wallet": "Pool" }
+  ],
+  "transactions": [
     {
-      "no": 1,
-      "description": "Breakfast (Hotel Café)",
-      "category": "Food",
       "date": "2025-06-06",
-      "amount_myr": 80.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 80.00,
+      "myr_amount": 80.00,
       "paid_by": "Mac",
+      "payment_type": "Cash",
       "wallet": "Mac Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 20.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 20.00 },
+        { "name": "Willy", "amount": 20.00 },
+        { "name": "Mac", "amount": 20.00 },
+        { "name": "Cristo", "amount": 20.00 }
+      ],
+      "notes": "Breakfast (Hotel Café)"
     },
     {
-      "no": 2,
-      "description": "Waterbom Water Park Tickets",
+      "date": "2025-06-06",
       "category": "Activities",
-      "date": "2025-06-06",
-      "amount_myr": 400.00,
+      "currency": "MYR",
+      "amount": 400.00,
+      "myr_amount": 400.00,
       "paid_by": "Willy",
+      "payment_type": "Cash",
       "wallet": "Willy Cash",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 100.00
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 100.00 },
+        { "name": "Willy", "amount": 100.00 },
+        { "name": "Mac", "amount": 100.00 },
+        { "name": "Cristo", "amount": 100.00 }
+      ],
+      "notes": "Waterbom Water Park Tickets"
     },
     {
-      "no": 3,
-      "description": "Lunch at Water Park",
-      "category": "Food",
       "date": "2025-06-06",
-      "amount_myr": 120.00,
+      "category": "Food",
+      "currency": "MYR",
+      "amount": 120.00,
+      "myr_amount": 120.00,
       "paid_by": "Cristo",
+      "payment_type": "TNG",
       "wallet": "Cristo TNG",
-      "split": "even",
-      "split_among": ["Darren", "Willy", "Mac", "Cristo"],
-      "each_share": 30.00
-    },
-    {
-      "no": 4,
-      "description": "Seafood Dinner Buffet",
-      "category": "Food",
-      "date": "2025-06-06",
-      "amount_myr": 640.00,
-      "paid_by": "Pool",
-      "wallet": "Pool",
-      "split": "pool_expense"
+      "split_type": "even",
+      "split_participants": [
+        { "name": "Darren", "amount": 30.00 },
+        { "name": "Willy", "amount": 30.00 },
+        { "name": "Mac", "amount": 30.00 },
+        { "name": "Cristo", "amount": 30.00 }
+      ],
+      "notes": "Lunch at Water Park"
     }
   ],
   "eod_verification": {
@@ -58,27 +69,20 @@
     "Cristo TNG": "RM 1,395.00",
     "Pool": "RM 1,080.00"
   },
-  "settlement_check": {
-    "note": "Cumulative net balances D4+D5+D6 (fresh after R1). Total personal: RM 1,500, share RM 375 each. Verify BEFORE clicking Settle All.",
-    "Darren": "−RM 155.00 (paid RM 220, share RM 375)",
-    "Willy": "+RM 425.00 (paid RM 800, share RM 375)",
-    "Mac": "−RM 95.00 (paid RM 280, share RM 375)",
-    "Cristo": "−RM 175.00 (paid RM 200, share RM 375)"
+  "settlement_net_balances": {
+    "note": "Cumulative D4+D5+D6. Total personal RM 1,500, share RM 375. Verify BEFORE Settle All.",
+    "Darren": "-RM 155.00",
+    "Willy": "+RM 425.00",
+    "Mac": "-RM 95.00",
+    "Cristo": "-RM 175.00"
   },
   "settlement_round_2": {
-    "action": "Click SETTLE ALL on the settlement page",
-    "wallet_selections": {
-      "Darren → Willy": "Darren Cash → Willy Cash",
-      "Mac → Willy": "Mac Cash → Willy Cash",
-      "Cristo → Willy": "Cristo TNG → Willy Cash"
-    },
     "expected_instructions": [
-      "Darren → Willy: RM 155.00",
-      "Mac → Willy: RM 95.00",
-      "Cristo → Willy: RM 175.00"
+      "Darren → Willy: RM 155.00  (Darren Cash → Willy Cash)",
+      "Mac → Willy: RM 95.00  (Mac Cash → Willy Cash)",
+      "Cristo → Willy: RM 175.00  (Cristo TNG → Willy Cash)"
     ],
-    "after_settlement_balances": {
-      "note": "All net balances should be RM 0.00. Check wallet balances:",
+    "balances_after_settlement": {
       "Darren Cash": "RM 3,220.00",
       "Willy Cash": "RM 3,220.00",
       "Mac Cash": "RM 3,220.00",
