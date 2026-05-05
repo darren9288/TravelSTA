@@ -31,6 +31,10 @@ export default function WalletsPage() {
   const [editTopup, setEditTopup] = useState<EditTopup | null>(null);
   const [savingTopup, setSavingTopup] = useState(false);
 
+  const [renamingWalletId, setRenamingWalletId] = useState<string | null>(null);
+  const [renamingWalletName, setRenamingWalletName] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+
   const [topupWalletId, setTopupWalletId] = useState<string | null>(null);
   const [topupAmount, setTopupAmount] = useState("");
   const [topupDate, setTopupDate] = useState(new Date().toISOString().slice(0, 10));
@@ -122,6 +126,18 @@ export default function WalletsPage() {
     await load();
   }
 
+  async function saveRenameWallet() {
+    if (!renamingWalletId || !renamingWalletName.trim()) return;
+    setSavingRename(true);
+    const res = await fetch("/api/wallets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: renamingWalletId, name: renamingWalletName.trim() }),
+    });
+    if (res.ok) { setRenamingWalletId(null); await load(); }
+    setSavingRename(false);
+  }
+
   async function addTopup() {
     if (!topupWalletId || !topupAmount) return;
     setTopping(true); setError("");
@@ -179,12 +195,14 @@ export default function WalletsPage() {
     expense: "text-red-400",
     settlement_out: "text-orange-400",
     settlement_in: "text-blue-400",
+    pool_topup: "text-purple-400",
   };
   const typeLabel: Record<WalletEvent["type"], string> = {
     topup: "Top-up",
     expense: "Expense paid",
     settlement_out: "Settlement out",
     settlement_in: "Settlement in",
+    pool_topup: "Pool top-up",
   };
 
   return (
@@ -294,10 +312,28 @@ export default function WalletsPage() {
                       return (
                         <div key={w.id}
                           className={`bg-slate-800/60 border rounded-2xl px-4 py-3 cursor-pointer transition-colors ${isSelected ? "border-emerald-500/60 bg-slate-700/60" : "border-slate-700/50 hover:border-slate-600"}`}
-                          onClick={() => setSelectedWallet(isSelected ? null : w.id)}>
+                          onClick={() => renamingWalletId === w.id ? undefined : setSelectedWallet(isSelected ? null : w.id)}>
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-white font-medium text-sm">{w.name}</p>
+                            <div className="flex-1 min-w-0 mr-2">
+                              {renamingWalletId === w.id ? (
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <input autoFocus value={renamingWalletName} onChange={(e) => setRenamingWalletName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") saveRenameWallet(); if (e.key === "Escape") setRenamingWalletId(null); }}
+                                    className="flex-1 bg-slate-700 border border-emerald-500/60 rounded px-2 py-0.5 text-sm text-white focus:outline-none" />
+                                  <button onClick={saveRenameWallet} disabled={savingRename} className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"><Check size={13} /></button>
+                                  <button onClick={() => setRenamingWalletId(null)} className="p-1 text-slate-500 hover:text-white transition-colors"><X size={13} /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 group/name">
+                                  <p className="text-white font-medium text-sm truncate">{w.name}</p>
+                                  {trip?.my_role !== "viewer" && (
+                                    <button onClick={(e) => { e.stopPropagation(); setRenamingWalletId(w.id); setRenamingWalletName(w.name); }}
+                                      className="opacity-0 group-hover/name:opacity-100 p-0.5 text-slate-600 hover:text-slate-300 transition-all flex-shrink-0">
+                                      <Pencil size={10} />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                               <p className="text-xs text-slate-500">{w.currency}</p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -414,6 +450,7 @@ export default function WalletsPage() {
                                       <p className="text-xs text-slate-500 truncate">
                                         {e.type === "settlement_in" && e.counterpart ? `from ${e.counterpart}` :
                                          e.type === "settlement_out" && e.counterpart ? `to ${e.counterpart}` :
+                                         e.type === "pool_topup" && e.counterpart ? `to ${e.counterpart}` :
                                          e.description}
                                         {e.notes && e.notes !== e.description ? ` · ${e.notes}` : ""}
                                       </p>

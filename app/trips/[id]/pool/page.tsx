@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
-import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type SortKey = "date-asc" | "date-desc" | "amount-desc" | "amount-asc";
@@ -38,6 +38,11 @@ export default function PoolPage() {
 
   // Edit top-up
   const [editTopup, setEditTopup] = useState<EditTopup | null>(null);
+
+  // Rename pool
+  const [renamingPoolId, setRenamingPoolId] = useState<string | null>(null);
+  const [renamingPoolName, setRenamingPoolName] = useState("");
+  const [savingPoolRename, setSavingPoolRename] = useState(false);
 
   // Create new pool wallet
   const [showCreatePool, setShowCreatePool] = useState(false);
@@ -119,6 +124,25 @@ export default function PoolPage() {
     });
     if (res.ok) { setEditTopup(null); await load(); }
     else { setEditTopup((p) => p ? { ...p, saving: false } : p); }
+  }
+
+  async function deletePool(poolId: string, poolName: string) {
+    if (!confirm(`Delete pool "${poolName}" and all its history? This cannot be undone.`)) return;
+    await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
+    if (selectedPool === poolId) setSelectedPool(null);
+    await load();
+  }
+
+  async function saveRenamePool() {
+    if (!renamingPoolId || !renamingPoolName.trim()) return;
+    setSavingPoolRename(true);
+    const res = await fetch("/api/travelers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: renamingPoolId, name: renamingPoolName.trim() }),
+    });
+    if (res.ok) { setRenamingPoolId(null); await load(); }
+    setSavingPoolRename(false);
   }
 
   async function createPool() {
@@ -384,12 +408,31 @@ export default function PoolPage() {
                 const isSelected = selectedPool === p.id;
                 return (
                   <div key={p.id} className={`bg-slate-800/60 border rounded-2xl px-4 py-3 transition-colors cursor-pointer ${isSelected ? "border-emerald-500/60 bg-slate-700/60" : "border-slate-700/50 hover:border-slate-600"}`}
-                    onClick={() => setSelectedPool(isSelected ? null : p.id)}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-semibold text-sm">{p.name}</p>
+                    onClick={() => renamingPoolId === p.id ? undefined : setSelectedPool(isSelected ? null : p.id)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {renamingPoolId === p.id ? (
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input autoFocus value={renamingPoolName} onChange={(e) => setRenamingPoolName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveRenamePool(); if (e.key === "Escape") setRenamingPoolId(null); }}
+                              className="flex-1 bg-slate-700 border border-emerald-500/60 rounded px-2 py-0.5 text-sm text-white focus:outline-none" />
+                            <button onClick={saveRenamePool} disabled={savingPoolRename} className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"><Check size={13} /></button>
+                            <button onClick={() => setRenamingPoolId(null)} className="p-1 text-slate-500 hover:text-white transition-colors"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group/name">
+                            <p className="text-white font-semibold text-sm truncate">{p.name}</p>
+                            {trip?.my_role !== "viewer" && (
+                              <button onClick={(e) => { e.stopPropagation(); setRenamingPoolId(p.id); setRenamingPoolName(p.name); }}
+                                className="opacity-0 group-hover/name:opacity-100 p-0.5 text-slate-600 hover:text-slate-300 transition-all flex-shrink-0">
+                                <Pencil size={10} />
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <p className="text-xs text-slate-500">{p.pool_currency}</p>
                       </div>
+                      <div className="flex items-center gap-2">
                       <div className="text-right">
                         {isForeign ? (
                           <>
@@ -404,6 +447,13 @@ export default function PoolPage() {
                           </p>
                         )}
                         <p className="text-xs text-slate-600">remaining</p>
+                      </div>
+                      {trip?.my_role !== "viewer" && (
+                        <button onClick={(e) => { e.stopPropagation(); deletePool(p.id, p.name); }}
+                          className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                       </div>
                     </div>
                     {!selectedPool && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}

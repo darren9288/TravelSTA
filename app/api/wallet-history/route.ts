@@ -4,7 +4,7 @@ import { serverDb } from "@/lib/supabase";
 
 export type WalletEvent = {
   id: string;
-  type: "topup" | "expense" | "settlement_out" | "settlement_in";
+  type: "topup" | "expense" | "settlement_out" | "settlement_in" | "pool_topup";
   date: string;
   created_at: string;
   amount: number; // in wallet's native currency, always positive
@@ -12,7 +12,7 @@ export type WalletEvent = {
   description: string;
   category?: string;
   notes?: string | null;
-  counterpart?: string | null; // traveler name for settlement events
+  counterpart?: string | null; // traveler/pool name for settlement and pool_topup events
 };
 
 export async function GET(req: NextRequest) {
@@ -32,12 +32,13 @@ export async function GET(req: NextRequest) {
     ? (wallet.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1))
     : 1;
 
-  const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }] = await Promise.all([
+  const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }, { data: poolTopups }] = await Promise.all([
     db.from("wallet_topups").select("id, amount, date, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("expenses").select("id, date, myr_amount, foreign_amount, category, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("settlement_payments").select("id, amount, to_traveler_id, created_at").eq("from_wallet_id", wallet_id),
     db.from("settlement_payments").select("id, amount, from_traveler_id, created_at").eq("to_wallet_id", wallet_id),
     db.from("travelers").select("id, name").eq("trip_id", trip_id),
+    db.from("pool_topups").select("id, myr_amount, foreign_amount, date, notes, created_at, pool:travelers!pool_id(name)").eq("from_wallet_id", wallet_id).order("date"),
   ]);
 
   const travelerMap: Record<string, string> = {};
@@ -57,6 +58,11 @@ export async function GET(req: NextRequest) {
     const amt = Number(s.amount) * rate;
     const toName = travelerMap[(s as unknown as { to_traveler_id: string }).to_traveler_id] ?? null;
     events.push({ id: s.id, type: "settlement_out", date, created_at: s.created_at, amount: amt, sign: -1, description: "Settlement paid", counterpart: toName });
+  }
+  for (const p of poolTopups ?? []) {
+    const amt = isForeign ? Number(p.foreign_amount ?? Number(p.myr_amount) * rate) : Number(p.myr_amount);
+    const poolName = (p as unknown as { pool?: { name: string } }).pool?.name ?? "Pool";
+    events.push({ id: p.id, type: "pool_topup", date: p.date, created_at: p.created_at, amount: amt, sign: -1, description: "Pool top-up", notes: p.notes, counterpart: poolName });
   }
   for (const s of settlementsIn ?? []) {
     const date = s.created_at.slice(0, 10);

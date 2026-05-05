@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data, { status: 201 });
 }
 
+export async function PUT(req: NextRequest) {
+  const { id, name } = await req.json();
+  const tripId = await tripIdFrom("travelers", id);
+  if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
+  const { data, error } = await serverDb().from("travelers").update({ name }).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
 export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   const tripId = await tripIdFrom("travelers", id);
