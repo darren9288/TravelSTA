@@ -3,43 +3,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 
+const ALLOWED_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "webm", "mov"];
+
+// POST { trip_id, filename } → returns { signedUrl, publicUrl }
+// The client uploads the file directly to Supabase using signedUrl (PUT),
+// then saves publicUrl to the trip. No large body passes through this server.
 export async function POST(req: NextRequest) {
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  const tripId = formData.get("trip_id") as string | null;
+  const body = await req.json();
+  const { trip_id, filename } = body as { trip_id?: string; filename?: string };
 
-  if (!file || !tripId) return NextResponse.json({ error: "file and trip_id required" }, { status: 400 });
+  if (!trip_id || !filename)
+    return NextResponse.json({ error: "trip_id and filename required" }, { status: 400 });
 
-  const denied = await requireEditor(tripId);
+  const denied = await requireEditor(trip_id);
   if (denied) return denied;
 
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const ALLOWED = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "webm", "mov"];
-  if (!ALLOWED.includes(ext)) {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+  if (!ALLOWED_EXTS.includes(ext))
     return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
-  }
 
-  const isVideo = ["mp4", "webm", "mov"].includes(ext);
-  const maxBytes = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
-  if (file.size > maxBytes) {
-    return NextResponse.json({ error: `File must be under ${isVideo ? "50" : "8"} MB` }, { status: 400 });
-  }
+  const path = `${trip_id}/background.${ext}`;
+  const db = serverDb();
 
-  const path = `${tripId}/background.${ext}`;
-
-  const { error } = await serverDb()
-    .storage
+  const { data, error } = await db.storage
     .from("trip-backgrounds")
-    .upload(path, file, { upsert: true, contentType: file.type });
+    .createSignedUploadUrl(path, { upsert: true } as never);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data: { publicUrl } } = serverDb()
-    .storage
+  const { data: { publicUrl } } = db.storage
     .from("trip-backgrounds")
     .getPublicUrl(path);
 
-  // Bust the browser cache so the new image shows immediately
-  const urlWithBust = `${publicUrl}?t=${Date.now()}`;
-  return NextResponse.json({ url: urlWithBust });
+  return NextResponse.json({
+    signedUrl: (data as { signedUrl: string }).signedUrl,
+    publicUrl: `${publicUrl}?t=${Date.now()}`,
+  });
 }

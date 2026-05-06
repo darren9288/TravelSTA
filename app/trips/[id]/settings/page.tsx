@@ -147,24 +147,38 @@ export default function SettingsPage() {
   }
 
   async function uploadBackground(file: File) {
-    const maxBytes = isVideoFile(file) ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
-    if (file.size > maxBytes) { setUploadError(isVideoFile(file) ? "Video must be under 50 MB." : "Image must be under 8 MB."); return; }
-    setUploading(true); setUploadError("");
-    const form = new FormData();
-    form.append("file", file);
-    form.append("trip_id", id);
-    const res = await fetch("/api/upload-background", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) { setUploadError(data.error ?? "Upload failed"); }
-    else {
-      setBackgroundImageUrl(data.url);
-      // Save immediately so the layout picks it up
-      await fetch(`/api/trips/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ background_image_url: data.url }),
-      });
+    const isVideo = isVideoFile(file);
+    const maxBytes = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setUploadError(isVideo ? "Video must be under 50 MB." : "Image must be under 8 MB.");
+      return;
     }
+    setUploading(true); setUploadError("");
+
+    // Step 1: get a signed upload URL from our server (no file sent here)
+    const signRes = await fetch("/api/upload-background", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trip_id: id, filename: file.name }),
+    });
+    const signData = await signRes.json();
+    if (!signRes.ok) { setUploadError(signData.error ?? "Upload failed"); setUploading(false); return; }
+
+    // Step 2: upload file directly to Supabase Storage (bypasses Next.js body limits)
+    const uploadRes = await fetch(signData.signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!uploadRes.ok) { setUploadError("Upload to storage failed"); setUploading(false); return; }
+
+    // Step 3: save the public URL to the trip
+    setBackgroundImageUrl(signData.publicUrl);
+    await fetch(`/api/trips/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ background_image_url: signData.publicUrl }),
+    });
     setUploading(false);
   }
 
