@@ -112,6 +112,11 @@ export async function DELETE(req: NextRequest) {
   // Look up the trip_id so we can check the role
   const { data: exp } = await supabase.from("expenses").select("trip_id").eq("id", id).single();
   if (exp?.trip_id) { const denied = await requireEditor(exp.trip_id); if (denied) return denied; }
+  // Delete receipt photo from storage if it exists
+  const { data: files } = await supabase.storage.from("expense-receipts").list(id);
+  if (files?.length) {
+    await supabase.storage.from("expense-receipts").remove(files.map((f) => `${id}/${f.name}`));
+  }
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });

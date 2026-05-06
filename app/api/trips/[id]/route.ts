@@ -56,6 +56,19 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     );
   }
 
+  // Delete expense receipt photos from storage (organized per expense_id folder)
+  const { data: expenses } = await db.from("expenses").select("id").eq("trip_id", params.id);
+  if (expenses?.length) {
+    await Promise.all(
+      expenses.map(async (expense) => {
+        const { data: files } = await db.storage.from("expense-receipts").list(expense.id);
+        if (files?.length) {
+          await db.storage.from("expense-receipts").remove(files.map((f) => `${expense.id}/${f.name}`));
+        }
+      })
+    );
+  }
+
   const { error } = await db.from("trips").delete().eq("id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
