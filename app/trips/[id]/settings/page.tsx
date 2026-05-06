@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy } from "lucide-react";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
+import BudgetTracker from "@/components/BudgetTracker";
 
 type Member = {
   user_id: string;
@@ -128,6 +129,17 @@ export default function SettingsPage() {
     if (!confirm("Delete this trip? This cannot be undone.")) return;
     await fetch(`/api/trips/${id}`, { method: "DELETE" });
     router.push("/");
+  }
+
+  async function duplicateTrip() {
+    if (!confirm("Duplicate this trip? A copy will be created with the same travelers and wallets.")) return;
+    const res = await fetch(`/api/trips/${id}/duplicate`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok && data.id) {
+      router.push(`/trips/${data.id}/settings`);
+    } else {
+      alert(data.error ?? "Failed to duplicate trip");
+    }
   }
 
   async function uploadBackground(file: File) {
@@ -427,6 +439,33 @@ export default function SettingsPage() {
                   <span className="text-xs text-slate-500">{p.pool_currency}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Budget Tracker */}
+          {trip && (
+            <BudgetTracker
+              tripId={id}
+              trip={trip as any}
+              travelers={realTravelers}
+              totalSpent={0}
+              readOnly={myRole === "viewer"}
+            />
+          )}
+
+          {/* Duplicate Trip — admin/editor */}
+          {myRole !== "viewer" && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <h2 className="text-sm font-semibold text-white mb-1">Duplicate Trip</h2>
+              <p className="text-xs text-slate-500 mb-3">
+                Creates a copy with the same travelers and wallets (no expenses).
+              </p>
+              <button
+                onClick={duplicateTrip}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white text-sm rounded-lg transition-colors"
+              >
+                <Copy size={14} /> Duplicate Trip
+              </button>
             </div>
           )}
 

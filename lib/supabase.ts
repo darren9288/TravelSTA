@@ -63,6 +63,7 @@ export type Expense = {
   notes: string | null;
   created_by_id: string | null;
   wallet_id?: string | null;
+  photo_url?: string | null; // Requires DB migration: ALTER TABLE expenses ADD COLUMN photo_url text;
   created_at: string;
   paid_by?: Traveler;
   splits?: ExpenseSplit[];

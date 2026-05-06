@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -12,17 +14,23 @@ type EditTopup = { id: string; myrAmount: string; foreignAmount: string; date: s
 
 export default function PoolPage() {
   const { id } = useParams<{ id: string }>();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [travelers, setTravelers] = useState<Traveler[]>([]);
-  const [pools, setPools] = useState<Traveler[]>([]);
-  const [topups, setTopups] = useState<PoolTopup[]>([]);
-  const [poolExpenses, setPoolExpenses] = useState<Expense[]>([]);
-  const [balances, setBalances] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [myId, setMyId] = useState<string | null>(null);
-  const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
+
+  const { data: tripData } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: travelersData } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
+  const { data: poolData, isLoading: loading, mutate: mutatePool } = useSWR<{ topups: PoolTopup[]; expenses: Expense[]; balances: Record<string, number> }>(`/api/pool?trip_id=${id}`, fetcher);
+  const { data: walletsData } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(`/api/wallets?trip_id=${id}`, fetcher);
+
+  const trip: Trip | null = tripData && !(tripData as any).error ? tripData : null;
+  const allTravelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
+  const travelers: Traveler[] = allTravelers.filter((t) => !t.is_pool);
+  const pools: Traveler[] = allTravelers.filter((t) => t.is_pool);
+  const topups: PoolTopup[] = Array.isArray(poolData?.topups) ? poolData!.topups : [];
+  const poolExpenses: Expense[] = Array.isArray(poolData?.expenses) ? poolData!.expenses : [];
+  const balances: Record<string, number> = poolData?.balances ?? {};
+  const myId: string | null = trip?.my_traveler_id ?? null;
+  const walletOptions = walletsData?.wallets ?? [];
 
   // Selected pool for history
   const [selectedPool, setSelectedPool] = useState<string | null>(null);
@@ -50,38 +58,28 @@ export default function PoolPage() {
   const [newPoolCurrency, setNewPoolCurrency] = useState("MYR");
   const [creatingPool, setCreatingPool] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [tripRes, travelerRes, poolRes, walletRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/pool?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    setTrip(tripRes.error ? null : tripRes);
-    const allTravelers: Traveler[] = Array.isArray(travelerRes) ? travelerRes : [];
-    setTravelers(allTravelers.filter((t) => !t.is_pool));
-    const poolList = allTravelers.filter((t) => t.is_pool);
-    setPools(poolList);
-    setTopups(Array.isArray(poolRes.topups) ? poolRes.topups : []);
-    setPoolExpenses(Array.isArray(poolRes.expenses) ? poolRes.expenses : []);
-    setBalances(poolRes.balances ?? {});
-    setWalletOptions(walletRes.wallets ?? []);
-    const me = tripRes.my_traveler_id ?? null;
-    setMyId(me);
-    const realTravelers = allTravelers.filter((t: Traveler) => !t.is_pool);
-    setContributions(Object.fromEntries(realTravelers.map((t: Traveler) => [t.id, { amount: "", walletId: "" }])));
-    setPoolId(poolList[0]?.id ?? "");
-    setNewPoolCurrency(tripRes.foreign_currency ?? "MYR");
-    setLoading(false);
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = useCallback(() => {
+    mutatePool();
+  }, [mutatePool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync derived UI state when SWR data arrives
+  useEffect(() => {
+    if (travelers.length > 0) {
+      setContributions((prev) => {
+        const next = { ...prev };
+        for (const t of travelers) if (!next[t.id]) next[t.id] = { amount: "", walletId: "" };
+        return next;
+      });
+    }
+  }, [travelers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    load();
-    const onVisible = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
+    if (pools.length > 0 && !poolId) setPoolId(pools[0].id);
+  }, [pools.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (trip?.foreign_currency) setNewPoolCurrency(trip.foreign_currency);
+  }, [trip?.foreign_currency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleTopup() {
     const entries = travelers.filter((t) => parseFloat(contributions[t.id]?.amount) > 0);
@@ -103,7 +101,7 @@ export default function PoolPage() {
       ));
       setContributions(Object.fromEntries(travelers.map((t) => [t.id, { amount: "", walletId: "" }])));
       setTopupNotes(""); setShowForm(false);
-      await load();
+      mutatePool();
     } catch (e) { setError((e as Error).message); }
     finally { setSaving(false); }
   }
@@ -122,7 +120,7 @@ export default function PoolPage() {
         notes: editTopup.notes || null,
       }),
     });
-    if (res.ok) { setEditTopup(null); await load(); }
+    if (res.ok) { setEditTopup(null); mutatePool(); }
     else { setEditTopup((p) => p ? { ...p, saving: false } : p); }
   }
 
@@ -130,7 +128,7 @@ export default function PoolPage() {
     if (!confirm(`Delete pool "${poolName}" and all its history? This cannot be undone.`)) return;
     await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
     if (selectedPool === poolId) setSelectedPool(null);
-    await load();
+    mutatePool();
   }
 
   async function saveRenamePool() {
@@ -141,7 +139,7 @@ export default function PoolPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: renamingPoolId, name: renamingPoolName.trim() }),
     });
-    if (res.ok) { setRenamingPoolId(null); await load(); }
+    if (res.ok) { setRenamingPoolId(null); mutatePool(); }
     setSavingPoolRename(false);
   }
 
@@ -155,7 +153,7 @@ export default function PoolPage() {
     });
     if (res.ok) {
       setNewPoolName(""); setShowCreatePool(false);
-      await load();
+      mutatePool();
     } else { const d = await res.json(); setError(d.error); }
     setCreatingPool(false);
   }

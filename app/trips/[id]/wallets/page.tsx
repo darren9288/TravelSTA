@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler } from "@/lib/supabase";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { WalletEvent } from "@/app/api/wallet-history/route";
@@ -12,12 +14,15 @@ type SortKey = "date-asc" | "date-desc" | "amount-desc" | "amount-asc";
 
 export default function WalletsPage() {
   const { id } = useParams<{ id: string }>();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [travelers, setTravelers] = useState<Traveler[]>([]);
-  const [wallets, setWallets] = useState<WalletRow[]>([]);
-  const [balances, setBalances] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const { data: trip } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: travelersData } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
+  const { data: walletsData, isLoading: loading, mutate: mutateWallets } = useSWR<{ wallets: WalletRow[]; balances: Record<string, number> }>(`/api/wallets?trip_id=${id}`, fetcher);
+
+  const travelers: Traveler[] = (Array.isArray(travelersData) ? travelersData : []).filter((t) => !t.is_pool);
+  const wallets: WalletRow[] = walletsData?.wallets ?? [];
+  const balances: Record<string, number> = walletsData?.balances ?? {};
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTravelerId, setNewTravelerId] = useState("");
@@ -49,23 +54,8 @@ export default function WalletsPage() {
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
-    setLoading(true);
-    const [tripRes, travelerRes, walletRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    const tripData: Trip | null = tripRes.error ? null : tripRes;
-    setTrip(tripData);
-    const allTravelers = Array.isArray(travelerRes) ? travelerRes : [];
-    setTravelers(allTravelers.filter((t: Traveler) => !t.is_pool));
-    setWallets(walletRes.wallets ?? []);
-    setBalances(walletRes.balances ?? {});
-    if (allTravelers.filter((t: Traveler) => !t.is_pool).length > 0 && !newTravelerId)
-      setNewTravelerId(allTravelers.filter((t: Traveler) => !t.is_pool)[0].id);
-    if (tripData) setNewCurrency(tripData.foreign_currency ?? "MYR");
-    setLoading(false);
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+    mutateWallets();
+  }, [mutateWallets]);
 
   async function loadHistory(walletId: string) {
     setHistoryLoading(true);
@@ -75,7 +65,13 @@ export default function WalletsPage() {
     setHistoryLoading(false);
   }
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (travelers.length > 0 && !newTravelerId) setNewTravelerId(travelers[0].id);
+  }, [travelers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (trip) setNewCurrency(trip.foreign_currency ?? "MYR");
+  }, [trip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedWallet) loadHistory(selectedWallet);
@@ -98,7 +94,7 @@ export default function WalletsPage() {
           body: JSON.stringify({ wallet_id: wallet.id, trip_id: id, amount: parseFloat(newInitialAmount), date: newInitialDate, notes: null }),
         });
       }
-      setNewName(""); setNewInitialAmount(""); setShowCreate(false); await load();
+      setNewName(""); setNewInitialAmount(""); setShowCreate(false); mutateWallets();
     } else { const d = await res.json(); setError(d.error); }
     setCreating(false);
   }
@@ -113,7 +109,7 @@ export default function WalletsPage() {
     });
     if (res.ok) {
       setEditTopup(null);
-      await load();
+      mutateWallets();
       if (selectedWallet) await loadHistory(selectedWallet);
     }
     setSavingTopup(false);
@@ -123,7 +119,7 @@ export default function WalletsPage() {
     if (!confirm("Delete this wallet and all its top-up history?")) return;
     await fetch("/api/wallets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: walletId }) });
     if (selectedWallet === walletId) setSelectedWallet(null);
-    await load();
+    mutateWallets();
   }
 
   async function saveRenameWallet() {
@@ -134,7 +130,7 @@ export default function WalletsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: renamingWalletId, name: renamingWalletName.trim() }),
     });
-    if (res.ok) { setRenamingWalletId(null); await load(); }
+    if (res.ok) { setRenamingWalletId(null); mutateWallets(); }
     setSavingRename(false);
   }
 
@@ -148,7 +144,7 @@ export default function WalletsPage() {
     });
     if (res.ok) {
       setTopupWalletId(null); setTopupAmount(""); setTopupNotes("");
-      await load();
+      mutateWallets();
       if (selectedWallet === topupWalletId) await loadHistory(topupWalletId);
     } else { const d = await res.json(); setError(d.error); }
     setTopping(false);

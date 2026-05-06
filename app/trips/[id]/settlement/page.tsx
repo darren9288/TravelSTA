@@ -4,7 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
-import { ArrowRight, RefreshCw, CheckCircle2, Wallet } from "lucide-react";
+import { ArrowRight, RefreshCw, CheckCircle2, Wallet, History } from "lucide-react";
+import Link from "next/link";
 import { SettlementPayment, Traveler } from "@/lib/supabase";
 
 type WalletSelection = {
@@ -94,10 +95,16 @@ export default function SettlementPage() {
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Settlement</h1>
-            <button onClick={load} disabled={loading}
-              className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
-              <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <Link href={`/trips/${id}/settlement/history`}
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors">
+                <History size={11} /> History
+              </Link>
+              <button onClick={load} disabled={loading}
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
           </div>
 
           {apiError && (

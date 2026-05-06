@@ -4,6 +4,24 @@ const withPWA = require("next-pwa")({
   register: true,
   skipWaiting: true,
   clientsClaim: true,
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "supabase-cache",
+        expiration: { maxEntries: 50, maxAgeSeconds: 300 },
+      },
+    },
+    {
+      urlPattern: /\/api\/.*/i,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "api-cache",
+        expiration: { maxEntries: 100, maxAgeSeconds: 60 },
+      },
+    },
+  ],
 });
 
 /** @type {import('next').NextConfig} */

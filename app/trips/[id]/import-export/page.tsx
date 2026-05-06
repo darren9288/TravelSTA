@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
-import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle, FileDown } from "lucide-react";
 
 interface ValidationError {
   row: number;
@@ -146,6 +146,23 @@ export default function ImportExportPage() {
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
           <h1 className="text-xl font-bold text-white">Import / Export</h1>
+
+          {/* PDF Export */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <FileDown className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-base font-semibold text-white">PDF Trip Summary</h2>
+            </div>
+            <p className="text-xs text-slate-400">Download a full PDF report including expenses, per-person summary, and settlement history.</p>
+            <a
+              href={`/api/trips/${id}/export-pdf`}
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors w-fit"
+            >
+              <FileDown className="w-4 h-4" />
+              Export PDF
+            </a>
+          </div>
 
           {/* Export Section */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">

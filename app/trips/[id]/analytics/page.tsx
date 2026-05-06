@@ -1,5 +1,4 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
@@ -8,6 +7,8 @@ import DailyBar from "@/components/charts/DailyBar";
 import TravelerBar from "@/components/charts/TravelerBar";
 import CumulativeLine from "@/components/charts/CumulativeLine";
 import { RefreshCw } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type StatsData = {
   byCategory: { name: string; amount: number; color: string }[];
@@ -18,28 +19,9 @@ type StatsData = {
 
 export default function AnalyticsPage() {
   const { id } = useParams<{ id: string }>();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [stats, setStats] = useState<StatsData | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [tripRes, statsRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/stats?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    setTrip(tripRes.error ? null : tripRes);
-    setStats(statsRes.error ? null : statsRes);
-    setLoading(false);
-  }, [id]);
-
-  useEffect(() => {
-    load();
-    // Refetch whenever the user switches back to this browser tab or navigates back
-    const onVisible = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
+  const { data: trip } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: stats, isLoading: loading, mutate } = useSWR<StatsData>(`/api/stats?trip_id=${id}`, fetcher);
 
   return (
     <>
@@ -50,7 +32,7 @@ export default function AnalyticsPage() {
             <h1 className="text-xl font-bold text-white">Analytics</h1>
             <div className="flex items-center gap-3">
               {stats && <span className="text-sm text-slate-400">Total: RM {stats.total.toFixed(2)}</span>}
-              <button onClick={load} disabled={loading}
+              <button onClick={() => mutate()} disabled={loading}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
               </button>

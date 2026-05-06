@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import {
@@ -42,9 +44,12 @@ function groupByDay(items: ItineraryItem[]) {
 
 export default function ItineraryPage() {
   const { id } = useParams<{ id: string }>();
-  const [trip, setTrip] = useState<{ name: string; start_date: string | null; my_role: string | null } | null>(null);
-  const [items, setItems] = useState<ItineraryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: tripSWR } = useSWR<{ name: string; start_date: string | null; my_role: string | null; error?: string }>(`/api/trips/${id}`, fetcher);
+  const { data: itemsSWR, isLoading: itemsLoading, mutate: mutateItems } = useSWR<ItineraryItem[]>(`/api/itinerary?trip_id=${id}`, fetcher);
+
+  const trip = tripSWR && !tripSWR.error ? { name: tripSWR.name, start_date: tripSWR.start_date, my_role: tripSWR.my_role } : null;
+  const items: ItineraryItem[] = Array.isArray(itemsSWR) ? itemsSWR : [];
+  const loading = itemsLoading;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -87,18 +92,9 @@ export default function ItineraryPage() {
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
   const isViewer = trip?.my_role === "viewer";
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [tripRes, itemsRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/itinerary?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    setTrip(tripRes.error ? null : { name: tripRes.name, start_date: tripRes.start_date, my_role: tripRes.my_role });
-    setItems(Array.isArray(itemsRes) ? itemsRes : []);
-    setLoading(false);
-  }, [id]);
-
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(() => {
+    mutateItems();
+  }, [mutateItems]);
 
   // Auto-scroll to today if a matching day exists
   useEffect(() => {
@@ -123,7 +119,7 @@ export default function ItineraryPage() {
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function patch(updated: ItineraryItem) {
-    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    mutateItems((prev) => (Array.isArray(prev) ? prev.map((i) => (i.id === updated.id ? updated : i)) : prev), { revalidate: false });
   }
 
   async function addItem() {
@@ -136,8 +132,11 @@ export default function ItineraryPage() {
     });
     if (res.ok) {
       const item = await res.json();
-      setItems((prev) =>
-        [...prev, item].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
+      mutateItems((prev) =>
+        Array.isArray(prev)
+          ? [...prev, item].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
+          : [item],
+        { revalidate: false }
       );
       setAddTitle(""); setAddTime(""); setAddEndTime(""); setShowAdd(false);
       setSelectedId(item.id);
@@ -153,7 +152,7 @@ export default function ItineraryPage() {
       body: JSON.stringify({ id: itemId, trip_id: id }),
     });
     if (selectedId === itemId) setSelectedId(null);
-    setItems((prev) => prev.filter((i) => i.id !== itemId));
+    mutateItems((prev) => Array.isArray(prev) ? prev.filter((i) => i.id !== itemId) : prev, { revalidate: false });
   }
 
   async function saveNotes() {

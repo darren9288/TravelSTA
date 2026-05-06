@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Nav from "@/components/Nav";
 import TripCard from "@/components/TripCard";
 import { Trip } from "@/lib/supabase";
-import { Plus, Hash } from "lucide-react";
+import { Plus, Hash, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function HomePage() {
@@ -78,7 +78,25 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {trips.map((t) => <TripCard key={t.id} trip={t} />)}
+              {trips.map((t) => (
+                <div key={t.id} className="relative group">
+                  <TripCard trip={t} />
+                  <button
+                    title="Duplicate trip"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      if (!confirm(`Duplicate "${t.name}"?`)) return;
+                      const res = await fetch(`/api/trips/${t.id}/duplicate`, { method: "POST" });
+                      const data = await res.json();
+                      if (res.ok && data.id) router.push(`/trips/${data.id}/settings`);
+                      else alert(data.error ?? "Failed to duplicate");
+                    }}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-400 hover:text-white rounded-lg"
+                  >
+                    <Copy size={12} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 import { Expense, Traveler, ExpenseSplit } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
-import { Trash2, Pencil, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { Trash2, Pencil, ChevronDown, ChevronUp, Lock, Camera, X, Image } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
 const CAT_COLORS: Record<string, string> = {
@@ -40,6 +40,10 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   const [toggling, setToggling] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState("");
   const autoSavedIds = useRef<Set<string>>(new Set());
+  const [photoUrl, setPhotoUrl] = useState<string | null>(expense.photo_url ?? null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Wallet picker shown when settling a split that involves wallets
   const [settlingPick, setSettlingPick] = useState<{ split: ExpenseSplit; fromWalletId: string; toWalletId: string } | null>(null);
@@ -136,6 +140,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
           {expense.foreign_amount && (
             <p className="text-xs text-slate-500">{foreignCurrency} {Number(expense.foreign_amount).toLocaleString()}</p>
           )}
+          {photoUrl && <Camera size={10} className="text-slate-500 ml-auto mt-0.5" />}
         </div>
         <div className="flex items-center gap-1 ml-1">
           {expanded ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
@@ -254,6 +259,61 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
             })}
           </div>
 
+          {/* Photo receipt */}
+          <div className="mb-3">
+            {photoUrl ? (
+              <div className="flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
+                  className="flex-shrink-0">
+                  <img src={photoUrl} alt="Receipt" className="w-14 h-14 object-cover rounded-lg border border-slate-700 hover:opacity-80 transition-opacity" />
+                </button>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400 flex items-center gap-1"><Image size={11} /> Receipt attached</span>
+                  {onEdit && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm("Remove receipt photo?")) return;
+                        await fetch(`/api/expenses/upload-photo?expense_id=${expense.id}`, { method: "DELETE" });
+                        setPhotoUrl(null);
+                      }}
+                      className="text-xs text-slate-600 hover:text-red-400 transition-colors flex items-center gap-1"
+                    >
+                      <X size={10} /> Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : onEdit ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
+                disabled={photoUploading}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"
+              >
+                <Camera size={12} /> {photoUploading ? "Uploading…" : "Add receipt photo"}
+              </button>
+            ) : null}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setPhotoUploading(true);
+                const form = new FormData();
+                form.append("file", file);
+                form.append("expense_id", expense.id);
+                const res = await fetch("/api/expenses/upload-photo", { method: "POST", body: form });
+                const data = await res.json();
+                if (res.ok) setPhotoUrl(data.photo_url);
+                setPhotoUploading(false);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
           <div className="flex gap-3">
             {onEdit && (
               <button onClick={(e) => { e.stopPropagation(); onEdit(expense); }}
@@ -268,6 +328,24 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxOpen && photoUrl && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button className="absolute top-4 right-4 text-white/70 hover:text-white" onClick={() => setLightboxOpen(false)}>
+            <X size={24} />
+          </button>
+          <img
+            src={photoUrl}
+            alt="Receipt full size"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

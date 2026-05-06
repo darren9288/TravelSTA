@@ -4,7 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { X, RefreshCw } from "lucide-react";
+import { X, RefreshCw, Search } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type EditState = {
   id: string;
@@ -23,44 +25,29 @@ type EditState = {
 export default function ExpensesPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [travelers, setTravelers] = useState<Traveler[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPaidBy, setFilterPaidBy] = useState("");
   const [filterDate, setFilterDate] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [tripRes, travelerRes, expenseRes, walletRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/expenses?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    setTrip(tripRes.error ? null : tripRes);
-    setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
-    setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
-    setWallets(walletRes.wallets ?? []);
-    setLoading(false);
-  }, [id]);
+  const { data: trip, isLoading: tripLoading } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: travelersData, isLoading: travelersLoading } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
+  const { data: expensesData, isLoading: expensesLoading, mutate: mutateExpenses } = useSWR<Expense[]>(`/api/expenses?trip_id=${id}`, fetcher);
+  const { data: walletsData, isLoading: walletsLoading } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(`/api/wallets?trip_id=${id}`, fetcher);
 
-  useEffect(() => {
-    router.refresh();
-    load();
-    const onVisible = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load, router]);
+  const travelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
+  const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
+  const wallets = walletsData?.wallets ?? [];
+  const loading = tripLoading || travelersLoading || expensesLoading || walletsLoading;
+
+  useEffect(() => { router.refresh(); }, [router]);
 
   async function handleDelete(expenseId: string) {
     await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
-    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+    mutateExpenses();
   }
 
   function openEdit(expense: Expense) {
@@ -122,7 +109,7 @@ export default function ExpensesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setEditState(null);
-      await load();
+      mutateExpenses();
     } catch (e) {
       setEditError((e as Error).message);
     } finally {
@@ -130,10 +117,15 @@ export default function ExpensesPage() {
     }
   }
 
+  const search = searchText.toLowerCase();
   const filtered = expenses.filter((e) => {
     if (filterCategory && e.category !== filterCategory) return false;
     if (filterPaidBy && e.paid_by_id !== filterPaidBy) return false;
     if (filterDate && e.date !== filterDate) return false;
+    if (search && !(
+      e.notes?.toLowerCase().includes(search) ||
+      e.category?.toLowerCase().includes(search)
+    )) return false;
     return true;
   });
 
@@ -155,11 +147,28 @@ export default function ExpensesPage() {
             <h1 className="text-xl font-bold text-white">Expenses</h1>
             <div className="flex items-center gap-3">
               <span className="text-sm text-slate-400">RM {total.toFixed(2)}</span>
-              <button onClick={load} disabled={loading}
+              <button onClick={() => mutateExpenses()} disabled={loading}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
               </button>
             </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search by description or category…"
+              className="w-full pl-8 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            {searchText && (
+              <button onClick={() => setSearchText("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           <div className="flex gap-2 flex-wrap">
@@ -175,8 +184,8 @@ export default function ExpensesPage() {
               <option value="">All Payers</option>
               {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            {(filterCategory || filterPaidBy || filterDate) && (
-              <button onClick={() => { setFilterCategory(""); setFilterPaidBy(""); setFilterDate(""); }}
+            {(filterCategory || filterPaidBy || filterDate || searchText) && (
+              <button onClick={() => { setFilterCategory(""); setFilterPaidBy(""); setFilterDate(""); setSearchText(""); }}
                 className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 transition-colors">Clear</button>
             )}
           </div>

@@ -1,55 +1,35 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense } from "@/lib/supabase";
 import { PlusCircle, Banknote, BarChart2, Droplets, Settings2 } from "lucide-react";
 import Link from "next/link";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import BudgetTracker from "@/components/BudgetTracker";
+
+type StatsData = { byTraveler: { id: string; amount: number }[]; total: number };
 
 export default function TripDashboard() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [travelers, setTravelers] = useState<Traveler[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [myId, setMyId] = useState<string | null>(null);
-  const [myRole, setMyRole] = useState<string | null>(null);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [myShare, setMyShare] = useState(0);
 
-  const [wallets, setWallets] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
+  const { data: trip, isLoading: tripLoading } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: travelersData, isLoading: travelersLoading } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
+  const { data: expensesData, isLoading: expensesLoading } = useSWR<Expense[]>(`/api/expenses?trip_id=${id}&limit=5`, fetcher);
+  const { data: walletsData } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(`/api/wallets?trip_id=${id}`, fetcher);
+  const { data: statsData } = useSWR<StatsData>(`/api/stats?trip_id=${id}`, fetcher);
 
-  const load = useCallback(async () => {
-    const [tripRes, travelerRes, expenseRes, walletRes, statsRes] = await Promise.all([
-      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/expenses?trip_id=${id}&limit=5`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/stats?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    if (tripRes.error) { router.push("/"); return; }
-    setTrip(tripRes);
-    setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
-    setExpenses(Array.isArray(expenseRes) ? expenseRes : []);
-    setWallets(walletRes.wallets ?? []);
-    setMyId(tripRes.my_traveler_id ?? null);
-    setMyRole(tripRes.my_role ?? null);
-
-    setTotalSpent(statsRes.total ?? 0);
-    const myTravelerStats = statsRes.byTraveler?.find((t: any) => t.id === tripRes.my_traveler_id);
-    setMyShare(myTravelerStats?.amount ?? 0);
-
-    setLoading(false);
-  }, [id, router]);
+  const travelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
+  const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
+  const wallets = walletsData?.wallets ?? [];
+  const loading = tripLoading || travelersLoading || expensesLoading;
 
   useEffect(() => {
-    load();
-    const onVisible = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
+    if (trip && (trip as any).error) router.push("/");
+  }, [trip, router]);
 
   if (loading) return (
     <>
@@ -61,6 +41,12 @@ export default function TripDashboard() {
   );
 
   if (!trip) return null;
+
+  const myId = trip.my_traveler_id ?? null;
+  const myRole = trip.my_role ?? null;
+  const totalSpent = statsData?.total ?? 0;
+  const myTravelerStats = statsData?.byTraveler?.find((t) => t.id === myId);
+  const myShare = myTravelerStats?.amount ?? 0;
 
   const realTravelers = travelers.filter((t) => !t.is_pool);
   const me = realTravelers.find((t) => t.id === myId);
@@ -120,6 +106,9 @@ export default function TripDashboard() {
               <p className="text-lg font-bold text-white">{realTravelers.length}</p>
             </div>
           </div>
+
+          {/* Budget Tracker */}
+          <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} readOnly />
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
