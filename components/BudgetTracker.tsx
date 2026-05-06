@@ -14,12 +14,13 @@ type Props = {
   trip: Trip & { total_budget?: number | null; per_person_budget?: PerPersonBudget | null };
   travelers: Traveler[];
   totalSpent: number;
+  spentByTraveler?: Record<string, number>; // traveler_id -> amount spent
   /** When true, hides the edit button (e.g., on dashboard for non-admins) */
   readOnly?: boolean;
   onSaved?: () => void;
 };
 
-export default function BudgetTracker({ tripId, trip, travelers, totalSpent, readOnly, onSaved }: Props) {
+export default function BudgetTracker({ tripId, trip, travelers, totalSpent, spentByTraveler = {}, readOnly, onSaved }: Props) {
   const totalBudget: number = (trip as any).total_budget ?? 0;
   const perPersonBudget: PerPersonBudget = (trip as any).per_person_budget ?? {};
 
@@ -152,16 +153,29 @@ export default function BudgetTracker({ tripId, trip, travelers, totalSpent, rea
           </div>
 
           {Object.keys(perPersonBudget).length > 0 && travelers.length > 0 && (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2.5">
               <span className="text-xs text-slate-500 uppercase tracking-wide">Per Person</span>
               {travelers.filter((t) => perPersonBudget[t.id]).map((t) => {
                 const budget = perPersonBudget[t.id];
-                const ppPct = Math.min((0 / budget) * 100, 100); // we don't have per-person spent here; just show budget
+                const spent = spentByTraveler[t.id] ?? 0;
+                const ppPct = Math.min((spent / budget) * 100, 100);
+                const ppOver = spent > budget;
                 return (
-                  <div key={t.id} className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-                    <span className="text-xs text-slate-300 flex-1">{t.name}</span>
-                    <span className="text-xs text-slate-400">RM {budget.toFixed(0)}</span>
+                  <div key={t.id} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                      <span className="text-xs text-slate-300 flex-1">{t.name}</span>
+                      <span className="text-xs text-slate-400">RM {spent.toFixed(0)} / RM {budget.toFixed(0)}</span>
+                      <span className={`text-xs font-medium w-20 text-right ${ppOver ? "text-red-400" : "text-emerald-400"}`}>
+                        {ppOver ? `RM ${(spent - budget).toFixed(0)} over` : `RM ${(budget - spent).toFixed(0)} left`}
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden ml-4">
+                      <div
+                        className={`h-full rounded-full transition-all ${ppOver ? "bg-red-500" : ppPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                        style={{ width: `${ppPct}%`, backgroundColor: ppOver || ppPct > 80 ? undefined : t.color }}
+                      />
+                    </div>
                   </div>
                 );
               })}

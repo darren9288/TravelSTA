@@ -47,6 +47,9 @@ export default function TripDashboard() {
   const totalSpent = statsData?.total ?? 0;
   const myTravelerStats = statsData?.byTraveler?.find((t) => t.id === myId);
   const myShare = myTravelerStats?.amount ?? 0;
+  const spentByTraveler: Record<string, number> = Object.fromEntries(
+    (statsData?.byTraveler ?? []).map((t: { id: string; amount: number }) => [t.id, t.amount])
+  );
 
   const realTravelers = travelers.filter((t) => !t.is_pool);
   const me = realTravelers.find((t) => t.id === myId);
@@ -108,7 +111,7 @@ export default function TripDashboard() {
           </div>
 
           {/* Budget Tracker */}
-          <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} readOnly />
+          <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} spentByTraveler={spentByTraveler} readOnly />
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
