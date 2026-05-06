@@ -14,6 +14,17 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const ALLOWED = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "webm", "mov"];
+  if (!ALLOWED.includes(ext)) {
+    return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
+  }
+
+  const isVideo = ["mp4", "webm", "mov"].includes(ext);
+  const maxBytes = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    return NextResponse.json({ error: `File must be under ${isVideo ? "50" : "8"} MB` }, { status: 400 });
+  }
+
   const path = `${tripId}/background.${ext}`;
 
   const { error } = await serverDb()

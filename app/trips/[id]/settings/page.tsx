@@ -142,8 +142,13 @@ export default function SettingsPage() {
     }
   }
 
+  function isVideoFile(file: File) {
+    return file.type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(file.name);
+  }
+
   async function uploadBackground(file: File) {
-    if (file.size > 8 * 1024 * 1024) { setUploadError("Image must be under 8 MB."); return; }
+    const maxBytes = isVideoFile(file) ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+    if (file.size > maxBytes) { setUploadError(isVideoFile(file) ? "Video must be under 50 MB." : "Image must be under 8 MB."); return; }
     setUploading(true); setUploadError("");
     const form = new FormData();
     form.append("file", file);
@@ -256,18 +261,29 @@ export default function SettingsPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <ImageIcon size={14} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-white">Background Image</h2>
+                <h2 className="text-sm font-semibold text-white">Background</h2>
               </div>
 
               {/* Current preview */}
               {backgroundImageUrl.trim() ? (
                 <div className="relative rounded-xl overflow-hidden h-32 border border-slate-700">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={backgroundImageUrl.trim()}
-                    alt="Background preview"
-                    className="w-full h-full object-cover"
-                  />
+                  {/\.(mp4|webm|mov)(\?|$)/i.test(backgroundImageUrl) ? (
+                    <video
+                      src={backgroundImageUrl.trim()}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={backgroundImageUrl.trim()}
+                      alt="Background preview"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-slate-950/40 flex items-end p-2 gap-2">
                     <button
                       onClick={() => fileInputRef.current?.click()}
@@ -300,7 +316,7 @@ export default function SettingsPage() {
                   >
                     <Upload size={20} />
                     <span className="text-sm font-medium">
-                      {uploading ? "Uploading…" : "Upload photo from device"}
+                      {uploading ? "Uploading…" : "Upload photo or video"}
                     </span>
                   </button>
 
@@ -337,7 +353,7 @@ export default function SettingsPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/mp4,video/webm,video/quicktime"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
