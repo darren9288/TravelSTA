@@ -4,21 +4,63 @@ const withPWA = require("next-pwa")({
   register: true,
   skipWaiting: true,
   clientsClaim: true,
+  // Auth/admin endpoints must always hit the network — never serve a cached response.
   runtimeCaching: [
     {
-      urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "supabase-cache",
-        expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-      },
+      urlPattern: /\/api\/admin\/.*/i,
+      handler: "NetworkOnly",
     },
     {
+      urlPattern: /\/auth\/.*/i,
+      handler: "NetworkOnly",
+    },
+    {
+      urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
+      handler: "NetworkOnly",
+    },
+    // Supabase data — StaleWhileRevalidate so old data is shown instantly while a refresh runs.
+    // When offline, the cached copy is what you see.
+    {
+      urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+      handler: "StaleWhileRevalidate",
+      options: {
+        cacheName: "supabase-data",
+        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 1 week
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    // Our API routes — same strategy: cached responses keep the app readable offline.
+    {
       urlPattern: /\/api\/.*/i,
+      handler: "StaleWhileRevalidate",
+      options: {
+        cacheName: "api-data",
+        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    // App shell + Next.js assets — fall back to cache when network fails.
+    {
+      urlPattern: /\.(?:js|css|woff2?|ttf|otf)$/i,
+      handler: "StaleWhileRevalidate",
+      options: { cacheName: "static-assets" },
+    },
+    {
+      urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+      handler: "CacheFirst",
+      options: {
+        cacheName: "images",
+        expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+      },
+    },
+    // HTML pages — try network first, fall back to cached page if offline.
+    {
+      urlPattern: ({ request }) => request.mode === "navigate",
       handler: "NetworkFirst",
       options: {
-        cacheName: "api-cache",
-        expiration: { maxEntries: 100, maxAgeSeconds: 60 },
+        cacheName: "pages",
+        networkTimeoutSeconds: 5,
+        expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
       },
     },
   ],

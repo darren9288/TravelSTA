@@ -101,10 +101,13 @@ export default function Nav({ tripId, tripName }: NavProps) {
         })}
         <div className="mt-auto pt-4 border-t border-slate-800">
           {username && (
-            <div className="flex items-center gap-2 px-3 py-2 mb-1">
-              <User size={14} className="text-slate-500" />
-              <span className="text-xs text-slate-400 font-mono">{username}</span>
-            </div>
+            <Link
+              href="/account"
+              className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg hover:bg-slate-800 transition-colors group"
+            >
+              <User size={14} className="text-slate-500 group-hover:text-emerald-400" />
+              <span className="text-xs text-slate-400 group-hover:text-white font-mono">{username}</span>
+            </Link>
           )}
           <button onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">

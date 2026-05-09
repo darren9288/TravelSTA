@@ -33,7 +33,12 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = path === "/login" || path === "/signup";
-  const isProtected = path === "/" || path.startsWith("/trips") || path.startsWith("/join");
+  const isProtected =
+    path === "/" ||
+    path.startsWith("/trips") ||
+    path.startsWith("/join") ||
+    path.startsWith("/admin") ||
+    path.startsWith("/account");
 
   // Not logged in → redirect to login for protected pages
   if (!user && isProtected) {

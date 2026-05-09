@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
+import OfflineBanner from "@/components/OfflineBanner";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-slate-950">
         <ThemeProvider>
           <ServiceWorkerUpdater />
+          <OfflineBanner />
           {children}
         </ThemeProvider>
       </body>
