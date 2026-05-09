@@ -65,6 +65,11 @@ export default function AdminPage() {
     ]);
     if (u.users) setUsers(u.users);
     if (t.trips) setTrips(t.trips);
+    // Surface the underlying error rather than silently showing "No users yet".
+    const errors: string[] = [];
+    if (u.error) errors.push(`Users: ${u.error}`);
+    if (t.error) errors.push(`Trips: ${t.error}`);
+    if (errors.length) setError(errors.join(" · "));
   }
 
   async function deleteUser(u: AdminUser) {

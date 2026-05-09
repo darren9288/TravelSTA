@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight, CalendarDays } from "lucide-react";
+import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight, CalendarDays, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useEffect, useState } from "react";
 
@@ -11,14 +11,21 @@ export default function Nav({ tripId, tripName }: NavProps) {
   const path = usePathname();
   const router = useRouter();
   const [username, setUsername] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        // Username is stored as the part before @travelsta.app
+        // Username is stored as the part before @placeholder.com.
         const name = user.email?.replace("@placeholder.com", "") ?? null;
         setUsername(name);
+        // Ask the server whether this user has super admin privileges, so we can
+        // surface an Admin link only to those users.
+        fetch("/api/admin/me", { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => setIsSuperAdmin(Boolean(data.is_super_admin)))
+          .catch(() => setIsSuperAdmin(false));
       }
     });
   }, []);
@@ -41,12 +48,23 @@ export default function Nav({ tripId, tripName }: NavProps) {
           <Link href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${path === "/" ? "bg-emerald-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
             <Home size={18} /> My Trips
           </Link>
+          {isSuperAdmin && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${path.startsWith("/admin") ? "bg-purple-600 text-white" : "text-purple-300 hover:bg-purple-900/40 hover:text-white"}`}
+            >
+              <Shield size={18} /> Admin Panel
+            </Link>
+          )}
           <div className="mt-auto pt-4 border-t border-slate-800">
             {username && (
-              <div className="flex items-center gap-2 px-3 py-2 mb-1">
-                <User size={14} className="text-slate-500" />
-                <span className="text-xs text-slate-400 font-mono">{username}</span>
-              </div>
+              <Link
+                href="/account"
+                className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg hover:bg-slate-800 transition-colors group"
+              >
+                <User size={14} className="text-slate-500 group-hover:text-emerald-400" />
+                <span className="text-xs text-slate-400 group-hover:text-white font-mono">{username}</span>
+              </Link>
             )}
             <button onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">
@@ -57,6 +75,14 @@ export default function Nav({ tripId, tripName }: NavProps) {
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
           <Link href="/" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-emerald-400">
             <Home size={20} /> Trips
+          </Link>
+          {isSuperAdmin && (
+            <Link href="/admin" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-purple-300">
+              <Shield size={20} /> Admin
+            </Link>
+          )}
+          <Link href="/account" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-slate-500">
+            <User size={20} /> Account
           </Link>
           <button onClick={handleLogout} className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-slate-500">
             <LogOut size={20} /> Sign Out
@@ -99,6 +125,14 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </Link>
           );
         })}
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-lg text-sm font-medium text-purple-300 hover:bg-purple-900/40 hover:text-white transition-colors border border-purple-900/40"
+          >
+            <Shield size={18} /> Admin Panel
+          </Link>
+        )}
         <div className="mt-auto pt-4 border-t border-slate-800">
           {username && (
             <Link
@@ -126,6 +160,11 @@ export default function Nav({ tripId, tripName }: NavProps) {
               </Link>
             );
           })}
+          {isSuperAdmin && (
+            <Link href="/admin" className="flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium text-purple-300 hover:text-purple-200 transition-colors min-w-[64px]">
+              <Shield size={20} /> Admin
+            </Link>
+          )}
           <button onClick={handleLogout}
             className="flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium text-slate-500 hover:text-red-400 transition-colors min-w-[64px]">
             <LogOut size={20} /> Sign Out

@@ -9,6 +9,14 @@ export async function GET() {
   const denied = await requireSuperAdmin();
   if (denied) return denied;
 
+  // Auth admin API requires the service role key. Without it, listUsers silently returns nothing.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY is not set on the server. Add it in Vercel → Environment Variables and redeploy." },
+      { status: 500 }
+    );
+  }
+
   const db = serverDb();
 
   // List auth users (paginated; default page size 50, we ask for max 1000 to keep it simple).
