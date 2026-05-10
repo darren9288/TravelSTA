@@ -9,6 +9,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
+import { useTripRealtime } from "@/lib/use-realtime";
 
 type StatsData = { byTraveler: { id: string; amount: number }[]; total: number };
 
@@ -26,6 +27,8 @@ export default function TripDashboard() {
   const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
   const wallets = walletsData?.wallets ?? [];
   const loading = tripLoading || travelersLoading || expensesLoading;
+
+  useTripRealtime(id);
 
   useEffect(() => {
     if (trip && (trip as any).error) router.push("/");

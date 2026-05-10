@@ -7,6 +7,7 @@ import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supaba
 import { X, RefreshCw, Search } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 
 type EditState = {
   id: string;
@@ -42,6 +43,8 @@ export default function ExpensesPage() {
   const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
   const wallets = walletsData?.wallets ?? [];
   const loading = tripLoading || travelersLoading || expensesLoading || walletsLoading;
+
+  useTripRealtime(id);
 
   useEffect(() => { router.refresh(); }, [router]);
 

@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { WalletEvent } from "@/app/api/wallet-history/route";
@@ -23,6 +24,8 @@ export default function WalletsPage() {
   const travelers: Traveler[] = (Array.isArray(travelersData) ? travelersData : []).filter((t) => !t.is_pool);
   const wallets: WalletRow[] = walletsData?.wallets ?? [];
   const balances: Record<string, number> = walletsData?.balances ?? {};
+
+  useTripRealtime(id);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTravelerId, setNewTravelerId] = useState("");

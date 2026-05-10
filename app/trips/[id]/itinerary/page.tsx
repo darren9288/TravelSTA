@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useParams } from "next/navigation";
+import { useTripRealtime } from "@/lib/use-realtime";
 import Nav from "@/components/Nav";
 import {
   Plane, Hotel, MapPin, Utensils, Train, Tag,
@@ -50,6 +51,8 @@ export default function ItineraryPage() {
   const trip = tripSWR && !tripSWR.error ? { name: tripSWR.name, start_date: tripSWR.start_date, my_role: tripSWR.my_role } : null;
   const items: ItineraryItem[] = Array.isArray(itemsSWR) ? itemsSWR : [];
   const loading = itemsLoading;
+
+  useTripRealtime(id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 

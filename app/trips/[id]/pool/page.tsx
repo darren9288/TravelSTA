@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -31,6 +32,8 @@ export default function PoolPage() {
   const balances: Record<string, number> = poolData?.balances ?? {};
   const myId: string | null = trip?.my_traveler_id ?? null;
   const walletOptions = walletsData?.wallets ?? [];
+
+  useTripRealtime(id);
 
   // Selected pool for history
   const [selectedPool, setSelectedPool] = useState<string | null>(null);
