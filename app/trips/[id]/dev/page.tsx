@@ -73,14 +73,45 @@ export default function DevPage() {
   const [selected, setSelected] = useState<LogEntry | null>(null);
   const [rawData, setRawData] = useState<Record<string, unknown>>({});
   const [rawLoading, setRawLoading] = useState(false);
+  // null = still checking; false = not allowed; true = allowed
+  const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
+    fetch("/api/admin/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => setAllowed(Boolean(data.is_super_admin)))
+      .catch(() => setAllowed(false));
+  }, []);
+
+  useEffect(() => {
+    if (allowed !== true) return;
     installFetchInterceptor();
     fetch(`/api/trips/${id}`).then((r) => r.json()).then((d) => setTrip(d.error ? null : d));
     refresh();
     const interval = setInterval(refresh, 2000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [id, allowed]);
+
+  if (allowed === null) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </main>
+    );
+  }
+  if (allowed === false) {
+    return (
+      <>
+        <Nav tripId={id} />
+        <main className="md:ml-56 pb-24 md:pb-8 min-h-screen flex items-center justify-center px-4">
+          <div className="max-w-sm text-center">
+            <h1 className="text-lg font-bold text-white mb-2">Access Denied</h1>
+            <p className="text-sm text-slate-500">The Dev page is restricted to the project owner.</p>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   function refresh() {
     setLogs([...getLogs()].reverse());

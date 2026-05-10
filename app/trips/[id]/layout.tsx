@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { serverDb } from "@/lib/supabase";
 import TripBackground from "@/components/TripBackground";
 import DevPanel from "@/components/DevPanel";
+import { isSuperAdmin } from "@/lib/admin";
 
 export default async function TripLayout({
   children,
@@ -22,10 +23,13 @@ export default async function TripLayout({
     // background is cosmetic — silently ignore errors
   }
 
+  // The floating API log panel is a developer tool — only the project owner sees it.
+  const showDevPanel = await isSuperAdmin();
+
   return (
     <TripBackground imageUrl={imageUrl}>
       {children}
-      <DevPanel />
+      {showDevPanel && <DevPanel />}
     </TripBackground>
   );
 }

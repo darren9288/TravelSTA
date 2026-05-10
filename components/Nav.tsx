@@ -103,7 +103,8 @@ export default function Nav({ tripId, tripName }: NavProps) {
     { href: `/trips/${tripId}/wallets`, icon: Wallet, label: "Wallets" },
     { href: `/trips/${tripId}/import-export`, icon: ArrowLeftRight, label: "Import/Export" },
     { href: `/trips/${tripId}/settings`, icon: Settings2, label: "Settings" },
-    { href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" },
+    // Dev tab is owner-only — appended below when isSuperAdmin is true.
+    ...(isSuperAdmin ? [{ href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" }] : []),
   ];
 
   return (
