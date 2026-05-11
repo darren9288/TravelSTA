@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
-import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle, FileDown } from "lucide-react";
+import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle, FileDown, CalendarDays } from "lucide-react";
 
 interface ValidationError {
   row: number;
@@ -32,6 +32,12 @@ export default function ImportExportPage() {
   const [useDateFilter, setUseDateFilter] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  // Separate state for the itinerary importer below so the two sections don't
+  // share files or results by accident.
+  const [itineraryFile, setItineraryFile] = useState<File | null>(null);
+  const [importingItinerary, setImportingItinerary] = useState(false);
+  const [itineraryResult, setItineraryResult] = useState<ImportResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +121,43 @@ export default function ImportExportPage() {
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleItineraryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setItineraryFile(file);
+      setItineraryResult(null);
+    }
+  };
+
+  const handleItineraryImport = async () => {
+    if (!itineraryFile) return;
+    setImportingItinerary(true);
+    setItineraryResult(null);
+
+    try {
+      const text = await itineraryFile.text();
+      const response = await fetch("/api/itinerary/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trip_id: id, data: text }),
+      });
+      const result = await response.json();
+      setItineraryResult(result);
+
+      if (result.success && result.inserted_count > 0) {
+        setTimeout(() => router.push(`/trips/${id}/itinerary`), 2000);
+      }
+    } catch (error) {
+      console.error("Itinerary import error:", error);
+      setItineraryResult({
+        success: false,
+        errors: [{ row: 0, field: "file", message: "Failed to parse file" }],
+      });
+    } finally {
+      setImportingItinerary(false);
     }
   };
 
@@ -333,6 +376,110 @@ export default function ImportExportPage() {
             </div>
           </div>
 
+          {/* Itinerary Import */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-amber-400" />
+              <h2 className="text-base font-semibold text-white">Import Itinerary</h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              Bulk-add flights, hotels, activities and other day-by-day plans from a JSON file.
+              See the format reference below.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Select JSON file
+                </label>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleItineraryFileChange}
+                  className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-500 file:transition-colors"
+                />
+              </div>
+
+              {itineraryFile && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <FileText className="w-4 h-4" />
+                  <span>{itineraryFile.name}</span>
+                  <span className="text-slate-500">
+                    ({(itineraryFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+              )}
+
+              <button
+                onClick={handleItineraryImport}
+                disabled={!itineraryFile || importingItinerary}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                {importingItinerary ? "Importing..." : "Import Itinerary"}
+              </button>
+
+              {itineraryResult && (
+                <div className="mt-3 p-4 rounded-lg border border-slate-600 bg-slate-700/50">
+                  {itineraryResult.success ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-semibold text-sm">Import Successful</span>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        Imported {itineraryResult.inserted_count} of {itineraryResult.total_count} items
+                      </p>
+                      {itineraryResult.warnings && itineraryResult.warnings.length > 0 && (
+                        <div className="mt-2">
+                          <div className="flex items-center gap-2 text-yellow-400 mb-1">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Warnings:</span>
+                          </div>
+                          <ul className="text-xs text-slate-400 space-y-1 pl-6">
+                            {itineraryResult.warnings.map((warning, idx) => (
+                              <li key={idx}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <p className="text-xs text-slate-500 mt-2">Redirecting to itinerary…</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-red-400">
+                        <XCircle className="w-5 h-5" />
+                        <span className="font-semibold text-sm">Import Failed</span>
+                      </div>
+                      {itineraryResult.valid_count !== undefined && (
+                        <p className="text-sm text-slate-300">
+                          {itineraryResult.valid_count} of {itineraryResult.total_count} items are valid
+                        </p>
+                      )}
+                      {itineraryResult.errors && itineraryResult.errors.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-semibold text-red-400 mb-1">Errors:</div>
+                          <ul className="text-xs text-slate-400 space-y-1 pl-4">
+                            {itineraryResult.errors.slice(0, 10).map((error, idx) => (
+                              <li key={idx}>
+                                Row {error.row}, {error.field}: {error.message}
+                              </li>
+                            ))}
+                            {itineraryResult.errors.length > 10 && (
+                              <li className="text-slate-500">
+                                ... and {itineraryResult.errors.length - 10} more errors
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="p-4 bg-slate-800/40 border border-slate-700/50 rounded-xl">
             <h3 className="text-sm font-semibold text-slate-300 mb-2">Import Notes:</h3>
             <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
@@ -341,6 +488,15 @@ export default function ImportExportPage() {
               <li>Split participants should be separated by semicolons in CSV format</li>
               <li>All imported transactions will be added to existing transactions</li>
               <li>CSV columns: date, category, myr_amount, foreign_amount, paid_by, payment_type, wallet, split_type, split_participants, notes</li>
+            </ul>
+            <h3 className="text-sm font-semibold text-slate-300 mt-4 mb-2">Itinerary JSON format:</h3>
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li>Top level: <code className="text-slate-300">{`{ "items": [ ... ] }`}</code> or a raw array</li>
+              <li>Each item requires <code className="text-slate-300">date</code> (YYYY-MM-DD) and <code className="text-slate-300">title</code></li>
+              <li>Optional: <code className="text-slate-300">time</code>, <code className="text-slate-300">end_time</code> (HH:MM), <code className="text-slate-300">category</code>, <code className="text-slate-300">notes</code>, <code className="text-slate-300">photo_url</code>, <code className="text-slate-300">links</code></li>
+              <li>Category must be one of: <code className="text-slate-300">flight, hotel, activity, food, transport, other</code></li>
+              <li>Duplicates (same date + title) are skipped automatically</li>
+              <li>File uploads (PDF attachments) still need to be added per-item via the itinerary page</li>
             </ul>
           </div>
         </div>
