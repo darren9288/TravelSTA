@@ -5,7 +5,6 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -32,8 +31,6 @@ export default function PoolPage() {
   const balances: Record<string, number> = poolData?.balances ?? {};
   const myId: string | null = trip?.my_traveler_id ?? null;
   const walletOptions = walletsData?.wallets ?? [];
-
-  useTripRealtime(id);
 
   // Selected pool for history
   const [selectedPool, setSelectedPool] = useState<string | null>(null);
@@ -65,6 +62,32 @@ export default function PoolPage() {
     mutatePool();
   }, [mutatePool]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Look up the trip's exchange rate for a given wallet. Foreign wallets are
+  // converted to MYR using cash_rate or wise_rate (or *_2 for the secondary
+  // currency). Wise vs cash is decided by the wallet name containing "wise".
+  const rateForWallet = useCallback(
+    (wallet: { name: string; currency: string } | undefined | null): number => {
+      if (!trip || !wallet || wallet.currency === "MYR") return 1;
+      const isWise = wallet.name.toLowerCase().includes("wise");
+      const t = trip as unknown as {
+        foreign_currency?: string;
+        cash_rate?: number;
+        wise_rate?: number;
+        foreign_currency_2?: string | null;
+        cash_rate_2?: number | null;
+        wise_rate_2?: number | null;
+      };
+      if (wallet.currency === t.foreign_currency) {
+        return isWise ? Number(t.wise_rate ?? 1) : Number(t.cash_rate ?? 1);
+      }
+      if (t.foreign_currency_2 && wallet.currency === t.foreign_currency_2) {
+        return isWise ? Number(t.wise_rate_2 ?? 1) : Number(t.cash_rate_2 ?? 1);
+      }
+      return 1;
+    },
+    [trip]
+  );
+
   // Sync derived UI state when SWR data arrives
   useEffect(() => {
     if (travelers.length > 0) {
@@ -89,19 +112,29 @@ export default function PoolPage() {
     if (!entries.length || !poolId) { setError("Enter at least one amount."); return; }
     setSaving(true); setError("");
     try {
-      await Promise.all(entries.map((t) =>
-        fetch("/api/pool", {
+      await Promise.all(entries.map((t) => {
+        const c = contributions[t.id];
+        const wallet = walletOptions.find((w) => w.id === c.walletId);
+        const entered = parseFloat(c.amount);
+        // When contributing from a foreign-currency wallet, the user enters the
+        // amount in that wallet's currency. We convert to MYR via the trip rate
+        // and store both so the history view shows whichever the pool prefers.
+        const isForeignWallet = !!wallet && wallet.currency !== "MYR";
+        const rate = rateForWallet(wallet);
+        const myr = isForeignWallet ? entered / rate : entered;
+        const foreign = isForeignWallet ? entered : null;
+        return fetch("/api/pool", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             trip_id: id, pool_id: poolId, contributed_by_id: t.id,
-            myr_amount: parseFloat(contributions[t.id].amount),
-            foreign_amount: null,
+            myr_amount: parseFloat(myr.toFixed(2)),
+            foreign_amount: foreign,
             date: topupDate, notes: topupNotes || null,
-            from_wallet_id: contributions[t.id].walletId || null,
+            from_wallet_id: c.walletId || null,
           }),
-        })
-      ));
+        });
+      }));
       setContributions(Object.fromEntries(travelers.map((t) => [t.id, { amount: "", walletId: "" }])));
       setTopupNotes(""); setShowForm(false);
       mutatePool();
@@ -225,13 +258,44 @@ export default function PoolPage() {
   const selectedPoolData = selectedPool ? buildPoolHistory(selectedPool) : null;
   const selectedPoolObj = selectedPool ? pools.find((p) => p.id === selectedPool) : null;
   const totalContrib = travelers.reduce((s, t) => s + (parseFloat(contributions[t.id]?.amount) || 0), 0);
+  // Sum of contributions converted to MYR — needed because each row may be in
+  // a different currency (e.g. one traveler tops up from a JPY wallet while
+  // another contributes from an MYR wallet).
+  const totalContribMyr = travelers.reduce((s, t) => {
+    const c = contributions[t.id];
+    if (!c) return s;
+    const wallet = walletOptions.find((w) => w.id === c.walletId);
+    const entered = parseFloat(c.amount) || 0;
+    if (!wallet || wallet.currency === "MYR") return s + entered;
+    const rate = rateForWallet(wallet);
+    return s + (rate ? entered / rate : 0);
+  }, 0);
 
   function renderEvent(e: ReturnType<typeof buildPoolHistory>["events"][0], showDate = false) {
     const isEditing = editTopup?.id === e.id;
     if (isEditing && editTopup) {
+      // If this top-up came from a foreign-currency wallet, show both inputs
+      // so the user can correct either the foreign or MYR amount.
+      const editingTopup = topups.find((tp) => tp.id === editTopup.id) as (typeof topups)[number] & { from_wallet_id?: string | null };
+      const editingWallet = editingTopup?.from_wallet_id ? walletOptions.find((w) => w.id === editingTopup.from_wallet_id) : undefined;
+      const hasForeign = !!editingWallet && editingWallet.currency !== "MYR";
+      const editingRate = rateForWallet(editingWallet);
       return (
         <div key={e.id} className="px-4 py-2.5 bg-slate-700/40 flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid gap-2 ${hasForeign ? "grid-cols-3" : "grid-cols-2"}`}>
+            {hasForeign && (
+              <div>
+                <label className="text-xs text-slate-500 mb-0.5 block">{editingWallet?.currency} Amount</label>
+                <input type="number" value={editTopup.foreignAmount} step="1"
+                  onChange={(ev) => {
+                    const foreign = ev.target.value;
+                    const fNum = parseFloat(foreign);
+                    const myr = isFinite(fNum) && editingRate ? (fNum / editingRate).toFixed(2) : "";
+                    setEditTopup((p) => p ? { ...p, foreignAmount: foreign, myrAmount: myr } : p);
+                  }}
+                  className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+            )}
             <div><label className="text-xs text-slate-500 mb-0.5 block">MYR Amount</label>
               <input type="number" value={editTopup.myrAmount} step="0.01"
                 onChange={(ev) => setEditTopup((p) => p ? { ...p, myrAmount: ev.target.value } : p)}
@@ -352,32 +416,52 @@ export default function PoolPage() {
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-3 gap-2 px-1">
                   <span className="text-xs text-slate-500">Traveler</span>
-                  <span className="text-xs text-slate-500">Amount (RM)</span>
+                  <span className="text-xs text-slate-500">Amount</span>
                   <span className="text-xs text-slate-500">From Wallet</span>
                 </div>
                 {travelers.map((t) => {
                   const c = contributions[t.id] ?? { amount: "", walletId: "" };
                   const tWallets = walletOptions.filter((w) => w.traveler_id === t.id);
+                  const selectedWallet = walletOptions.find((w) => w.id === c.walletId);
+                  const walletCurrency = selectedWallet?.currency ?? "MYR";
+                  const isForeign = walletCurrency !== "MYR";
+                  const rate = rateForWallet(selectedWallet);
+                  const entered = parseFloat(c.amount) || 0;
+                  const myrEquiv = isForeign && rate ? entered / rate : entered;
                   return (
-                    <div key={t.id} className="grid grid-cols-3 gap-2 items-center">
-                      <div className="flex items-center gap-1.5">
+                    <div key={t.id} className="grid grid-cols-3 gap-2 items-start">
+                      <div className="flex items-center gap-1.5 py-1.5">
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                         <span className="text-xs text-slate-300 truncate">{t.name}</span>
                       </div>
-                      <input type="number" value={c.amount} placeholder="0" step="0.01" min="0"
-                        onChange={(e) => setContributions((prev) => ({ ...prev, [t.id]: { ...c, amount: e.target.value } }))}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                      <div className="flex flex-col gap-0.5">
+                        <div className="relative">
+                          <input type="number" value={c.amount} placeholder="0" step={isForeign ? "1" : "0.01"} min="0"
+                            onChange={(e) => setContributions((prev) => ({ ...prev, [t.id]: { ...c, amount: e.target.value } }))}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-2 pr-12 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono pointer-events-none">
+                            {walletCurrency}
+                          </span>
+                        </div>
+                        {isForeign && entered > 0 && (
+                          <span className="text-[10px] text-slate-500 px-1">
+                            ≈ RM {myrEquiv.toFixed(2)} @ {rate}
+                          </span>
+                        )}
+                      </div>
                       <select value={c.walletId}
                         onChange={(e) => setContributions((prev) => ({ ...prev, [t.id]: { ...c, walletId: e.target.value } }))}
                         className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
                         <option value="">— no wallet —</option>
-                        {tWallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                        {tWallets.map((w) => <option key={w.id} value={w.id}>{w.name}{w.currency !== "MYR" ? ` (${w.currency})` : ""}</option>)}
                       </select>
                     </div>
                   );
                 })}
-                {totalContrib > 0 && (
-                  <p className="text-xs text-slate-500 text-right">Total: <span className="text-white font-medium">RM {totalContrib.toFixed(2)}</span></p>
+                {totalContribMyr > 0 && (
+                  <p className="text-xs text-slate-500 text-right">
+                    Total: <span className="text-white font-medium">RM {totalContribMyr.toFixed(2)}</span>
+                  </p>
                 )}
               </div>
 
@@ -386,7 +470,7 @@ export default function PoolPage() {
                 <button onClick={() => { setShowForm(false); setError(""); }} className="flex-1 py-2 border border-slate-600 text-slate-400 text-sm rounded-xl hover:text-white transition-colors">Cancel</button>
                 <button onClick={handleTopup} disabled={saving || totalContrib === 0}
                   className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
-                  {saving ? "Saving..." : `Add Top-Up${totalContrib > 0 ? ` (RM ${totalContrib.toFixed(2)})` : ""}`}
+                  {saving ? "Saving..." : `Add Top-Up${totalContribMyr > 0 ? ` (RM ${totalContribMyr.toFixed(2)})` : ""}`}
                 </button>
               </div>
             </div>
