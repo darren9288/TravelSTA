@@ -488,7 +488,20 @@ export default function PoolPage() {
                 const balMyr = balances[p.id] ?? 0;
                 const isForeign = p.pool_currency !== "MYR";
                 const rate = p.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
-                const balForeign = balMyr * rate;
+                // Sum the actual foreign amounts of contributions and expenses
+                // so the JPY display reflects what users really paid in, not a
+                // round-trip MYR conversion at the pool's rate (which inflates
+                // the number when contributions came from cash-rate wallets).
+                const balForeign = isForeign
+                  ? topups.filter((t) => t.pool_id === p.id).reduce(
+                      (s, t) => s + (t.foreign_amount != null ? Number(t.foreign_amount) : Number(t.myr_amount) * rate),
+                      0
+                    )
+                    - poolExpenses.filter((e) => e.paid_by_id === p.id).reduce(
+                        (s, e) => s + (e.foreign_amount != null ? Number(e.foreign_amount) : Number(e.myr_amount) * rate),
+                        0
+                      )
+                  : 0;
                 const positive = balMyr >= 0;
                 const isSelected = selectedPool === p.id;
                 return (
