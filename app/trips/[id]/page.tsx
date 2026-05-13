@@ -6,7 +6,7 @@ import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense } from "@/lib/supabase";
 import { PlusCircle, Banknote, BarChart2, Droplets, Settings2 } from "lucide-react";
 import Link from "next/link";
-import useSWR from "swr";
+import useSWR, { preload } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -34,11 +34,44 @@ export default function TripDashboard() {
     if (trip && (trip as any).error) router.push("/");
   }, [trip, router]);
 
+  // Prefetch the API responses for every other tab in the trip. By the time
+  // the user taps Expenses / Settlement / Pool / Wallets / Itinerary /
+  // Analytics, the data is already sitting in SWR + service-worker cache
+  // and the page renders instantly. Mobile networks pay this latency
+  // upfront in parallel (much cheaper than serial on each tap).
+  useEffect(() => {
+    if (!id) return;
+    preload(`/api/expenses?trip_id=${id}`, fetcher);
+    preload(`/api/settlement?trip_id=${id}`, fetcher);
+    preload(`/api/settlement-payments?trip_id=${id}`, fetcher);
+    preload(`/api/pool?trip_id=${id}`, fetcher);
+    preload(`/api/itinerary?trip_id=${id}`, fetcher);
+  }, [id]);
+
   if (loading) return (
     <>
-      <Nav />
-      <main className="md:ml-56 pb-24 md:pb-8 min-h-screen flex items-center justify-center">
-        <div className="text-slate-400 text-sm">Loading...</div>
+      <Nav tripId={id} />
+      <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
+        <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
+          {/* Skeleton — mimics the real layout so the user perceives the page
+              loading rather than staring at empty space. */}
+          <div className="h-7 bg-slate-800 rounded animate-pulse w-2/3" />
+          <div className="h-4 bg-slate-800 rounded animate-pulse w-1/2 -mt-2" />
+          <div className="grid grid-cols-3 gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-12 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+          <div className="h-5 bg-slate-800 rounded animate-pulse w-1/3 mt-2" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+          ))}
+        </div>
       </main>
     </>
   );
