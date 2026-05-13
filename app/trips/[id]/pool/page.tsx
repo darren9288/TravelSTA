@@ -6,7 +6,7 @@ import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useTripRealtime } from "@/lib/use-realtime";
-import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Archive, RotateCcw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type SortKey = "date-asc" | "date-desc" | "amount-desc" | "amount-asc";
@@ -25,8 +25,13 @@ export default function PoolPage() {
 
   const trip: Trip | null = tripData && !(tripData as any).error ? tripData : null;
   const allTravelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
-  const travelers: Traveler[] = allTravelers.filter((t) => !t.is_pool);
-  const pools: Traveler[] = allTravelers.filter((t) => t.is_pool);
+  // Active (non-archived) travelers and pools for the action UIs.
+  const travelers: Traveler[] = allTravelers.filter((t) => !t.is_pool && !t.archived);
+  // Show archived pools in the list too, but with a different style and no actions
+  // — toggleable via the "Show archived" switch below.
+  const [showArchivedPools, setShowArchivedPools] = useState(false);
+  const allPools: Traveler[] = allTravelers.filter((t) => t.is_pool);
+  const pools: Traveler[] = showArchivedPools ? allPools : allPools.filter((t) => !t.archived);
   const topups: PoolTopup[] = Array.isArray(poolData?.topups) ? poolData!.topups : [];
   const poolExpenses: Expense[] = Array.isArray(poolData?.expenses) ? poolData!.expenses : [];
   const balances: Record<string, number> = poolData?.balances ?? {};
@@ -103,8 +108,10 @@ export default function PoolPage() {
   }, [travelers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (pools.length > 0 && !poolId) setPoolId(pools[0].id);
-  }, [pools.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Default top-up target to the first active pool — never an archived one.
+    const activePools = allPools.filter((p) => !p.archived);
+    if (activePools.length > 0 && !poolId) setPoolId(activePools[0].id);
+  }, [allPools.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (trip?.foreign_currency) setNewPoolCurrency(trip.foreign_currency);
@@ -163,20 +170,30 @@ export default function PoolPage() {
     else { setEditTopup((p) => p ? { ...p, saving: false } : p); }
   }
 
-  async function deletePool(poolId: string, poolName: string) {
-    if (!confirm(`Delete pool "${poolName}" and all its history? This cannot be undone.`)) return;
-    const res = await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
+  // Archive or unarchive a pool. Archive is reversible and preserves history;
+  // we never hard-delete pools that have any activity. For empty pools the
+  // archive is functionally equivalent to delete and can be cleaned up later.
+  async function archivePool(poolId: string, poolName: string, archived: boolean) {
+    const verb = archived ? "Archive" : "Restore";
+    const message = archived
+      ? `Archive pool "${poolName}"? It will be hidden from new expenses and pool top-ups, but its history stays. You can restore it any time.`
+      : `Restore pool "${poolName}"? It will be available for new expenses and top-ups again.`;
+    if (!confirm(message)) return;
+    const res = await fetch("/api/travelers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: poolId, archived }),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const message = data.error ?? `Failed to delete pool (${res.status})`;
-      // alert() so the user actually sees it — setError isn't displayed
-      // anywhere visible from this delete trigger point.
-      alert(message);
-      setError(message);
+      const m = data.error ?? `${verb} failed (${res.status})`;
+      alert(m);
+      setError(m);
       return;
     }
     setError("");
-    if (selectedPool === poolId) setSelectedPool(null);
+    // Realtime hook will pick up the travelers-table change and revalidate
+    // every related SWR key; mutatePool covers pool history specifically.
     mutatePool();
   }
 
@@ -357,9 +374,22 @@ export default function PoolPage() {
       <Nav tripId={id} tripName={trip?.name} />
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-xl font-bold text-white">Pool</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {allPools.some((p) => p.archived) && (
+                <button
+                  onClick={() => setShowArchivedPools((v) => !v)}
+                  className={`flex items-center gap-1 px-2 py-1 border text-xs rounded-lg transition-colors ${
+                    showArchivedPools
+                      ? "bg-amber-900/40 border-amber-700/60 text-amber-200"
+                      : "bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-400"
+                  }`}
+                  title="Toggle archived pools"
+                >
+                  <Archive size={11} /> {showArchivedPools ? "Hide archived" : "Show archived"}
+                </button>
+              )}
               <button onClick={load} disabled={loading}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
@@ -408,11 +438,11 @@ export default function PoolPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
               <h2 className="text-sm font-semibold text-white">Pool Top-Up</h2>
 
-              {pools.length > 1 && (
+              {allPools.filter((p) => !p.archived).length > 1 && (
                 <div><label className="text-xs text-slate-400 mb-1 block">Pool</label>
                   <select value={poolId} onChange={(e) => setPoolId(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                    {pools.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {allPools.filter((p) => !p.archived).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select></div>
               )}
 
@@ -518,7 +548,7 @@ export default function PoolPage() {
                 const positive = balMyr >= 0;
                 const isSelected = selectedPool === p.id;
                 return (
-                  <div key={p.id} className={`bg-slate-800/60 border rounded-2xl px-4 py-3 transition-colors cursor-pointer ${isSelected ? "border-emerald-500/60 bg-slate-700/60" : "border-slate-700/50 hover:border-slate-600"}`}
+                  <div key={p.id} className={`bg-slate-800/60 border rounded-2xl px-4 py-3 transition-colors cursor-pointer ${isSelected ? "border-emerald-500/60 bg-slate-700/60" : "border-slate-700/50 hover:border-slate-600"} ${p.archived ? "opacity-60" : ""}`}
                     onClick={() => renamingPoolId === p.id ? undefined : setSelectedPool(isSelected ? null : p.id)}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -533,7 +563,12 @@ export default function PoolPage() {
                         ) : (
                           <div className="flex items-center gap-1.5 group/name">
                             <p className="text-white font-semibold text-sm truncate">{p.name}</p>
-                            {trip?.my_role !== "viewer" && (
+                            {p.archived && (
+                              <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-800/50 flex-shrink-0">
+                                Archived
+                              </span>
+                            )}
+                            {!p.archived && trip?.my_role !== "viewer" && (
                               <button onClick={(e) => { e.stopPropagation(); setRenamingPoolId(p.id); setRenamingPoolName(p.name); }}
                                 className="opacity-0 group-hover/name:opacity-100 p-0.5 text-slate-600 hover:text-slate-300 transition-all flex-shrink-0">
                                 <Pencil size={10} />
@@ -560,9 +595,16 @@ export default function PoolPage() {
                         <p className="text-xs text-slate-600">remaining</p>
                       </div>
                       {trip?.my_role !== "viewer" && (
-                        <button onClick={(e) => { e.stopPropagation(); deletePool(p.id, p.name); }}
-                          className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
-                          <Trash2 size={13} />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); archivePool(p.id, p.name, !p.archived); }}
+                          className={`p-1.5 transition-colors flex-shrink-0 ${
+                            p.archived
+                              ? "text-emerald-500 hover:text-emerald-300"
+                              : "text-slate-600 hover:text-amber-400"
+                          }`}
+                          title={p.archived ? "Restore pool" : "Archive pool"}
+                        >
+                          {p.archived ? <RotateCcw size={13} /> : <Archive size={13} />}
                         </button>
                       )}
                       </div>

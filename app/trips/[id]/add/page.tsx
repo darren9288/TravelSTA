@@ -56,10 +56,12 @@ export default function AddExpensePage() {
       setTravelers(all);
       const me = tripRes.my_traveler_id ?? null;
       setMyId(me);
-      const defaultPayer = me ?? (all[0]?.id ?? "");
+      // Default payer: prefer the current user, else the first active traveler.
+      const active = all.filter((t) => !t.archived);
+      const defaultPayer = me ?? (active[0]?.id ?? "");
       setPaidById(defaultPayer);
       setAiPaidBy(defaultPayer);
-      const real = all.filter((t) => !t.is_pool);
+      const real = all.filter((t) => !t.is_pool && !t.archived);
       setSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
       setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
       setWalletOptions(walletRes.wallets ?? []);
@@ -79,7 +81,7 @@ export default function AddExpensePage() {
     const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
     setTravelers(all);
     setWalletOptions(walletRes.wallets ?? []);
-    const real = all.filter((t) => !t.is_pool);
+    const real = all.filter((t) => !t.is_pool && !t.archived);
     // Add new travelers to splits without erasing existing inputs
     setSplits((prev) => {
       const existing = new Map(prev.map((s) => [s.traveler_id, s]));
@@ -106,7 +108,10 @@ export default function AddExpensePage() {
     if (!isNaN(myr)) setMyrAmount(myr.toFixed(2));
   }, [foreignAmount, paymentType, trip, currency]);
 
-  const realTravelers = travelers.filter((t) => !t.is_pool);
+  // Only active (non-archived) non-pool travelers are eligible for new even-splits.
+  const realTravelers = travelers.filter((t) => !t.is_pool && !t.archived);
+  // Selectable in "Paid by" dropdowns — exclude archived but allow pools.
+  const activeTravelers = travelers.filter((t) => !t.archived);
 
   function evenSplitAmount(total: number) {
     return realTravelers.length > 0 ? total / realTravelers.length : 0;
@@ -252,7 +257,7 @@ export default function AddExpensePage() {
               <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
                 <select value={paidById} onChange={(e) => { setPaidById(e.target.value); setWalletId(""); }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
-                  {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
+                  {activeTravelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                 </select></div>
               {walletOptions.filter((w) => w.traveler_id === paidById).length > 0 && (
                 <div><label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
@@ -425,7 +430,7 @@ export default function AddExpensePage() {
                     <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
                       <select value={aiPaidBy} onChange={(e) => setAiPaidBy(e.target.value)}
                         className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
-                        {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
+                        {activeTravelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                       </select></div>
                     <div><label className="text-xs text-slate-400 mb-1 block">Payment</label>
                       <select value={aiPayType} onChange={(e) => setAiPayType(e.target.value)}

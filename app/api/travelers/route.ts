@@ -31,10 +31,18 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, name } = await req.json();
+  const body = await req.json();
+  const { id } = body;
   const tripId = await tripIdFrom("travelers", id);
   if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
-  const { data, error } = await serverDb().from("travelers").update({ name }).eq("id", id).select().single();
+
+  // Accept a partial update — only the fields explicitly passed get changed.
+  const updates: Record<string, unknown> = {};
+  if (typeof body.name === "string") updates.name = body.name;
+  if (typeof body.color === "string") updates.color = body.color;
+  if (typeof body.archived === "boolean") updates.archived = body.archived;
+
+  const { data, error } = await serverDb().from("travelers").update(updates).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy, Archive, RotateCcw } from "lucide-react";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
 import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
@@ -35,6 +35,9 @@ export default function SettingsPage() {
   // New traveler
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(TRAVELER_COLORS[0]);
+
+  // Toggle whether archived travelers + pools are shown in the lists.
+  const [showArchived, setShowArchived] = useState(false);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -93,6 +96,27 @@ export default function SettingsPage() {
     const data = await res.json();
     if (!res.ok) { setError(data.error); } else { setSuccess("Saved!"); setTrip(data); }
     setSaving(false);
+  }
+
+  // Toggle archived state on a traveler. Archived travelers are hidden from
+  // new-expense dropdowns but their historical splits and balances remain.
+  async function archiveTraveler(travelerId: string, name: string, archived: boolean) {
+    const verb = archived ? "Archive" : "Restore";
+    const message = archived
+      ? `Archive "${name}"? They'll be hidden from new expenses and even-splits, but their existing share of past expenses stays.`
+      : `Restore "${name}"? They'll be eligible for new expenses again.`;
+    if (!confirm(message)) return;
+    const res = await fetch("/api/travelers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: travelerId, archived }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error ?? `${verb} failed (${res.status})`);
+      return;
+    }
+    setTravelers((prev) => prev.map((t) => t.id === travelerId ? { ...t, archived } : t));
   }
 
   async function addTraveler() {
@@ -187,8 +211,9 @@ export default function SettingsPage() {
 
   if (!trip) return null;
 
-  const realTravelers = travelers.filter((t) => !t.is_pool);
-  const pools = travelers.filter((t) => t.is_pool);
+  const realTravelers = travelers.filter((t) => !t.is_pool && (showArchived || !t.archived));
+  const pools = travelers.filter((t) => t.is_pool && (showArchived || !t.archived));
+  const hasArchived = travelers.some((t) => t.archived);
 
   return (
     <>
@@ -433,11 +458,39 @@ export default function SettingsPage() {
 
           {/* Travelers */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-white">Travelers</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Travelers</h2>
+              {hasArchived && (
+                <button
+                  onClick={() => setShowArchived((v) => !v)}
+                  className={`flex items-center gap-1 px-2 py-0.5 border text-xs rounded-lg transition-colors ${
+                    showArchived
+                      ? "bg-amber-900/40 border-amber-700/60 text-amber-200"
+                      : "bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-400"
+                  }`}
+                >
+                  <Archive size={10} /> {showArchived ? "Hide archived" : "Show archived"}
+                </button>
+              )}
+            </div>
             {realTravelers.map((t) => (
-              <div key={t.id} className="flex items-center gap-3">
+              <div key={t.id} className={`flex items-center gap-3 ${t.archived ? "opacity-60" : ""}`}>
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
                 <span className="text-sm text-white flex-1">{t.name}</span>
+                {t.archived && (
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-800/50">
+                    Archived
+                  </span>
+                )}
+                {myRole !== "viewer" && (
+                  <button
+                    onClick={() => archiveTraveler(t.id, t.name, !t.archived)}
+                    className={`p-1 transition-colors ${t.archived ? "text-emerald-500 hover:text-emerald-300" : "text-slate-500 hover:text-amber-400"}`}
+                    title={t.archived ? "Restore traveler" : "Archive traveler"}
+                  >
+                    {t.archived ? <RotateCcw size={13} /> : <Archive size={13} />}
+                  </button>
+                )}
               </div>
             ))}
             {/* Add traveler — editors/admins only */}
