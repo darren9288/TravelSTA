@@ -29,7 +29,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const body = await req.json();
   const { id, ...updates } = body;
   void id;
-  const { data, error } = await serverDb().from("trips").update(updates).eq("id", params.id).select().single();
+  const db = serverDb();
+
+  // If the caller is clearing the background, remove the file(s) in Storage
+  // too — otherwise the trip-backgrounds bucket fills up with orphaned media
+  // that nobody references but still counts toward egress/storage.
+  if ("background_image_url" in updates && updates.background_image_url === null) {
+    const { data: bgFiles } = await db.storage.from("trip-backgrounds").list(params.id);
+    if (bgFiles?.length) {
+      await db.storage
+        .from("trip-backgrounds")
+        .remove(bgFiles.map((f) => `${params.id}/${f.name}`));
+    }
+  }
+
+  const { data, error } = await db.from("trips").update(updates).eq("id", params.id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

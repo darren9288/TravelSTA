@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
   const ext = file.name.split(".").pop() ?? "jpg";
   const path = `${expenseId}/receipt.${ext}`;
 
+  // Remove any pre-existing files for this expense before uploading the new
+  // one — otherwise switching extensions (jpg → png) leaves the old file
+  // orphaned in the bucket forever.
+  const { data: existing } = await db.storage.from("expense-receipts").list(expenseId);
+  if (existing?.length) {
+    await db.storage
+      .from("expense-receipts")
+      .remove(existing.map((f) => `${expenseId}/${f.name}`));
+  }
+
   const { error: uploadError } = await db.storage
     .from("expense-receipts")
     .upload(path, file, { upsert: true, contentType: file.type });
