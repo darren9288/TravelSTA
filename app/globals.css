@@ -4,6 +4,21 @@ body {
   background-color: #0f172a;
   color: #f1f5f9;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Remove the 300ms tap delay on mobile browsers — taps feel instant. */
+  touch-action: manipulation;
+  /* Remove the grey/blue flash when you tap a link or button on touch. */
+  -webkit-tap-highlight-color: transparent;
+  /* Stop iOS rubber-band scrolling at top/bottom of the page. */
+  overscroll-behavior-y: none;
+}
+
+/* Prevent iOS Safari from auto-zooming when you focus a small-text input.
+   The viewport meta with userScalable:false already covers this on iOS 10+,
+   but font-size 16px is the bulletproof belt-and-braces fix. */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: 16px;
+  }
 }
 
 ::-webkit-scrollbar { width: 6px; }

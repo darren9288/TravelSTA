@@ -18,6 +18,15 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
+  // Lock the viewport so the app feels native on phones:
+  //   - maximumScale: 1 + userScalable: false → no pinch-to-zoom, no
+  //     double-tap zoom, no iOS auto-zoom when focusing an input.
+  //   - viewportFit: "cover" → uses the full screen on devices with a
+  //     notch (iPhones, modern Androids) so backgrounds extend edge-to-
+  //     edge instead of leaving safe-area letterboxing.
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
