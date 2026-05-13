@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
 import OfflineBanner from "@/components/OfflineBanner";
+import NavigationProgress from "@/components/NavigationProgress";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ServiceWorkerUpdater />
           <OfflineBanner />
+          <NavigationProgress />
           {children}
         </ThemeProvider>
       </body>

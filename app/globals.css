@@ -14,6 +14,19 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
 /* ─────────────────────────────────────────────────────
+   Route navigation progress bar (NavigationProgress.tsx)
+   ───────────────────────────────────────────────────── */
+@keyframes nav-progress {
+  0%   { transform: translateX(-100%); }
+  40%  { transform: translateX(-30%);  }
+  80%  { transform: translateX(20%);   }
+  100% { transform: translateX(100%);  }
+}
+.nav-progress-bar {
+  animation: nav-progress 0.8s ease-out forwards;
+}
+
+/* ─────────────────────────────────────────────────────
    Color Themes — override emerald accent classes
    ───────────────────────────────────────────────────── */
 
