@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
   const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }, { data: poolTopups }] = await Promise.all([
     db.from("wallet_topups").select("id, amount, date, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("expenses").select("id, date, myr_amount, foreign_amount, category, notes, created_at").eq("wallet_id", wallet_id).order("date"),
-    db.from("settlement_payments").select("id, amount, to_traveler_id, created_at").eq("from_wallet_id", wallet_id),
-    db.from("settlement_payments").select("id, amount, from_traveler_id, created_at").eq("to_wallet_id", wallet_id),
+    db.from("settlement_payments").select("id, amount, from_foreign_amount, to_traveler_id, created_at").eq("from_wallet_id", wallet_id),
+    db.from("settlement_payments").select("id, amount, to_foreign_amount, from_traveler_id, created_at").eq("to_wallet_id", wallet_id),
     db.from("travelers").select("id, name").eq("trip_id", trip_id),
     db.from("pool_topups").select("id, myr_amount, foreign_amount, date, notes, created_at, pool:travelers!pool_id(name)").eq("from_wallet_id", wallet_id).order("date"),
   ]);
@@ -55,7 +55,12 @@ export async function GET(req: NextRequest) {
   }
   for (const s of settlementsOut ?? []) {
     const date = s.created_at.slice(0, 10);
-    const amt = Number(s.amount) * rate;
+    // Prefer the frozen foreign amount stored at settle time. Fall back to
+    // the live rate for legacy rows that pre-date the migration.
+    const stored = (s as unknown as { from_foreign_amount?: number | null }).from_foreign_amount;
+    const amt = isForeign
+      ? (stored != null ? Number(stored) : Number(s.amount) * rate)
+      : Number(s.amount);
     const toName = travelerMap[(s as unknown as { to_traveler_id: string }).to_traveler_id] ?? null;
     events.push({ id: s.id, type: "settlement_out", date, created_at: s.created_at, amount: amt, sign: -1, description: "Settlement paid", counterpart: toName });
   }
@@ -66,7 +71,10 @@ export async function GET(req: NextRequest) {
   }
   for (const s of settlementsIn ?? []) {
     const date = s.created_at.slice(0, 10);
-    const amt = Number(s.amount) * rate;
+    const stored = (s as unknown as { to_foreign_amount?: number | null }).to_foreign_amount;
+    const amt = isForeign
+      ? (stored != null ? Number(stored) : Number(s.amount) * rate)
+      : Number(s.amount);
     const fromName = travelerMap[(s as unknown as { from_traveler_id: string }).from_traveler_id] ?? null;
     events.push({ id: s.id, type: "settlement_in", date, created_at: s.created_at, amount: amt, sign: 1, description: "Settlement received", counterpart: fromName });
   }

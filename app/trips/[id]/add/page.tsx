@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
 import { Sparkles, ClipboardList } from "lucide-react";
+import { useTripRealtime } from "@/lib/use-realtime";
 
 type SplitEntry = { traveler_id: string; amount: string; foreignAmount: string };
 type ParsedEntry = { description: string; category: string; foreign_amount?: number; myr_amount?: number };
@@ -65,6 +66,32 @@ export default function AddExpensePage() {
     }
     load();
   }, [id]);
+
+  // Refresh only the traveler + wallet dropdowns when someone else makes
+  // changes mid-form. We deliberately keep the current paid_by/splits state
+  // so the user doesn't lose what they were typing — new travelers just
+  // appear in the dropdown for them to optionally pick.
+  const refreshLists = useCallback(async () => {
+    const [travelerRes, walletRes] = await Promise.all([
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/wallets?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    const all = (Array.isArray(travelerRes) ? travelerRes : []) as Traveler[];
+    setTravelers(all);
+    setWalletOptions(walletRes.wallets ?? []);
+    const real = all.filter((t) => !t.is_pool);
+    // Add new travelers to splits without erasing existing inputs
+    setSplits((prev) => {
+      const existing = new Map(prev.map((s) => [s.traveler_id, s]));
+      return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, amount: "", foreignAmount: "" });
+    });
+    setAiSplits((prev) => {
+      const existing = new Map(prev.map((s) => [s.traveler_id, s]));
+      return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, amount: "", foreignAmount: "" });
+    });
+  }, [id]);
+
+  useTripRealtime(id, refreshLists);
 
   // Auto-convert foreign → MYR for form tab
   useEffect(() => {

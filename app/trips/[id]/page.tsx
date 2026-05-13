@@ -17,7 +17,7 @@ export default function TripDashboard() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const { data: trip, isLoading: tripLoading } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
+  const { data: trip, isLoading: tripLoading, mutate: mutateTrip } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
   const { data: travelersData, isLoading: travelersLoading } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
   const { data: expensesData, isLoading: expensesLoading } = useSWR<Expense[]>(`/api/expenses?trip_id=${id}&limit=5`, fetcher);
   const { data: walletsData } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(`/api/wallets?trip_id=${id}`, fetcher);
@@ -114,7 +114,7 @@ export default function TripDashboard() {
           </div>
 
           {/* Budget Tracker */}
-          <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} spentByTraveler={spentByTraveler} readOnly />
+          <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} spentByTraveler={spentByTraveler} readOnly onSaved={() => mutateTrip()} />
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">

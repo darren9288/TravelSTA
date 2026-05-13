@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -61,6 +62,8 @@ export default function PoolPage() {
   const load = useCallback(() => {
     mutatePool();
   }, [mutatePool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useTripRealtime(id);
 
   // Look up the trip's exchange rate for a given wallet. Foreign wallets are
   // converted to MYR using cash_rate or wise_rate (or *_2 for the secondary

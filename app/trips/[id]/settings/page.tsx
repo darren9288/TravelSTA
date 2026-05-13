@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
 import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy } from "lucide-react";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
+import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
 
 type Member = {
@@ -47,30 +48,32 @@ export default function SettingsPage() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    async function load() {
-      const [tripRes, travelerRes, membersRes] = await Promise.all([
-        fetch(`/api/trips/${id}`).then((r) => r.json()),
-        fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
-        fetch(`/api/members?trip_id=${id}`).then((r) => r.json()),
-      ]);
-      if (tripRes.error) return;
-      setTrip(tripRes);
-      setName(tripRes.name);
-      setDestination(tripRes.destination ?? "");
-      setStartDate(tripRes.start_date ?? "");
-      setEndDate(tripRes.end_date ?? "");
-      setCashRate(String(tripRes.cash_rate));
-      setWiseRate(String(tripRes.wise_rate));
-      setBackgroundImageUrl(tripRes.background_image_url ?? "");
-      setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
-      if (!membersRes.error) {
-        setMembers(membersRes.members ?? []);
-        setMyRole(membersRes.my_role ?? null);
-      }
+  const load = useCallback(async () => {
+    const [tripRes, travelerRes, membersRes] = await Promise.all([
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/members?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    if (tripRes.error) return;
+    setTrip(tripRes);
+    setName(tripRes.name);
+    setDestination(tripRes.destination ?? "");
+    setStartDate(tripRes.start_date ?? "");
+    setEndDate(tripRes.end_date ?? "");
+    setCashRate(String(tripRes.cash_rate));
+    setWiseRate(String(tripRes.wise_rate));
+    setBackgroundImageUrl(tripRes.background_image_url ?? "");
+    setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
+    if (!membersRes.error) {
+      setMembers(membersRes.members ?? []);
+      setMyRole(membersRes.my_role ?? null);
     }
-    load();
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Refresh when anyone else mutates trip data via Supabase Realtime.
+  useTripRealtime(id, load);
 
   async function saveTrip() {
     setSaving(true);
@@ -480,6 +483,7 @@ export default function SettingsPage() {
               travelers={realTravelers}
               totalSpent={0}
               readOnly={myRole === "viewer"}
+              onSaved={load}
             />
           )}
 

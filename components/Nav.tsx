@@ -4,6 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight, CalendarDays, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type NavProps = { tripId?: string; tripName?: string };
 
@@ -12,6 +14,15 @@ export default function Nav({ tripId, tripName }: NavProps) {
   const router = useRouter();
   const [username, setUsername] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Fetch trip role via SWR so we can hide editor-only links from viewers.
+  // SWR dedupes this with the page's own trip fetch — no extra network hit.
+  const { data: tripData } = useSWR<{ my_role?: string }>(
+    tripId ? `/api/trips/${tripId}` : null,
+    fetcher
+  );
+  const myRole = tripData?.my_role ?? null;
+  const isViewer = myRole === "viewer";
 
   useEffect(() => {
     const supabase = createClient();
@@ -96,7 +107,10 @@ export default function Nav({ tripId, tripName }: NavProps) {
     { href: `/trips/${tripId}`, icon: BarChart2, label: "Dashboard" },
     { href: `/trips/${tripId}/itinerary`, icon: CalendarDays, label: "Itinerary" },
     { href: `/trips/${tripId}/expenses`, icon: Receipt, label: "Expenses" },
-    { href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" },
+    // Add tab is hidden from viewers — they're redirected to the dashboard
+    // if they hit /add directly. Show for non-viewers and for unresolved roles
+    // (avoids flicker before role data arrives).
+    ...(!isViewer ? [{ href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" }] : []),
     { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
     { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Analytics" },
     { href: `/trips/${tripId}/pool`, icon: Banknote, label: "Pool" },
