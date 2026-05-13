@@ -3,7 +3,6 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
 import OfflineBanner from "@/components/OfflineBanner";
-import SWRProvider from "@/components/SWRProvider";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -24,11 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head><link rel="apple-touch-icon" href="/icons/icon-192.svg" /></head>
       <body className="min-h-screen bg-slate-950">
         <ThemeProvider>
-          <SWRProvider>
-            <ServiceWorkerUpdater />
-            <OfflineBanner />
-            {children}
-          </SWRProvider>
+          <ServiceWorkerUpdater />
+          <OfflineBanner />
+          {children}
         </ThemeProvider>
       </body>
     </html>
