@@ -70,8 +70,13 @@ const withPWA = require("next-pwa")({
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
+    // Keep visited dynamic pages in the Next.js Router Cache for 30 seconds
+    // so back/forward + tab navigation feels instant. The data inside each
+    // page is still kept fresh by SWR + realtime — the router cache only
+    // controls how quickly the page *shell* renders, not stale data
+    // displayed to the user.
     staleTimes: {
-      dynamic: 0,
+      dynamic: 30,
     },
   },
 };
