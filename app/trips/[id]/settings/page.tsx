@@ -175,9 +175,17 @@ export default function SettingsPage() {
 
   async function uploadBackground(file: File) {
     const isVideo = isVideoFile(file);
-    const maxBytes = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+    // Tight caps to keep Supabase cached-egress usage under the Free plan.
+    // Background files are fetched on every page load so even a few MB
+    // multiplied by daily usage burns through the 5 GB monthly quota fast.
+    const maxBytes = isVideo ? 5 * 1024 * 1024 : 1 * 1024 * 1024;
     if (file.size > maxBytes) {
-      setUploadError(isVideo ? "Video must be under 50 MB." : "Image must be under 8 MB.");
+      const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+      setUploadError(
+        isVideo
+          ? `Video is ${sizeMb} MB — max 5 MB. Re-export at 480p or shorter length, then try again.`
+          : `Image is ${sizeMb} MB — max 1 MB. Try compressing at tinypng.com.`
+      );
       return;
     }
     setUploading(true); setUploadError("");
