@@ -54,6 +54,8 @@ const withPWA = require("next-pwa")({
       },
     },
     // HTML pages — try network first, fall back to cached page if offline.
+    // precacheFallback hands off to /offline when both network and cache miss,
+    // so users see our friendly offline page instead of Chrome's default error.
     {
       urlPattern: ({ request }) => request.mode === "navigate",
       handler: "NetworkFirst",
@@ -61,6 +63,7 @@ const withPWA = require("next-pwa")({
         cacheName: "pages",
         networkTimeoutSeconds: 5,
         expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
+        precacheFallback: { fallbackURL: "/offline" },
       },
     },
   ],
