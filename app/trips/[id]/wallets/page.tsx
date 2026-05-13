@@ -120,7 +120,12 @@ export default function WalletsPage() {
 
   async function deleteWallet(walletId: string) {
     if (!confirm("Delete this wallet and all its top-up history?")) return;
-    await fetch("/api/wallets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: walletId }) });
+    const res = await fetch("/api/wallets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: walletId }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? `Failed to delete wallet (${res.status})`);
+      return;
+    }
     if (selectedWallet === walletId) setSelectedWallet(null);
     mutateWallets();
   }

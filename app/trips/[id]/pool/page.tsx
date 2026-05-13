@@ -168,7 +168,11 @@ export default function PoolPage() {
     const res = await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? `Failed to delete pool (${res.status})`);
+      const message = data.error ?? `Failed to delete pool (${res.status})`;
+      // alert() so the user actually sees it — setError isn't displayed
+      // anywhere visible from this delete trigger point.
+      alert(message);
+      setError(message);
       return;
     }
     setError("");
