@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
-import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle, FileDown, CalendarDays } from "lucide-react";
+import { Download, Upload, Calendar, FileJson, FileText, AlertCircle, CheckCircle2, XCircle, FileDown, CalendarDays, Database } from "lucide-react";
 
 interface ValidationError {
   row: number;
@@ -204,6 +204,46 @@ export default function ImportExportPage() {
             >
               <FileDown className="w-4 h-4" />
               Export PDF
+            </a>
+          </div>
+
+          {/* Itinerary Export */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-amber-400" />
+              <h2 className="text-base font-semibold text-white">Export Itinerary</h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              Download all itinerary items, links, and file names as JSON. Re-importable
+              into another trip via the Import Itinerary section below.
+            </p>
+            <a
+              href={`/api/itinerary/export?trip_id=${id}`}
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors w-fit"
+            >
+              <FileJson className="w-4 h-4" />
+              Export Itinerary JSON
+            </a>
+          </div>
+
+          {/* Trip Data Export (wallets, travelers, pools, settlement history) */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Database className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-base font-semibold text-white">Export Trip Data (Backup)</h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              Download a JSON backup of trip setup: travelers, pools, wallets, wallet top-ups,
+              pool top-ups, and settlement history. Expenses are exported separately above.
+            </p>
+            <a
+              href={`/api/trips/${id}/export-data`}
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors w-fit"
+            >
+              <Database className="w-4 h-4" />
+              Export Trip Data JSON
             </a>
           </div>
 

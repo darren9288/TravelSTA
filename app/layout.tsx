@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
 import OfflineBanner from "@/components/OfflineBanner";
 import NavigationProgress from "@/components/NavigationProgress";
+import { Toaster } from "@/components/Toaster";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -24,10 +25,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head><link rel="apple-touch-icon" href="/icons/icon-192.svg" /></head>
       <body className="min-h-screen bg-slate-950">
         <ThemeProvider>
-          <ServiceWorkerUpdater />
-          <OfflineBanner />
-          <NavigationProgress />
-          {children}
+          <Toaster>
+            <ServiceWorkerUpdater />
+            <OfflineBanner />
+            <NavigationProgress />
+            {children}
+          </Toaster>
         </ThemeProvider>
       </body>
     </html>
