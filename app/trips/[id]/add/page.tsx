@@ -36,14 +36,21 @@ export default function AddExpensePage() {
   const [walletId, setWalletId] = useState<string>("");
   const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
 
-  // AI tab
+  // AI tab — now matches the Form tab's field set so entries created via AI
+  // have the same shape (date, wallet, currency, etc.) as ones typed manually.
   const [aiText, setAiText] = useState("");
   const [aiParsed, setAiParsed] = useState<ParsedEntry[] | null>(null);
+  const [aiDate, setAiDate] = useState(new Date().toISOString().slice(0, 10));
   const [aiPaidBy, setAiPaidBy] = useState("");
+  const [aiWalletId, setAiWalletId] = useState<string>("");
   const [aiPayType, setAiPayType] = useState("Cash");
+  const [aiCurrency, setAiCurrency] = useState("MYR");
   const [aiSplitType, setAiSplitType] = useState<"even" | "individual">("even");
   const [aiSplits, setAiSplits] = useState<SplitEntry[]>([]); // per-traveler share of TOTAL
   const [aiParsing, setAiParsing] = useState(false);
+  // Tracks whether the user has manually touched aiDate. If so, we won't
+  // overwrite it with Claude's parsed date on the next Parse click.
+  const [aiDateTouched, setAiDateTouched] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -202,24 +209,54 @@ export default function AddExpensePage() {
   async function handleAiParse() {
     if (!aiText.trim()) return;
     setAiParsing(true); setError("");
+    // Re-parsing should clear the previous result so the preview never shows
+    // stale entries if the user is editing the textarea before re-parsing.
+    setAiParsed(null);
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: aiText, currency: trip?.foreign_currency }),
+        body: JSON.stringify({
+          text: aiText,
+          // Use the currency the user picked — if it's a foreign one, Claude
+          // will treat unprefixed numbers as that currency. If MYR, it'll
+          // expect "RM 50" style.
+          currency: aiCurrency !== "MYR" ? aiCurrency : trip?.foreign_currency,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setAiParsed(data.entries ?? []);
+      // If the user hasn't manually picked a date, accept whatever Claude
+      // pulled out of the text (e.g. "lunch yesterday" → yesterday's date).
+      if (!aiDateTouched && data.date) {
+        setAiDate(data.date);
+      }
     } catch (e) { setError((e as Error).message); }
     finally { setAiParsing(false); }
+  }
+
+  // Pick the correct exchange rate for an entry based on the AI currency
+  // selection AND the chosen wallet's name. Mirrors what the Form tab does.
+  function aiRate(): number {
+    if (!trip || aiCurrency === "MYR") return 1;
+    const wallet = walletOptions.find((w) => w.id === aiWalletId);
+    const useWise = wallet
+      ? wallet.name.toLowerCase().includes("wise")
+      : aiPayType === "Wise";
+    if (aiCurrency === trip.foreign_currency) {
+      return useWise ? trip.wise_rate : trip.cash_rate;
+    }
+    if (aiCurrency === trip.foreign_currency_2) {
+      return useWise ? (trip.wise_rate_2 ?? 1) : (trip.cash_rate_2 ?? 1);
+    }
+    return 1;
   }
 
   function calcMyr(entry: ParsedEntry) {
     if (entry.myr_amount) return entry.myr_amount;
     if (entry.foreign_amount && trip) {
-      const rate = aiPayType === "Wise" ? trip.wise_rate : trip.cash_rate;
-      return entry.foreign_amount / rate;
+      return entry.foreign_amount / aiRate();
     }
     return 0;
   }
@@ -254,11 +291,19 @@ export default function AddExpensePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            trip_id: id, date: new Date().toISOString().slice(0, 10),
-            category: entry.category, split_type: aiSplitType,
-            paid_by_id: aiPaidBy, payment_type: aiPayType,
-            foreign_amount: entry.foreign_amount ?? null,
-            myr_amount: myr, notes: entry.description, created_by_id: myId, splits: splitData,
+            trip_id: id,
+            date: aiDate,
+            category: entry.category,
+            split_type: aiSplitType,
+            paid_by_id: aiPaidBy,
+            payment_type: aiPayType,
+            currency: aiCurrency,
+            foreign_amount: aiCurrency !== "MYR" ? (entry.foreign_amount ?? null) : null,
+            myr_amount: myr,
+            notes: entry.description,
+            created_by_id: myId,
+            splits: splitData,
+            wallet_id: aiWalletId || null,
           }),
         });
       }
@@ -461,7 +506,7 @@ export default function AddExpensePage() {
                           <p className="text-xs text-slate-500">{e.category}</p>
                         </div>
                         <div className="text-right">
-                          {e.foreign_amount && <p className="text-xs text-slate-400">{trip.foreign_currency} {e.foreign_amount.toLocaleString()}</p>}
+                          {e.foreign_amount && <p className="text-xs text-slate-400">{aiCurrency} {e.foreign_amount.toLocaleString()}</p>}
                           <p className="text-sm font-bold text-white">RM {calcMyr(e).toFixed(2)}</p>
                         </div>
                       </div>
@@ -472,10 +517,35 @@ export default function AddExpensePage() {
                     </div>
                   </div>
 
-                  {/* Options */}
+                  {/* Date + Currency — apply to every parsed entry. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Date</label>
+                      <input
+                        type="date"
+                        value={aiDate}
+                        onChange={(e) => { setAiDate(e.target.value); setAiDateTouched(true); }}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                      <select
+                        value={aiCurrency}
+                        onChange={(e) => setAiCurrency(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="MYR">MYR</option>
+                        <option value={trip.foreign_currency}>{trip.foreign_currency}</option>
+                        {trip.foreign_currency_2 && <option value={trip.foreign_currency_2}>{trip.foreign_currency_2}</option>}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Paid By / Payment / Split */}
                   <div className="grid grid-cols-3 gap-3">
                     <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
-                      <select value={aiPaidBy} onChange={(e) => setAiPaidBy(e.target.value)}
+                      <select value={aiPaidBy} onChange={(e) => { setAiPaidBy(e.target.value); setAiWalletId(""); }}
                         className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
                         {activeTravelers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
                       </select></div>
@@ -491,6 +561,45 @@ export default function AddExpensePage() {
                         <option value="individual">Individual</option>
                       </select></div>
                   </div>
+
+                  {/* Wallet — only shown if the chosen payer has wallets. Auto-syncs
+                      payment_type from wallet name like the Form tab does. */}
+                  {walletOptions.filter((w) => w.traveler_id === aiPaidBy).length > 0 && (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Paid from Wallet</label>
+                      <select
+                        value={aiWalletId}
+                        onChange={(e) => {
+                          const wId = e.target.value;
+                          setAiWalletId(wId);
+                          if (wId) {
+                            const w = walletOptions.find((x) => x.id === wId);
+                            if (w) {
+                              const n = w.name.toLowerCase();
+                              if (n.includes("wise")) setAiPayType("Wise");
+                              else if (n.includes("credit")) setAiPayType("Credit Card");
+                              else if (n.includes("debit") || n.includes("card")) setAiPayType("Debit Card");
+                              else if (n.includes("tng") || n.includes("touch")) setAiPayType("TNG");
+                              else setAiPayType("Cash");
+                              // Default currency to the wallet's currency so the
+                              // numbers Claude parsed already match the right rate.
+                              if (w.currency && (w.currency === "MYR" || w.currency === trip.foreign_currency || w.currency === trip.foreign_currency_2)) {
+                                setAiCurrency(w.currency);
+                              }
+                            }
+                          }
+                        }}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="">— not linked to a wallet —</option>
+                        {walletOptions
+                          .filter((w) => w.traveler_id === aiPaidBy)
+                          .map((w) => (
+                            <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Individual splits for AI — enter total amounts per traveler */}
                   {aiSplitType === "individual" && (
