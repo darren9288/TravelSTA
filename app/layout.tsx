@@ -5,6 +5,7 @@ import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
 import OfflineBanner from "@/components/OfflineBanner";
 import NavigationProgress from "@/components/NavigationProgress";
 import { Toaster } from "@/components/Toaster";
+import OfflineQueueWatcher from "@/components/OfflineQueueWatcher";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Toaster>
             <ServiceWorkerUpdater />
             <OfflineBanner />
+            <OfflineQueueWatcher />
             <NavigationProgress />
             {children}
           </Toaster>

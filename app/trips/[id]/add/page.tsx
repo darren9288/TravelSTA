@@ -5,6 +5,8 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
 import { Sparkles, ClipboardList } from "lucide-react";
 import { useTripRealtime } from "@/lib/use-realtime";
+import { enqueue } from "@/lib/offline-queue";
+import { useToast } from "@/components/Toaster";
 
 type SplitEntry = { traveler_id: string; amount: string; foreignAmount: string };
 type ParsedEntry = { description: string; category: string; foreign_amount?: number; myr_amount?: number };
@@ -12,6 +14,7 @@ type ParsedEntry = { description: string; category: string; foreign_amount?: num
 export default function AddExpensePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { toast } = useToast();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [myId, setMyId] = useState<string | null>(null);
@@ -128,28 +131,72 @@ export default function AddExpensePage() {
       }
     }
     setSaving(true); setError("");
-    try {
-      const total = parseFloat(myrAmount);
-      const splitData = splitType === "even"
-        ? realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(total).toFixed(2)) }))
-        : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
 
+    const total = parseFloat(myrAmount);
+    const splitData = splitType === "even"
+      ? realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(total).toFixed(2)) }))
+      : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
+
+    const body = {
+      trip_id: id, date, category, split_type: splitType,
+      paid_by_id: paidById, payment_type: paymentType,
+      currency: currency,
+      foreign_amount: currency !== "MYR" ? parseFloat(foreignAmount) || null : null,
+      myr_amount: total, notes: notes || null, created_by_id: myId, splits: splitData,
+      wallet_id: walletId || null,
+    };
+
+    // If we're offline, enqueue the operation instead of failing. The
+    // OfflineQueueWatcher in the layout will drain it when the browser
+    // reports `online`. We optimistically navigate to the expenses list
+    // so the user feels like the save succeeded.
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueue({
+        method: "POST",
+        url: "/api/expenses",
+        body,
+        description: `${category} · RM ${total.toFixed(2)}`,
+      });
+      toast({
+        kind: "info",
+        title: "Saved offline",
+        body: "Will sync automatically when you reconnect.",
+      });
+      router.push(`/trips/${id}/expenses`);
+      return;
+    }
+
+    try {
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trip_id: id, date, category, split_type: splitType,
-          paid_by_id: paidById, payment_type: paymentType,
-          currency: currency,
-          foreign_amount: currency !== "MYR" ? parseFloat(foreignAmount) || null : null,
-          myr_amount: total, notes: notes || null, created_by_id: myId, splits: splitData,
-          wallet_id: walletId || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       router.push(`/trips/${id}/expenses`);
-    } catch (e) { setError((e as Error).message); setSaving(false); }
+    } catch (e) {
+      // Network error while we *thought* we were online — fall back to
+      // queueing rather than discarding the user's input.
+      const msg = (e as Error).message;
+      if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+        enqueue({
+          method: "POST",
+          url: "/api/expenses",
+          body,
+          description: `${category} · RM ${total.toFixed(2)}`,
+        });
+        toast({
+          kind: "info",
+          title: "Saved offline",
+          body: "Network glitch — we'll sync when it's back.",
+        });
+        router.push(`/trips/${id}/expenses`);
+        return;
+      }
+      setError(msg);
+      setSaving(false);
+    }
   }
 
   async function handleAiParse() {
