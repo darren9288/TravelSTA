@@ -10,6 +10,31 @@ body {
   -webkit-tap-highlight-color: transparent;
   /* Stop iOS rubber-band scrolling at top/bottom of the page. */
   overscroll-behavior-y: none;
+  /* Respect the device safe-area on iPhones + Android notch phones when the
+     app runs as an installed PWA (viewport-fit: cover extends content under
+     the status bar and home indicator). env() values are 0 outside that
+     context so this is a no-op in a regular browser tab. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Fixed-position top elements (offline banner, navigation progress bar,
+   toaster) live ABOVE the body, so they need their own safe-area offset
+   or they'd sit underneath the iOS status bar. */
+.safe-top {
+  top: env(safe-area-inset-top, 0);
+}
+/* For elements where we want their natural distance from top kept, but
+   pushed down by the safe area. Used by the toast stack. */
+.safe-top-12 {
+  top: calc(env(safe-area-inset-top, 0) + 3rem);
+}
+/* Mobile bottom nav needs extra padding so the buttons sit ABOVE the
+   home indicator gesture area on newer iPhones. */
+.safe-bottom-pad {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* Prevent iOS Safari from auto-zooming when you focus a small-text input.

@@ -35,7 +35,7 @@ export default function OfflineBanner() {
 
   if (offline) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-600 text-white text-xs font-medium px-3 py-1.5 flex items-center justify-center gap-2 shadow-md">
+      <div className="fixed safe-top left-0 right-0 z-[100] bg-amber-600 text-white text-xs font-medium px-3 py-1.5 flex items-center justify-center gap-2 shadow-md">
         <WifiOff size={13} />
         <span>
           You&apos;re offline — viewing cached data.
@@ -49,7 +49,7 @@ export default function OfflineBanner() {
 
   // Online but still draining queued items.
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] bg-blue-600 text-white text-xs font-medium px-3 py-1.5 flex items-center justify-center gap-2 shadow-md">
+    <div className="fixed safe-top left-0 right-0 z-[100] bg-blue-600 text-white text-xs font-medium px-3 py-1.5 flex items-center justify-center gap-2 shadow-md">
       <Upload size={13} className="animate-pulse" />
       <span>Syncing {pending} offline {pending === 1 ? "change" : "changes"}…</span>
     </div>

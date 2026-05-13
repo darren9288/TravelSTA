@@ -33,7 +33,7 @@ export default function NavigationProgress() {
   return (
     <div
       key={nonce}
-      className="fixed top-0 left-0 right-0 h-0.5 z-[200] pointer-events-none overflow-hidden"
+      className="fixed safe-top left-0 right-0 h-0.5 z-[200] pointer-events-none overflow-hidden"
     >
       <div className="h-full w-full bg-emerald-500 nav-progress-bar" />
     </div>

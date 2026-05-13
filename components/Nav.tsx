@@ -83,7 +83,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </button>
           </div>
         </nav>
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50 safe-bottom-pad">
           <Link href="/" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-emerald-400">
             <Home size={20} /> Trips
           </Link>
@@ -164,7 +164,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
           </button>
         </div>
       </nav>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 safe-bottom-pad">
         <div className="flex overflow-x-auto scrollbar-none">
           {links.map(({ href, icon: Icon, label }) => {
             const active = path === href;

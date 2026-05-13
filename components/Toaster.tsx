@@ -66,7 +66,7 @@ export function Toaster({ children }: { children: React.ReactNode }) {
           (top-0, ~28px tall) and the navigation progress bar (top-0, 2px).
           On wide screens the toast caps at 28rem so it doesn't stretch
           across the whole viewport. */}
-      <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2.5 w-[min(92vw,28rem)] pointer-events-none">
+      <div className="fixed safe-top-12 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2.5 w-[min(92vw,28rem)] pointer-events-none">
         {toasts.map((t) => {
           const s = KIND_STYLES[t.kind];
           return (
