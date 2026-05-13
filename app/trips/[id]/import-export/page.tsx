@@ -214,17 +214,27 @@ export default function ImportExportPage() {
               <h2 className="text-base font-semibold text-white">Export Itinerary</h2>
             </div>
             <p className="text-xs text-slate-400">
-              Download all itinerary items, links, and file names as JSON. Re-importable
-              into another trip via the Import Itinerary section below.
+              Download a printable day-by-day PDF for sharing with travelmates, or a JSON
+              file re-importable into another trip.
             </p>
-            <a
-              href={`/api/itinerary/export?trip_id=${id}`}
-              download
-              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors w-fit"
-            >
-              <FileJson className="w-4 h-4" />
-              Export Itinerary JSON
-            </a>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`/api/itinerary/export-pdf?trip_id=${id}`}
+                download
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors w-fit"
+              >
+                <FileDown className="w-4 h-4" />
+                Export PDF
+              </a>
+              <a
+                href={`/api/itinerary/export?trip_id=${id}`}
+                download
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 text-sm rounded-lg transition-colors w-fit"
+              >
+                <FileJson className="w-4 h-4" />
+                Export JSON
+              </a>
+            </div>
           </div>
 
           {/* Trip Data Export (wallets, travelers, pools, settlement history) */}
@@ -234,17 +244,28 @@ export default function ImportExportPage() {
               <h2 className="text-base font-semibold text-white">Export Trip Data (Backup)</h2>
             </div>
             <p className="text-xs text-slate-400">
-              Download a JSON backup of trip setup: travelers, pools, wallets, wallet top-ups,
-              pool top-ups, and settlement history. Expenses are exported separately above.
+              A backup of trip setup — travelers, pools, wallets, wallet top-ups, pool
+              top-ups, and settlement history. PDF is human-readable; JSON is for
+              re-import or archiving.
             </p>
-            <a
-              href={`/api/trips/${id}/export-data`}
-              download
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors w-fit"
-            >
-              <Database className="w-4 h-4" />
-              Export Trip Data JSON
-            </a>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`/api/trips/${id}/export-data-pdf`}
+                download
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors w-fit"
+              >
+                <FileDown className="w-4 h-4" />
+                Export PDF
+              </a>
+              <a
+                href={`/api/trips/${id}/export-data`}
+                download
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 text-sm rounded-lg transition-colors w-fit"
+              >
+                <FileJson className="w-4 h-4" />
+                Export JSON
+              </a>
+            </div>
           </div>
 
           {/* Export Section */}
