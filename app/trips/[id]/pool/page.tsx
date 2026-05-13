@@ -165,7 +165,13 @@ export default function PoolPage() {
 
   async function deletePool(poolId: string, poolName: string) {
     if (!confirm(`Delete pool "${poolName}" and all its history? This cannot be undone.`)) return;
-    await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
+    const res = await fetch("/api/travelers", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: poolId }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? `Failed to delete pool (${res.status})`);
+      return;
+    }
+    setError("");
     if (selectedPool === poolId) setSelectedPool(null);
     mutatePool();
   }
