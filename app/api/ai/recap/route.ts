@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/supabase-server";
 import { getAIConfig } from "@/lib/ai-config";
+import { mapUpstreamError } from "@/lib/ai-errors";
 
 // POST /api/ai/recap
 // Body: { trip_id: string }
@@ -110,7 +111,11 @@ ${JSON.stringify(summary)}`;
         messages: [{ role: "user", content: "Write the trip recap." }],
       }),
     });
-    if (!res.ok) return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 500 });
+    if (!res.ok) {
+      const mapped = mapUpstreamError(res.status, await res.text().catch(() => ""));
+      console.error("[ai/recap]", mapped.technical);
+      return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    }
     const data = await res.json();
     const recap = (data.content?.[0]?.text ?? "").trim();
     return NextResponse.json({ recap });

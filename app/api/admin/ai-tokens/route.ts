@@ -112,12 +112,84 @@ export async function PUT(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const id: string | null = body.id ?? null;
+  // Skip the safety check when the caller explicitly forces. The UI uses
+  // confirm() before sending force=true so an admin who really wants to
+  // activate a failed token still can — they just have to ack the risk.
+  const force: boolean = body.force === true;
 
   const db = serverDb();
-  // null means deactivate everything (fall back to env vars).
+  // null means deactivate everything (fall back to env vars). Always allowed.
   if (id) {
-    const { data: exists } = await db.from("app_tokens").select("id").eq("id", id).maybeSingle();
-    if (!exists) return NextResponse.json({ error: "Token not found" }, { status: 404 });
+    const { data: token } = await db
+      .from("app_tokens")
+      .select("id, last_test_result, anthropic_api_key, claude_proxy_url")
+      .eq("id", id)
+      .maybeSingle();
+    if (!token) return NextResponse.json({ error: "Token not found" }, { status: 404 });
+
+    // Block known-bad tokens. The client should run Test first, but defense-in-depth.
+    if (!force && token.last_test_result === "fail") {
+      return NextResponse.json(
+        {
+          error:
+            "This token's last test failed. Test it again first, or pass { force: true } to override.",
+          code: "TEST_FAILED",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Auto-test if never tested. Catches the obvious case where someone adds
+    // a typo and immediately hits Use without testing.
+    if (!force && token.last_test_result === null) {
+      const proxy = token.claude_proxy_url || "https://api.anthropic.com";
+      const url = proxy.endsWith("/v1") ? `${proxy}/messages` : `${proxy}/v1/messages`;
+      const start = Date.now();
+      let ok = false;
+      let errMsg: string | null = null;
+      try {
+        const pingRes = await fetch(url, {
+          method: "POST",
+          headers: {
+            "x-api-key": token.anthropic_api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 5,
+            messages: [{ role: "user", content: "hi" }],
+          }),
+        });
+        if (pingRes.ok) {
+          ok = true;
+        } else {
+          errMsg = `${pingRes.status}: ${(await pingRes.text().catch(() => "")).slice(0, 200)}`;
+        }
+      } catch (e) {
+        errMsg = (e as Error).message;
+      }
+      const latency = Date.now() - start;
+      await db
+        .from("app_tokens")
+        .update({
+          last_tested_at: new Date().toISOString(),
+          last_test_result: ok ? "success" : "fail",
+          last_test_error: errMsg,
+          last_test_latency_ms: latency,
+        })
+        .eq("id", id);
+
+      if (!ok) {
+        return NextResponse.json(
+          {
+            error: `Auto-test failed before activating: ${errMsg}. Fix the token or pass force=true to override.`,
+            code: "AUTO_TEST_FAILED",
+          },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const me = await getSessionUser();

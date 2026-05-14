@@ -151,6 +151,20 @@ export default function AdminPage() {
   }
 
   async function activateToken(id: string | null) {
+    // Client-side guard: don't activate a row whose last test failed.
+    // The server enforces this too, but bailing here gives instant feedback.
+    if (id) {
+      const row = tokens.find((t) => t.id === id);
+      if (row?.last_test_result === "fail") {
+        const proceed = confirm(
+          `⚠️ This token's last test FAILED.\n\nActivating it now will break AI features for everyone until you fix it.\n\nAre you sure you want to proceed anyway?`
+        );
+        if (!proceed) return;
+        // User explicitly overrode — fall through with force flag.
+        return activateTokenForce(id);
+      }
+    }
+
     setTokensBusy(true);
     setAiMessage(null);
     try {
@@ -161,12 +175,49 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiMessage({ kind: "error", text: data.error ?? "Failed to activate" });
+        // The server runs an auto-test for never-tested tokens — if that
+        // fails, the response includes a code so we can show a more helpful
+        // message than just the raw error.
+        if (data.code === "AUTO_TEST_FAILED") {
+          await loadTokens(); // refresh so the failed test status appears in the table
+          setAiMessage({
+            kind: "error",
+            text: `Activation blocked — token didn't work. ${data.error?.replace(/^Auto-test failed before activating: /, "") ?? ""}`,
+          });
+        } else {
+          setAiMessage({ kind: "error", text: data.error ?? "Failed to activate" });
+        }
         return;
       }
       setAiMessage({
         kind: "success",
         text: id ? "Active token switched. New requests will use it immediately." : "Using environment variable.",
+      });
+      await loadTokens();
+    } finally {
+      setTokensBusy(false);
+    }
+  }
+
+  // Same as activateToken but tells the server to skip its safety check.
+  // Only reachable after the user accepted the warning dialog above.
+  async function activateTokenForce(id: string) {
+    setTokensBusy(true);
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/admin/ai-tokens", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, force: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiMessage({ kind: "error", text: data.error ?? "Failed to activate" });
+        return;
+      }
+      setAiMessage({
+        kind: "success",
+        text: "Activated despite failed test — AI features may not work until you fix the token.",
       });
       await loadTokens();
     } finally {
@@ -583,9 +634,20 @@ export default function AdminPage() {
                               <button
                                 onClick={() => activateToken(t.id)}
                                 disabled={tokensBusy}
-                                className="px-2 py-1 bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 text-white rounded transition-colors"
+                                title={
+                                  t.last_test_result === "fail"
+                                    ? "Last test failed — clicking will warn you before activating"
+                                    : t.last_test_result === null
+                                    ? "Untested — server will auto-test before activating"
+                                    : "Activate this token (instant)"
+                                }
+                                className={`px-2 py-1 disabled:opacity-50 text-white rounded transition-colors ${
+                                  t.last_test_result === "fail"
+                                    ? "bg-amber-600/80 hover:bg-amber-500"
+                                    : "bg-emerald-600/80 hover:bg-emerald-500"
+                                }`}
                               >
-                                Use
+                                {t.last_test_result === "fail" ? "Use ⚠" : "Use"}
                               </button>
                             )}
                           </td>

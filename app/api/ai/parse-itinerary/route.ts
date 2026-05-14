@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 import { getAIConfig } from "@/lib/ai-config";
+import { mapUpstreamError } from "@/lib/ai-errors";
 
 // POST /api/ai/parse-itinerary
 // Body: { text: string, trip_id: string }
@@ -74,7 +75,9 @@ Rules:
       }),
     });
     if (!res.ok) {
-      return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 500 });
+      const mapped = mapUpstreamError(res.status, await res.text().catch(() => ""));
+      console.error("[ai/parse-itinerary]", mapped.technical);
+      return NextResponse.json({ error: mapped.message }, { status: mapped.status });
     }
     const data = await res.json();
     const content = data.content?.[0];

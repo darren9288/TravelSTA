@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai-config";
+import { mapUpstreamError } from "@/lib/ai-errors";
 
 // POST /api/ai/categorize
 // Body: { description: string }
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
         messages: [{ role: "user", content: description.slice(0, 200) }],
       }),
     });
-    if (!res.ok) return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 500 });
+    if (!res.ok) {
+      const mapped = mapUpstreamError(res.status, await res.text().catch(() => ""));
+      console.error("[ai/categorize]", mapped.technical);
+      return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    }
     const data = await res.json();
     const text: string = data.content?.[0]?.text ?? "";
     const start = text.indexOf("{");

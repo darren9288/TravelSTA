@@ -1,4 +1,5 @@
 import { getAIConfig } from "./ai-config";
+import { mapUpstreamError } from "./ai-errors";
 
 function extractJSON(text: string): unknown {
   const start = text.indexOf("{");
@@ -68,7 +69,11 @@ Rules:
     }),
   });
 
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const mapped = mapUpstreamError(res.status, await res.text().catch(() => ""));
+    console.error("[claude.parseExpenses]", mapped.technical);
+    throw new Error(mapped.message);
+  }
   const data = await res.json();
   const content = data.content?.[0];
   if (!content || content.type !== "text") throw new Error("Unexpected response");
