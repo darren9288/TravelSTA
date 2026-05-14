@@ -1,13 +1,17 @@
 import { serverDb } from "./supabase";
 
 // Resolved AI configuration. baseURL is the Anthropic-compatible host.
-// apiKey is what goes into the x-api-key header. Both prefer the DB override
-// (set via Dev tab → Token Manager) over the deploy-time env var so the owner
-// can rotate to a fresh key when one hits its usage cap without redeploying.
+// apiKey is what goes into the x-api-key header.
+//
+// Resolution order:
+//   1. The token row pointed to by app_settings.active_token_id (if any).
+//   2. Legacy singleton override in app_settings.anthropic_api_key (kept
+//      working for safety, though migration 017 nulled it out).
+//   3. The deploy-time env vars ANTHROPIC_API_KEY + CLAUDE_PROXY_URL.
 export type AIConfig = {
   apiKey: string;
   baseURL: string;
-  messagesUrl: string; // convenience: full POST url for /v1/messages
+  messagesUrl: string;
   source: { apiKey: "db" | "env"; baseURL: "db" | "env" };
 };
 
@@ -27,15 +31,31 @@ export async function getAIConfig(): Promise<AIConfig> {
   let dbProxy: string | null = null;
   try {
     const db = serverDb();
-    const { data } = await db
+    const { data: settings } = await db
       .from("app_settings")
-      .select("anthropic_api_key, claude_proxy_url")
+      .select("active_token_id, anthropic_api_key, claude_proxy_url")
       .eq("id", 1)
       .single();
-    dbKey = data?.anthropic_api_key ?? null;
-    dbProxy = data?.claude_proxy_url ?? null;
+
+    if (settings?.active_token_id) {
+      const { data: token } = await db
+        .from("app_tokens")
+        .select("anthropic_api_key, claude_proxy_url")
+        .eq("id", settings.active_token_id)
+        .single();
+      if (token?.anthropic_api_key) {
+        dbKey = token.anthropic_api_key;
+        dbProxy = token.claude_proxy_url ?? null;
+      }
+    }
+
+    // Legacy fallback for any data not yet migrated.
+    if (!dbKey && settings?.anthropic_api_key) {
+      dbKey = settings.anthropic_api_key;
+      dbProxy = settings.claude_proxy_url ?? null;
+    }
   } catch {
-    // Table may not exist yet (migration not run) — silently fall back to env.
+    // Tables may not exist yet — silently fall back to env.
   }
 
   const envKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -60,7 +80,7 @@ export async function getAIConfig(): Promise<AIConfig> {
   return value;
 }
 
-// Mask a secret for display: "sk-ant-api03-...AbCd" — never returns the raw value.
+// Mask a secret for display: "sk-ant-api…AbCd". Never returns the raw value.
 export function maskSecret(secret: string | null | undefined): string {
   if (!secret || secret.length === 0) return "(not set)";
   if (secret.length <= 12) return "•".repeat(secret.length);

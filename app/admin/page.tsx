@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Shield, ArrowLeftCircle, Trash2, KeyRound, Users, Plane,
-  Search, AlertTriangle, Crown, Key, Eye, EyeOff, Save, RotateCcw, RefreshCw,
+  Search, AlertTriangle, Crown, Key, Save, RefreshCw, Check, X, Play, Loader2, Plus,
 } from "lucide-react";
 
 type AdminUser = {
@@ -31,14 +31,17 @@ type AdminTrip = {
   total_myr: number;
 };
 
-type AISettings = {
+type TokenRow = {
+  id: string;
+  label: string | null;
   anthropic_api_key_masked: string;
   claude_proxy_url: string;
-  key_source: "db" | "env";
-  proxy_source: "db" | "env";
-  has_key: boolean;
-  updated_at: string | null;
-  updated_by: string | null;
+  is_active: boolean;
+  last_tested_at: string | null;
+  last_test_result: "success" | "fail" | null;
+  last_test_error: string | null;
+  last_test_latency_ms: number | null;
+  created_at: string;
 };
 
 export default function AdminPage() {
@@ -55,13 +58,14 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
 
-  // AI Token Manager state
-  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSaving, setAiSaving] = useState(false);
+  // AI Token Manager state — list of tokens with per-row test results.
+  const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [tokensBusy, setTokensBusy] = useState(false);    // global save/activate/delete spinner
+  const [testingId, setTestingId] = useState<string | null>(null); // which row is currently being tested
+  const [newLabel, setNewLabel] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newProxy, setNewProxy] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const [aiMessage, setAiMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -90,90 +94,115 @@ export default function AdminPage() {
     if (t.error) errors.push(`Trips: ${t.error}`);
     if (errors.length) setError(errors.join(" · "));
     // Token manager lives in its own tab — load lazily but kick it off so the tab is ready when clicked.
-    loadAISettings();
+    loadTokens();
   }
 
-  async function loadAISettings() {
-    setAiLoading(true);
+  async function loadTokens() {
+    setTokensLoading(true);
     try {
-      const res = await fetch("/api/admin/ai-settings", { cache: "no-store" });
+      const res = await fetch("/api/admin/ai-tokens", { cache: "no-store" });
       const data = await res.json();
-      if (res.ok) setAiSettings(data);
+      if (res.ok && data.tokens) setTokens(data.tokens);
     } finally {
-      setAiLoading(false);
+      setTokensLoading(false);
     }
   }
 
-  async function saveToken() {
+  async function addToken() {
     if (!newKey.trim()) {
-      setAiMessage({ kind: "error", text: "Paste a new token first." });
+      setAiMessage({ kind: "error", text: "Paste a token first." });
       return;
     }
-    setAiSaving(true);
+    setTokensBusy(true);
     setAiMessage(null);
     try {
-      const res = await fetch("/api/admin/ai-settings", {
-        method: "PUT",
+      const res = await fetch("/api/admin/ai-tokens", {
+        method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ anthropic_api_key: newKey.trim() }),
+        body: JSON.stringify({
+          label: newLabel.trim() || null,
+          anthropic_api_key: newKey.trim(),
+          claude_proxy_url: newProxy.trim() || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiMessage({ kind: "error", text: data.error ?? "Failed to update" });
+        setAiMessage({ kind: "error", text: data.error ?? "Failed to add" });
         return;
       }
-      setAiMessage({ kind: "success", text: "Token updated — active for all AI calls across every trip." });
+      setAiMessage({ kind: "success", text: "Token added. Click Test to verify, then Use to activate it." });
+      setNewLabel("");
       setNewKey("");
-      await loadAISettings();
+      setNewProxy("");
+      await loadTokens();
     } finally {
-      setAiSaving(false);
+      setTokensBusy(false);
     }
   }
 
-  async function saveProxy() {
-    setAiSaving(true);
+  async function activateToken(id: string | null) {
+    setTokensBusy(true);
     setAiMessage(null);
     try {
-      const res = await fetch("/api/admin/ai-settings", {
+      const res = await fetch("/api/admin/ai-tokens", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ claude_proxy_url: newProxy.trim() || null }),
+        body: JSON.stringify({ id }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiMessage({ kind: "error", text: data.error ?? "Failed to update" });
+        setAiMessage({ kind: "error", text: data.error ?? "Failed to activate" });
         return;
       }
-      setAiMessage({ kind: "success", text: "Proxy URL updated." });
-      setNewProxy("");
-      await loadAISettings();
+      setAiMessage({
+        kind: "success",
+        text: id ? "Active token switched. New requests will use it immediately." : "Using environment variable.",
+      });
+      await loadTokens();
     } finally {
-      setAiSaving(false);
+      setTokensBusy(false);
     }
   }
 
-  async function clearOverride(field: "key" | "proxy") {
-    if (!confirm(`Clear the ${field === "key" ? "API token" : "proxy URL"} override and fall back to the deploy-time environment variable?`)) {
+  async function testToken(id: string) {
+    setTestingId(id);
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/admin/ai-tokens/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAiMessage({ kind: "success", text: `Test passed in ${data.latency_ms}ms.` });
+      } else {
+        setAiMessage({ kind: "error", text: `Test failed: ${data.error ?? "Unknown error"}` });
+      }
+      await loadTokens();
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function deleteToken(t: TokenRow) {
+    const label = t.label || t.anthropic_api_key_masked;
+    if (!confirm(`Delete token "${label}"?${t.is_active ? " It's the active token — AI features will fall back to the env var until you activate another one." : ""}`)) {
       return;
     }
-    setAiSaving(true);
+    setTokensBusy(true);
     setAiMessage(null);
     try {
-      const body = field === "key" ? { anthropic_api_key: null } : { claude_proxy_url: null };
-      const res = await fetch("/api/admin/ai-settings", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(`/api/admin/ai-tokens?id=${encodeURIComponent(t.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
-        setAiMessage({ kind: "error", text: data.error ?? "Failed to clear" });
+        setAiMessage({ kind: "error", text: data.error ?? "Failed to delete" });
         return;
       }
-      setAiMessage({ kind: "success", text: "Override cleared — using environment variable." });
-      await loadAISettings();
+      setAiMessage({ kind: "success", text: "Token removed." });
+      await loadTokens();
     } finally {
-      setAiSaving(false);
+      setTokensBusy(false);
     }
   }
 
@@ -440,13 +469,13 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* AI Settings tab — global Anthropic token + proxy URL */}
+        {/* AI Settings tab — list of tokens, one is active, all can be tested. */}
         {tab === "ai" && (
           <div className="flex flex-col gap-4">
             <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 flex items-start gap-2">
               <Key size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-slate-400 leading-relaxed">
-                This token powers every AI feature (Parse Expense, Ask, Recap, Itinerary, Categorize) across <span className="text-white font-semibold">all trips</span> — it&apos;s billed to one Anthropic account. Rotate it here when the current key hits its monthly cap.
+                Pre-stage AI tokens here. The active one powers every AI feature (Parse Expense, Ask, Recap, Itinerary, Categorize) across <span className="text-white font-semibold">all trips</span>. When a key hits its monthly cap, click <span className="text-emerald-400 font-semibold">Use</span> on another row to flip — no redeploy.
               </p>
             </div>
 
@@ -461,140 +490,172 @@ export default function AdminPage() {
               </div>
             )}
 
-            {aiSettings ? (
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex flex-col gap-4">
-                {/* Current token */}
-                <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700/40">
-                  <div className="flex items-center justify-between mb-2 gap-2">
-                    <p className="text-xs font-mono text-slate-400">CURRENT TOKEN</p>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                        aiSettings.key_source === "db"
-                          ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/40"
-                          : "bg-slate-700/60 text-slate-400 border border-slate-600/40"
-                      }`}>
-                        {aiSettings.key_source === "db" ? "OVERRIDE ACTIVE" : "USING ENV VAR"}
-                      </span>
-                      <button
-                        onClick={() => setShowKey((s) => !s)}
-                        className="text-slate-400 hover:text-white"
-                        title={showKey ? "Hide" : "Show fingerprint"}
-                      >
-                        {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
-                      </button>
-                      <button
-                        onClick={loadAISettings}
-                        disabled={aiLoading}
-                        className="text-slate-400 hover:text-white disabled:opacity-40"
-                        title="Reload"
-                      >
-                        <RefreshCw size={12} className={aiLoading ? "animate-spin" : ""} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-sm font-mono text-white break-all">
-                    {showKey
-                      ? aiSettings.anthropic_api_key_masked
-                      : "•".repeat(Math.min(aiSettings.anthropic_api_key_masked.length, 24))}
-                  </p>
-                  {!aiSettings.has_key && (
-                    <p className="text-xs text-red-400 mt-2">
-                      No token configured — AI features will fail. Paste one below.
-                    </p>
-                  )}
-                  {aiSettings.updated_at && aiSettings.key_source === "db" && (
-                    <p className="text-[11px] text-slate-500 mt-2">
-                      Last changed {new Date(aiSettings.updated_at).toLocaleString()}
-                      {aiSettings.updated_by ? ` by ${aiSettings.updated_by}` : ""}
-                    </p>
-                  )}
-                </div>
-
-                {/* Paste new token */}
-                <div>
-                  <label className="text-xs font-mono text-slate-400 block mb-1.5">PASTE NEW TOKEN</label>
-                  <div className="flex gap-2 flex-wrap">
-                    <input
-                      type="password"
-                      value={newKey}
-                      onChange={(e) => setNewKey(e.target.value)}
-                      placeholder="sk-ant-api03-..."
-                      autoComplete="off"
-                      className="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white text-xs font-mono rounded-md px-3 py-2 outline-none"
-                    />
-                    <button
-                      onClick={saveToken}
-                      disabled={aiSaving || !newKey.trim()}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs rounded-md transition-colors whitespace-nowrap"
-                    >
-                      <Save size={12} />
-                      {aiSaving ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5">
-                    Stored in the database. Takes effect immediately, no redeploy needed.
-                  </p>
-                </div>
-
-                {/* Clear override */}
-                {aiSettings.key_source === "db" && (
-                  <button
-                    onClick={() => clearOverride("key")}
-                    disabled={aiSaving}
-                    className="self-start flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 hover:bg-slate-700 border border-slate-600/50 text-slate-300 text-xs rounded-md transition-colors"
-                  >
-                    <RotateCcw size={11} />
-                    Clear override (use env var)
-                  </button>
-                )}
-
-                {/* Proxy URL — collapsed by default */}
-                <details className="border-t border-slate-700/50 pt-3">
-                  <summary className="cursor-pointer text-xs text-slate-400 hover:text-white select-none">
-                    Advanced: Proxy URL ({aiSettings.proxy_source === "db" ? "override active" : "from env"})
-                  </summary>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <p className="text-[11px] text-slate-500">
-                      Where AI requests go. Default is Anthropic direct. Set this to a MIRBUDS / LiteLLM / OpenRouter Claude endpoint to route through a proxy instead.
-                    </p>
-                    <p className="text-xs font-mono text-slate-300 bg-slate-900/60 rounded px-2 py-1.5 break-all border border-slate-700/40">
-                      {aiSettings.claude_proxy_url}
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      <input
-                        type="text"
-                        value={newProxy}
-                        onChange={(e) => setNewProxy(e.target.value)}
-                        placeholder="https://api.anthropic.com"
-                        className="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white text-xs font-mono rounded-md px-3 py-2 outline-none"
-                      />
-                      <button
-                        onClick={saveProxy}
-                        disabled={aiSaving || !newProxy.trim()}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs rounded-md transition-colors whitespace-nowrap"
-                      >
-                        <Save size={12} /> Save
-                      </button>
-                    </div>
-                    {aiSettings.proxy_source === "db" && (
-                      <button
-                        onClick={() => clearOverride("proxy")}
-                        disabled={aiSaving}
-                        className="self-start flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 hover:bg-slate-700 border border-slate-600/50 text-slate-300 text-xs rounded-md transition-colors"
-                      >
-                        <RotateCcw size={11} /> Clear override
-                      </button>
-                    )}
-                  </div>
-                </details>
+            {/* Token table */}
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/50">
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Saved Tokens ({tokens.length})</p>
+                <button
+                  onClick={loadTokens}
+                  disabled={tokensLoading}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-slate-700/40 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs rounded-md transition-colors"
+                >
+                  <RefreshCw size={10} className={tokensLoading ? "animate-spin" : ""} /> Reload
+                </button>
               </div>
-            ) : aiLoading ? (
-              <p className="text-sm text-slate-500 text-center py-8">Loading token info…</p>
-            ) : (
-              <p className="text-sm text-slate-500 text-center py-8">
-                Couldn&apos;t load token info. Run migration <code className="text-emerald-400">016_app_settings.sql</code> in Supabase first.
+
+              {tokens.length === 0 ? (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-sm text-slate-500">
+                    {tokensLoading
+                      ? "Loading…"
+                      : "No tokens saved yet. Add one below. Until then, AI calls use the env var."}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-900/60 text-slate-500">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2">#</th>
+                        <th className="text-left font-medium px-3 py-2">Token</th>
+                        <th className="text-left font-medium px-3 py-2">Proxy URL</th>
+                        <th className="text-left font-medium px-3 py-2">Status</th>
+                        <th className="text-left font-medium px-3 py-2">Test</th>
+                        <th className="text-left font-medium px-3 py-2">Result</th>
+                        <th className="text-left font-medium px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokens.map((t, idx) => (
+                        <tr key={t.id} className="border-t border-slate-700/40">
+                          <td className="px-3 py-2 text-slate-500">{idx + 1}.</td>
+                          <td className="px-3 py-2">
+                            <div className="font-mono text-white">{t.anthropic_api_key_masked}</div>
+                            {t.label && <div className="text-[10px] text-slate-500 mt-0.5">{t.label}</div>}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-slate-300 break-all max-w-[240px]">{t.claude_proxy_url}</td>
+                          <td className="px-3 py-2">
+                            {t.is_active ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 rounded-full">
+                                <Check size={10} /> Using
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => activateToken(t.id)}
+                                disabled={tokensBusy}
+                                className="px-2 py-1 bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 text-white rounded transition-colors"
+                              >
+                                Use
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={() => testToken(t.id)}
+                              disabled={testingId === t.id}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/60 hover:bg-slate-600 disabled:opacity-50 text-slate-200 rounded transition-colors"
+                            >
+                              {testingId === t.id ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
+                              {testingId === t.id ? "Testing…" : "Test"}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2">
+                            {t.last_test_result === "success" ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-400" title={t.last_tested_at ? new Date(t.last_tested_at).toLocaleString() : ""}>
+                                <Check size={11} /> Success
+                                {t.last_test_latency_ms !== null && <span className="text-slate-500 ml-1">{t.last_test_latency_ms}ms</span>}
+                              </span>
+                            ) : t.last_test_result === "fail" ? (
+                              <span
+                                className="inline-flex items-center gap-1 text-red-400 cursor-help"
+                                title={t.last_test_error ?? "Failed"}
+                              >
+                                <X size={11} /> Fail
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={() => deleteToken(t)}
+                              disabled={tokensBusy}
+                              className="text-red-400 hover:text-red-300 disabled:opacity-50 p-1"
+                              title="Delete token"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {tokens.some((t) => t.is_active) && (
+                <div className="px-4 py-2 border-t border-slate-700/50 flex justify-end">
+                  <button
+                    onClick={() => activateToken(null)}
+                    disabled={tokensBusy}
+                    className="text-[11px] text-slate-500 hover:text-slate-300 disabled:opacity-50"
+                  >
+                    Deactivate all (fall back to env var)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Add token form */}
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Plus size={14} className="text-emerald-400" />
+                <p className="text-sm font-semibold text-white">Add Token</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-mono text-slate-500 block mb-1">LABEL (optional)</label>
+                  <input
+                    type="text"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder="e.g. Mirbuds account 1"
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white text-xs rounded-md px-3 py-2 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono text-slate-500 block mb-1">PROXY URL (optional)</label>
+                  <input
+                    type="text"
+                    value={newProxy}
+                    onChange={(e) => setNewProxy(e.target.value)}
+                    placeholder="https://api.anthropic.com"
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white text-xs font-mono rounded-md px-3 py-2 outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-slate-500 block mb-1">TOKEN</label>
+                <input
+                  type="password"
+                  value={newKey}
+                  onChange={(e) => setNewKey(e.target.value)}
+                  placeholder="sk-ant-api03-..."
+                  autoComplete="off"
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white text-xs font-mono rounded-md px-3 py-2 outline-none"
+                />
+              </div>
+              <button
+                onClick={addToken}
+                disabled={tokensBusy || !newKey.trim()}
+                className="self-start flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs rounded-md transition-colors"
+              >
+                <Save size={12} /> {tokensBusy ? "Saving…" : "Add Token"}
+              </button>
+              <p className="text-[11px] text-slate-500">
+                The token isn&apos;t activated automatically. Click <span className="text-emerald-400">Test</span> first to verify it works, then <span className="text-emerald-400">Use</span> to make it active.
               </p>
-            )}
+            </div>
           </div>
         )}
 

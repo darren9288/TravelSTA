@@ -1,0 +1,141 @@
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import { serverDb } from "@/lib/supabase";
+import { requireSuperAdmin } from "@/lib/admin";
+import { getSessionUser } from "@/lib/supabase-server";
+import { invalidateAIConfigCache, maskSecret } from "@/lib/ai-config";
+
+// GET /api/admin/ai-tokens
+// Returns every saved token (masked) + which one is active.
+// POST /api/admin/ai-tokens — body: { label?, anthropic_api_key, claude_proxy_url? }
+//   Adds a new token to the list. Doesn't auto-activate — admin clicks "Use" to flip.
+// PUT /api/admin/ai-tokens — body: { id }    Activates a token (sets app_settings.active_token_id).
+// DELETE /api/admin/ai-tokens?id=... — removes a token. If it was active, clears active_token_id.
+
+const DEFAULT_PROXY = "https://api.anthropic.com";
+
+export async function GET() {
+  const denied = await requireSuperAdmin();
+  if (denied) return denied;
+
+  const db = serverDb();
+  const [{ data: tokens, error: tokErr }, { data: settings }] = await Promise.all([
+    db
+      .from("app_tokens")
+      .select(
+        "id, label, anthropic_api_key, claude_proxy_url, last_tested_at, last_test_result, last_test_error, last_test_latency_ms, created_at"
+      )
+      .order("created_at", { ascending: false }),
+    db.from("app_settings").select("active_token_id").eq("id", 1).single(),
+  ]);
+
+  if (tokErr) return NextResponse.json({ error: tokErr.message }, { status: 500 });
+
+  const activeId = settings?.active_token_id ?? null;
+  const masked = (tokens ?? []).map((t) => ({
+    id: t.id,
+    label: t.label,
+    anthropic_api_key_masked: maskSecret(t.anthropic_api_key),
+    claude_proxy_url: t.claude_proxy_url || DEFAULT_PROXY,
+    is_active: t.id === activeId,
+    last_tested_at: t.last_tested_at,
+    last_test_result: t.last_test_result,
+    last_test_error: t.last_test_error,
+    last_test_latency_ms: t.last_test_latency_ms,
+    created_at: t.created_at,
+  }));
+
+  return NextResponse.json({ tokens: masked, active_id: activeId });
+}
+
+export async function POST(req: NextRequest) {
+  const denied = await requireSuperAdmin();
+  if (denied) return denied;
+
+  const body = await req.json().catch(() => ({}));
+  const key: string | undefined = body.anthropic_api_key;
+  const proxy: string | undefined = body.claude_proxy_url;
+  const label: string | undefined = body.label;
+
+  if (!key || typeof key !== "string" || key.trim().length < 20) {
+    return NextResponse.json(
+      { error: "Token looks too short — paste the full key (e.g. sk-ant-…)." },
+      { status: 400 }
+    );
+  }
+
+  if (proxy && typeof proxy === "string" && proxy.trim().length > 0) {
+    try {
+      // eslint-disable-next-line no-new
+      new URL(proxy.trim());
+    } catch {
+      return NextResponse.json(
+        { error: "Proxy URL is not a valid URL (e.g. https://api.anthropic.com)." },
+        { status: 400 }
+      );
+    }
+  }
+
+  const me = await getSessionUser();
+  const db = serverDb();
+  const { data, error } = await db
+    .from("app_tokens")
+    .insert({
+      label: label?.trim() || null,
+      anthropic_api_key: key.trim(),
+      claude_proxy_url: proxy?.trim() || null,
+      updated_by: me?.id ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ success: true, id: data?.id });
+}
+
+export async function PUT(req: NextRequest) {
+  const denied = await requireSuperAdmin();
+  if (denied) return denied;
+
+  const body = await req.json().catch(() => ({}));
+  const id: string | null = body.id ?? null;
+
+  const db = serverDb();
+  // null means deactivate everything (fall back to env vars).
+  if (id) {
+    const { data: exists } = await db.from("app_tokens").select("id").eq("id", id).maybeSingle();
+    if (!exists) return NextResponse.json({ error: "Token not found" }, { status: 404 });
+  }
+
+  const me = await getSessionUser();
+  const { error } = await db
+    .from("app_settings")
+    .update({
+      active_token_id: id,
+      updated_at: new Date().toISOString(),
+      updated_by: me?.id ?? null,
+    })
+    .eq("id", 1);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  invalidateAIConfigCache();
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(req: NextRequest) {
+  const denied = await requireSuperAdmin();
+  if (denied) return denied;
+
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const db = serverDb();
+  // The FK on app_settings.active_token_id is ON DELETE SET NULL, so deletion
+  // automatically clears the pointer if the active token is removed.
+  const { error } = await db.from("app_tokens").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  invalidateAIConfigCache();
+  return NextResponse.json({ success: true });
+}
