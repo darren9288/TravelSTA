@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
+import { getAIConfig } from "@/lib/ai-config";
 
 // POST /api/ai/parse-itinerary
 // Body: { text: string, trip_id: string }
@@ -25,8 +26,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const today = new Date().toISOString().slice(0, 10);
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
   const system = `You convert free-text travel day plans into structured itinerary items.
 
@@ -59,10 +59,10 @@ Rules:
 - Output ONLY JSON, no commentary.`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(cfg.messagesUrl, {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "x-api-key": cfg.apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },

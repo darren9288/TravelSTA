@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
+import { getAIConfig } from "@/lib/ai-config";
 
 // POST /api/ai/categorize
 // Body: { description: string }
@@ -11,16 +12,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "description required" }, { status: 400 });
   }
 
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
   const system = `Pick the single most fitting expense category for the user's description. Return ONLY JSON: {"category":"<one of: Activity, Breakfast, Lunch, Dinner, Small Eat, Entertainment, Others, Souvenirs, Supplies, Laundry, Hotel, Flight, Transport, Car Rental, Fuel, Travel Related>"}`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(cfg.messagesUrl, {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "x-api-key": cfg.apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },

@@ -1,3 +1,5 @@
+import { getAIConfig } from "./ai-config";
+
 function extractJSON(text: string): unknown {
   const start = text.indexOf("{");
   if (start === -1) throw new Error("No JSON found in response");
@@ -31,13 +33,12 @@ export async function parseExpenses(
   foreignCurrency: string,
   today: string
 ): Promise<ParsedExpenses> {
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
-  const res = await fetch(url, {
+  const res = await fetch(cfg.messagesUrl, {
     method: "POST",
     headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY!,
+      "x-api-key": cfg.apiKey,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/supabase-server";
+import { getAIConfig } from "@/lib/ai-config";
 
 // POST /api/ai/recap
 // Body: { trip_id: string }
@@ -74,8 +75,7 @@ export async function POST(req: NextRequest) {
     expense_count: (expenses ?? []).length,
   };
 
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
   const system = `You write friendly, share-worthy trip recaps for group travelers in Malaysia. The recap should feel like a WhatsApp message you'd send to your travel mates after the trip — warm, factual, no marketing fluff. About 150-250 words.
 
@@ -96,10 +96,10 @@ TRIP_DATA:
 ${JSON.stringify(summary)}`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(cfg.messagesUrl, {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "x-api-key": cfg.apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },

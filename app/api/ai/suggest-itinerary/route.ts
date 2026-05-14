@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
+import { getAIConfig } from "@/lib/ai-config";
 
 // POST /api/ai/suggest-itinerary
 // Body: { prompt?: string, date: string, trip_id: string }
@@ -29,8 +30,7 @@ export async function POST(req: NextRequest) {
     .eq("trip_id", trip_id)
     .eq("date", date);
 
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
   const system = `You're a local travel guide suggesting itinerary items for a Malaysian-based group trip. Generate 4-6 concrete activity / food / transport suggestions for the given day, given the destination and any user preference.
 
@@ -59,10 +59,10 @@ Rules:
 - Output JSON only, no commentary.`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(cfg.messagesUrl, {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "x-api-key": cfg.apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },

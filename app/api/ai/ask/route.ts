@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/supabase-server";
+import { getAIConfig } from "@/lib/ai-config";
 
 // POST /api/ai/ask
 // Body: { question: string, trip_id: string }
@@ -83,8 +84,7 @@ export async function POST(req: NextRequest) {
     })),
   };
 
-  const baseURL = process.env.CLAUDE_PROXY_URL ?? "https://api.anthropic.com";
-  const url = baseURL.endsWith("/v1") ? `${baseURL}/messages` : `${baseURL}/v1/messages`;
+  const cfg = await getAIConfig();
 
   const system = `You're a helpful travel-expense assistant for a Malaysian group trip tracker. Answer the user's question using ONLY the data in TRIP_CONTEXT below. If the data doesn't contain the answer, say so plainly — don't invent numbers.
 
@@ -98,10 +98,10 @@ TRIP_CONTEXT:
 ${JSON.stringify(summary)}`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(cfg.messagesUrl, {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "x-api-key": cfg.apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
