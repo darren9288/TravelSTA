@@ -21,8 +21,14 @@ type Props = {
 };
 
 export default function BudgetTracker({ tripId, trip, travelers, totalSpent, spentByTraveler = {}, readOnly, onSaved }: Props) {
-  const totalBudget: number = (trip as any).total_budget ?? 0;
-  const perPersonBudget: PerPersonBudget = (trip as any).per_person_budget ?? {};
+  // Local override state — after a save we update these immediately so the
+  // display reflects the new values without needing a full page reload.
+  // Parent can still pass onSaved to refresh its own data layer (SWR mutate).
+  const [savedTotal, setSavedTotal] = useState<number | null>(null);
+  const [savedPerPerson, setSavedPerPerson] = useState<PerPersonBudget | null>(null);
+
+  const totalBudget: number = savedTotal ?? (trip as any).total_budget ?? 0;
+  const perPersonBudget: PerPersonBudget = savedPerPerson ?? (trip as any).per_person_budget ?? {};
 
   const [editing, setEditing] = useState(false);
   const [editTotal, setEditTotal] = useState(String(totalBudget || ""));
@@ -43,19 +49,22 @@ export default function BudgetTracker({ tripId, trip, travelers, totalSpent, spe
       const n = parseFloat(val);
       if (n > 0) ppb[tid] = n;
     }
+    const nextTotal = parseFloat(editTotal) || null;
+    const nextPpb = Object.keys(ppb).length ? ppb : null;
     await fetch(`/api/trips/${tripId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        total_budget: parseFloat(editTotal) || null,
-        per_person_budget: Object.keys(ppb).length ? ppb : null,
+        total_budget: nextTotal,
+        per_person_budget: nextPpb,
       }),
     });
+    // Update local state so the display refreshes immediately — no full page reload.
+    setSavedTotal(nextTotal);
+    setSavedPerPerson(nextPpb ?? {});
     setSaving(false);
     setEditing(false);
     onSaved?.();
-    // Reload page data
-    window.location.reload();
   }
 
   if (editing) {

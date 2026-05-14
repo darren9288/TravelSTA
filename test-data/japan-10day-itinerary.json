@@ -1,0 +1,234 @@
+{
+  "_about": {
+    "trip": "Japan 2026 — Tokyo + Kyoto, 10 days",
+    "dates": "2026-07-01 to 2026-07-10",
+    "import_path": "/trips/<id>/import-export → Import Itinerary section",
+    "categories_used": ["flight", "hotel", "activity", "food", "transport", "other"],
+    "note": "Pairs with japan-10day.json (expenses). Times in HH:MM 24h. Photos and file attachments must still be added per-item via the itinerary page."
+  },
+  "items": [
+    {
+      "date": "2026-07-01",
+      "time": "08:30",
+      "end_time": "16:30",
+      "title": "Flight AirAsia AK62 → Narita",
+      "category": "flight",
+      "notes": "Terminal 1 KLIA. Check-in opens 2 hrs before. Bring power bank under 100Wh.",
+      "links": [
+        { "label": "AirAsia booking", "url": "https://www.airasia.com/" }
+      ]
+    },
+    {
+      "date": "2026-07-01",
+      "time": "17:30",
+      "title": "Skyliner Narita → Nippori",
+      "category": "transport",
+      "notes": "Book online for cheaper rate. JR Pass not valid on Skyliner.",
+      "links": [{ "label": "Keisei Skyliner", "url": "https://www.keisei.co.jp/keisei/tetudou/skyliner/us/" }]
+    },
+    {
+      "date": "2026-07-01",
+      "time": "19:00",
+      "title": "Check-in Shinjuku Granbell Hotel",
+      "category": "hotel",
+      "notes": "Confirmation #ABC123. Free luggage hold if room not ready.",
+      "links": [{ "label": "Hotel website", "url": "https://www.granbellhotel.jp/shinjuku/en/" }]
+    },
+    {
+      "date": "2026-07-01",
+      "time": "20:30",
+      "title": "Welcome dinner — Ichiran Ramen Shibuya",
+      "category": "food",
+      "notes": "Closest branch: Shibuya. Queue manageable around 9pm."
+    },
+
+    {
+      "date": "2026-07-02",
+      "time": "09:30",
+      "title": "Tsukiji Outer Market breakfast",
+      "category": "food",
+      "notes": "Try tamagoyaki and uni at the Sushi Dai stall — go early to skip the queue."
+    },
+    {
+      "date": "2026-07-02",
+      "time": "13:00",
+      "end_time": "16:00",
+      "title": "teamLab Planets",
+      "category": "activity",
+      "notes": "Toyosu. Wear shorts (you walk through water). Tickets timed-entry.",
+      "links": [{ "label": "teamLab Planets", "url": "https://planets.teamlab.art/tokyo/" }]
+    },
+    {
+      "date": "2026-07-02",
+      "time": "19:00",
+      "title": "Izakaya in Shinjuku Golden Gai",
+      "category": "food",
+      "notes": "Many bars charge ¥500-1000 cover. Pick one with English menu first time."
+    },
+
+    {
+      "date": "2026-07-03",
+      "time": "09:00",
+      "title": "Sensoji Temple + Nakamise street",
+      "category": "activity",
+      "notes": "Asakusa. Try ningyo-yaki and melon pan along Nakamise."
+    },
+    {
+      "date": "2026-07-03",
+      "time": "14:00",
+      "title": "Akihabara — Yodobashi, anime shops",
+      "category": "activity",
+      "notes": "Mandarake for vintage anime figurines. AKB48 cafe optional."
+    },
+    {
+      "date": "2026-07-03",
+      "time": "19:30",
+      "title": "Sushi dinner at Sushi Zanmai Ginza",
+      "category": "food",
+      "notes": "Open 24h. Sit at the counter if available."
+    },
+
+    {
+      "date": "2026-07-04",
+      "time": "08:30",
+      "end_time": "22:00",
+      "title": "Tokyo DisneySea — full day",
+      "category": "activity",
+      "notes": "Get Premier Access for Soaring and Tower of Terror. Park hopper not needed. Bring portable fan.",
+      "links": [
+        { "label": "DisneySea tickets", "url": "https://www.tokyodisneyresort.jp/en/tds/" }
+      ]
+    },
+
+    {
+      "date": "2026-07-05",
+      "time": "10:00",
+      "end_time": "12:30",
+      "title": "Shinkansen Tokyo → Kyoto",
+      "category": "transport",
+      "notes": "Nozomi 11. Reserve seats in advance. Eat ekiben on board.",
+      "links": [{ "label": "Smart-EX booking", "url": "https://smart-ex.jp/en/" }]
+    },
+    {
+      "date": "2026-07-05",
+      "time": "13:30",
+      "title": "Check-in Kyoto Ryokan-style hotel",
+      "category": "hotel",
+      "notes": "Confirmation #DEF456. Onsen open 17:00-23:00."
+    },
+    {
+      "date": "2026-07-05",
+      "time": "19:30",
+      "title": "Pontocho alley dinner",
+      "category": "food",
+      "notes": "Narrow street along Kamogawa river. Aim for a place with kawayuka river-deck seating."
+    },
+
+    {
+      "date": "2026-07-06",
+      "time": "08:00",
+      "end_time": "13:00",
+      "title": "Fushimi Inari Shrine hike",
+      "category": "activity",
+      "notes": "Start early to beat crowds and heat. Full loop to the top: ~2.5 hours."
+    },
+    {
+      "date": "2026-07-06",
+      "time": "15:00",
+      "end_time": "16:30",
+      "title": "Traditional tea ceremony — Camellia Garden",
+      "category": "activity",
+      "notes": "Gion district. Wear socks (you'll remove shoes).",
+      "links": [{ "label": "Camellia Tea Ceremony", "url": "https://www.tea-kyoto.com/" }]
+    },
+    {
+      "date": "2026-07-06",
+      "time": "19:30",
+      "title": "Kaiseki multi-course dinner",
+      "category": "food",
+      "notes": "Reservation 4 pax. Allergies/notes called ahead."
+    },
+
+    {
+      "date": "2026-07-07",
+      "time": "09:00",
+      "title": "Arashiyama Bamboo Grove + Tenryu-ji",
+      "category": "activity",
+      "notes": "Early morning is the only way to get photos without crowds."
+    },
+    {
+      "date": "2026-07-07",
+      "time": "11:30",
+      "title": "Iwatayama Monkey Park",
+      "category": "activity",
+      "notes": "20 min hike up. Bring snacks for monkeys (sold at the top)."
+    },
+    {
+      "date": "2026-07-07",
+      "time": "14:00",
+      "end_time": "16:00",
+      "title": "Hozugawa river boat ride",
+      "category": "activity",
+      "notes": "From Kameoka. Book in advance during peak season.",
+      "links": [{ "label": "Hozugawa Yusen", "url": "https://www.hozugawakudari.jp/en" }]
+    },
+
+    {
+      "date": "2026-07-08",
+      "time": "09:30",
+      "end_time": "17:30",
+      "title": "Day trip to Nara — Todai-ji + deer park",
+      "category": "activity",
+      "notes": "Buy deer crackers from licensed vendors only (the deer will bow for them). Don't tease them with food.",
+      "links": [{ "label": "Nara Park guide", "url": "https://www.nara-park.com/en/" }]
+    },
+
+    {
+      "date": "2026-07-09",
+      "time": "09:00",
+      "end_time": "11:30",
+      "title": "Shinkansen Kyoto → Tokyo",
+      "category": "transport",
+      "notes": "Return leg. Last day in Tokyo for shopping."
+    },
+    {
+      "date": "2026-07-09",
+      "time": "12:30",
+      "title": "Check-in Tokyo final night hotel",
+      "category": "hotel",
+      "notes": "Ginza area for easy shopping access."
+    },
+    {
+      "date": "2026-07-09",
+      "time": "14:00",
+      "end_time": "18:00",
+      "title": "Ginza shopping — Uniqlo flagship, MUJI",
+      "category": "activity",
+      "notes": "Uniqlo Ginza has limited-edition lines not in MY. MUJI Ginza top floor has cafe."
+    },
+    {
+      "date": "2026-07-09",
+      "time": "19:30",
+      "title": "Final dinner — Ushigoro yakiniku",
+      "category": "food",
+      "notes": "Reservation 4 pax. Try the wagyu sushi if available."
+    },
+
+    {
+      "date": "2026-07-10",
+      "time": "10:00",
+      "title": "Skyliner Nippori → Narita",
+      "category": "transport",
+      "notes": "Allow 90 min for terminal + check-in."
+    },
+    {
+      "date": "2026-07-10",
+      "time": "13:30",
+      "end_time": "20:30",
+      "title": "Flight AirAsia AK63 → KLIA",
+      "category": "flight",
+      "notes": "Return leg. Terminal 1 Narita.",
+      "links": [{ "label": "AirAsia booking", "url": "https://www.airasia.com/" }]
+    }
+  ]
+}

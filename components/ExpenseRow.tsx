@@ -301,13 +301,28 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                // Cap receipt photos at 2 MB to stay safely under both the
+                // Free-tier cached-egress quota and Next.js's 4.5 MB API body
+                // limit. Most phone photos are 1-3 MB JPEGs — a quick "shrink
+                // image" step in their gallery usually does the job.
+                const MAX_BYTES = 2 * 1024 * 1024;
+                if (file.size > MAX_BYTES) {
+                  const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+                  alert(`Receipt is ${sizeMb} MB — max 2 MB. Compress at tinypng.com or shrink in your phone's photo app, then try again.`);
+                  e.target.value = "";
+                  return;
+                }
                 setPhotoUploading(true);
                 const form = new FormData();
                 form.append("file", file);
                 form.append("expense_id", expense.id);
                 const res = await fetch("/api/expenses/upload-photo", { method: "POST", body: form });
-                const data = await res.json();
-                if (res.ok) setPhotoUrl(data.photo_url);
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                  setPhotoUrl(data.photo_url);
+                } else {
+                  alert(data.error ?? `Upload failed (${res.status})`);
+                }
                 setPhotoUploading(false);
                 e.target.value = "";
               }}

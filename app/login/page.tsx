@@ -91,6 +91,9 @@ export default function LoginPage() {
             Sign up
           </Link>
         </p>
+        <p className="text-center text-xs text-slate-600 mt-3">
+          Forgot password? Ask the admin to reset it for you.
+        </p>
       </div>
     </div>
   );

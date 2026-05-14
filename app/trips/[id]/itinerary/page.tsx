@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useParams } from "next/navigation";
+import { useTripRealtime } from "@/lib/use-realtime";
 import Nav from "@/components/Nav";
 import {
   Plane, Hotel, MapPin, Utensils, Train, Tag,
@@ -50,6 +51,8 @@ export default function ItineraryPage() {
   const trip = tripSWR && !tripSWR.error ? { name: tripSWR.name, start_date: tripSWR.start_date, my_role: tripSWR.my_role } : null;
   const items: ItineraryItem[] = Array.isArray(itemsSWR) ? itemsSWR : [];
   const loading = itemsLoading;
+
+  useTripRealtime(id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -209,13 +212,26 @@ export default function ItineraryPage() {
 
   async function uploadPhoto(file: File) {
     if (!selectedItem) return;
+    // Cover photos are loaded each time the itinerary item opens.
+    // 3 MB cap is plenty for a JPEG, comfortably under Next.js's 4.5 MB
+    // API body limit, and gentle on the cached-egress quota.
+    const MAX_BYTES = 3 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+      alert(`Image is ${sizeMb} MB — max 3 MB. Compress at tinypng.com, then try again.`);
+      return;
+    }
     setUploadingPhoto(true); setUploadError("");
     const form = new FormData();
     form.append("file", file); form.append("item_id", selectedItem.id);
     form.append("trip_id", id); form.append("type", "photo");
     const res = await fetch("/api/itinerary/upload", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) { setUploadError(data.error); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.error ?? `Upload failed (${res.status})`;
+      setUploadError(msg);
+      alert(msg);
+    }
     else {
       await fetch("/api/itinerary", {
         method: "PUT",
@@ -229,13 +245,26 @@ export default function ItineraryPage() {
 
   async function uploadFile(file: File) {
     if (!selectedItem) return;
+    // Itinerary attachments (boarding passes, hotel confirmations) — 5 MB cap.
+    // Most PDFs are well under this; anything bigger usually has unnecessary
+    // embedded high-res images and should be compressed/screenshotted first.
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+      alert(`File is ${sizeMb} MB — max 5 MB. For large PDFs, try compressing at ilovepdf.com.`);
+      return;
+    }
     setUploadingFile(true); setUploadError("");
     const form = new FormData();
     form.append("file", file); form.append("item_id", selectedItem.id);
     form.append("trip_id", id); form.append("type", "file");
     const res = await fetch("/api/itinerary/upload", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) { setUploadError(data.error); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.error ?? `Upload failed (${res.status})`;
+      setUploadError(msg);
+      alert(msg);
+    }
     else {
       const fileRes = await fetch("/api/itinerary/files", {
         method: "POST",

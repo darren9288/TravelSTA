@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight, CalendarDays } from "lucide-react";
+import { Home, PlusCircle, Receipt, BarChart2, Banknote, Settings2, ArrowLeftCircle, Terminal, LogOut, User, Wallet, ArrowLeftRight, CalendarDays, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type NavProps = { tripId?: string; tripName?: string };
 
@@ -11,14 +13,30 @@ export default function Nav({ tripId, tripName }: NavProps) {
   const path = usePathname();
   const router = useRouter();
   const [username, setUsername] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Fetch trip role via SWR so we can hide editor-only links from viewers.
+  // SWR dedupes this with the page's own trip fetch — no extra network hit.
+  const { data: tripData } = useSWR<{ my_role?: string }>(
+    tripId ? `/api/trips/${tripId}` : null,
+    fetcher
+  );
+  const myRole = tripData?.my_role ?? null;
+  const isViewer = myRole === "viewer";
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        // Username is stored as the part before @travelsta.app
+        // Username is stored as the part before @placeholder.com.
         const name = user.email?.replace("@placeholder.com", "") ?? null;
         setUsername(name);
+        // Ask the server whether this user has super admin privileges, so we can
+        // surface an Admin link only to those users.
+        fetch("/api/admin/me", { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => setIsSuperAdmin(Boolean(data.is_super_admin)))
+          .catch(() => setIsSuperAdmin(false));
       }
     });
   }, []);
@@ -41,12 +59,23 @@ export default function Nav({ tripId, tripName }: NavProps) {
           <Link href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${path === "/" ? "bg-emerald-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
             <Home size={18} /> My Trips
           </Link>
+          {isSuperAdmin && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${path.startsWith("/admin") ? "bg-purple-600 text-white" : "text-purple-300 hover:bg-purple-900/40 hover:text-white"}`}
+            >
+              <Shield size={18} /> Admin Panel
+            </Link>
+          )}
           <div className="mt-auto pt-4 border-t border-slate-800">
             {username && (
-              <div className="flex items-center gap-2 px-3 py-2 mb-1">
-                <User size={14} className="text-slate-500" />
-                <span className="text-xs text-slate-400 font-mono">{username}</span>
-              </div>
+              <Link
+                href="/account"
+                className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg hover:bg-slate-800 transition-colors group"
+              >
+                <User size={14} className="text-slate-500 group-hover:text-emerald-400" />
+                <span className="text-xs text-slate-400 group-hover:text-white font-mono">{username}</span>
+              </Link>
             )}
             <button onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">
@@ -54,9 +83,17 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </button>
           </div>
         </nav>
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50 safe-bottom-pad">
           <Link href="/" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-emerald-400">
             <Home size={20} /> Trips
+          </Link>
+          {isSuperAdmin && (
+            <Link href="/admin" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-purple-300">
+              <Shield size={20} /> Admin
+            </Link>
+          )}
+          <Link href="/account" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-slate-500">
+            <User size={20} /> Account
           </Link>
           <button onClick={handleLogout} className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-slate-500">
             <LogOut size={20} /> Sign Out
@@ -70,14 +107,18 @@ export default function Nav({ tripId, tripName }: NavProps) {
     { href: `/trips/${tripId}`, icon: BarChart2, label: "Dashboard" },
     { href: `/trips/${tripId}/itinerary`, icon: CalendarDays, label: "Itinerary" },
     { href: `/trips/${tripId}/expenses`, icon: Receipt, label: "Expenses" },
-    { href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" },
+    // Add tab is hidden from viewers — they're redirected to the dashboard
+    // if they hit /add directly. Show for non-viewers and for unresolved roles
+    // (avoids flicker before role data arrives).
+    ...(!isViewer ? [{ href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" }] : []),
     { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
     { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Analytics" },
     { href: `/trips/${tripId}/pool`, icon: Banknote, label: "Pool" },
     { href: `/trips/${tripId}/wallets`, icon: Wallet, label: "Wallets" },
     { href: `/trips/${tripId}/import-export`, icon: ArrowLeftRight, label: "Import/Export" },
     { href: `/trips/${tripId}/settings`, icon: Settings2, label: "Settings" },
-    { href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" },
+    // Dev tab is owner-only — appended below when isSuperAdmin is true.
+    ...(isSuperAdmin ? [{ href: `/trips/${tripId}/dev`, icon: Terminal, label: "Dev" }] : []),
   ];
 
   return (
@@ -99,12 +140,23 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </Link>
           );
         })}
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-lg text-sm font-medium text-purple-300 hover:bg-purple-900/40 hover:text-white transition-colors border border-purple-900/40"
+          >
+            <Shield size={18} /> Admin Panel
+          </Link>
+        )}
         <div className="mt-auto pt-4 border-t border-slate-800">
           {username && (
-            <div className="flex items-center gap-2 px-3 py-2 mb-1">
-              <User size={14} className="text-slate-500" />
-              <span className="text-xs text-slate-400 font-mono">{username}</span>
-            </div>
+            <Link
+              href="/account"
+              className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg hover:bg-slate-800 transition-colors group"
+            >
+              <User size={14} className="text-slate-500 group-hover:text-emerald-400" />
+              <span className="text-xs text-slate-400 group-hover:text-white font-mono">{username}</span>
+            </Link>
           )}
           <button onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors">
@@ -112,7 +164,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
           </button>
         </div>
       </nav>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 safe-bottom-pad">
         <div className="flex overflow-x-auto scrollbar-none">
           {links.map(({ href, icon: Icon, label }) => {
             const active = path === href;
@@ -123,6 +175,11 @@ export default function Nav({ tripId, tripName }: NavProps) {
               </Link>
             );
           })}
+          {isSuperAdmin && (
+            <Link href="/admin" className="flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium text-purple-300 hover:text-purple-200 transition-colors min-w-[64px]">
+              <Shield size={20} /> Admin
+            </Link>
+          )}
           <button onClick={handleLogout}
             className="flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium text-slate-500 hover:text-red-400 transition-colors min-w-[64px]">
             <LogOut size={20} /> Sign Out

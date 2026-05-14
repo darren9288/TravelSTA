@@ -25,6 +25,16 @@ export async function POST(req: NextRequest) {
   const path = `${trip_id}/background.${ext}`;
   const db = serverDb();
 
+  // Clear any existing background file(s) before issuing the new signed URL.
+  // Without this, switching from mp4 → jpg (or any extension change) leaves
+  // the previous file orphaned in the bucket — it keeps consuming storage
+  // and, more painfully, cached egress whenever someone follows an old URL.
+  const { data: existing } = await db.storage.from("trip-backgrounds").list(trip_id);
+  if (existing?.length) {
+    const toRemove = existing.map((f) => `${trip_id}/${f.name}`);
+    await db.storage.from("trip-backgrounds").remove(toRemove);
+  }
+
   const { data, error } = await db.storage
     .from("trip-backgrounds")
     .createSignedUploadUrl(path, { upsert: true } as never);

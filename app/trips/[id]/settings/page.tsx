@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy, Archive, RotateCcw } from "lucide-react";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
+import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
 
 type Member = {
@@ -35,6 +36,9 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(TRAVELER_COLORS[0]);
 
+  // Toggle whether archived travelers + pools are shown in the lists.
+  const [showArchived, setShowArchived] = useState(false);
+
   // Members
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string | null>(null);
@@ -47,30 +51,32 @@ export default function SettingsPage() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    async function load() {
-      const [tripRes, travelerRes, membersRes] = await Promise.all([
-        fetch(`/api/trips/${id}`).then((r) => r.json()),
-        fetch(`/api/travelers?trip_id=${id}`).then((r) => r.json()),
-        fetch(`/api/members?trip_id=${id}`).then((r) => r.json()),
-      ]);
-      if (tripRes.error) return;
-      setTrip(tripRes);
-      setName(tripRes.name);
-      setDestination(tripRes.destination ?? "");
-      setStartDate(tripRes.start_date ?? "");
-      setEndDate(tripRes.end_date ?? "");
-      setCashRate(String(tripRes.cash_rate));
-      setWiseRate(String(tripRes.wise_rate));
-      setBackgroundImageUrl(tripRes.background_image_url ?? "");
-      setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
-      if (!membersRes.error) {
-        setMembers(membersRes.members ?? []);
-        setMyRole(membersRes.my_role ?? null);
-      }
+  const load = useCallback(async () => {
+    const [tripRes, travelerRes, membersRes] = await Promise.all([
+      fetch(`/api/trips/${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/travelers?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/members?trip_id=${id}`, { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    if (tripRes.error) return;
+    setTrip(tripRes);
+    setName(tripRes.name);
+    setDestination(tripRes.destination ?? "");
+    setStartDate(tripRes.start_date ?? "");
+    setEndDate(tripRes.end_date ?? "");
+    setCashRate(String(tripRes.cash_rate));
+    setWiseRate(String(tripRes.wise_rate));
+    setBackgroundImageUrl(tripRes.background_image_url ?? "");
+    setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
+    if (!membersRes.error) {
+      setMembers(membersRes.members ?? []);
+      setMyRole(membersRes.my_role ?? null);
     }
-    load();
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Refresh when anyone else mutates trip data via Supabase Realtime.
+  useTripRealtime(id, load);
 
   async function saveTrip() {
     setSaving(true);
@@ -90,6 +96,27 @@ export default function SettingsPage() {
     const data = await res.json();
     if (!res.ok) { setError(data.error); } else { setSuccess("Saved!"); setTrip(data); }
     setSaving(false);
+  }
+
+  // Toggle archived state on a traveler. Archived travelers are hidden from
+  // new-expense dropdowns but their historical splits and balances remain.
+  async function archiveTraveler(travelerId: string, name: string, archived: boolean) {
+    const verb = archived ? "Archive" : "Restore";
+    const message = archived
+      ? `Archive "${name}"? They'll be hidden from new expenses and even-splits, but their existing share of past expenses stays.`
+      : `Restore "${name}"? They'll be eligible for new expenses again.`;
+    if (!confirm(message)) return;
+    const res = await fetch("/api/travelers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: travelerId, archived }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error ?? `${verb} failed (${res.status})`);
+      return;
+    }
+    setTravelers((prev) => prev.map((t) => t.id === travelerId ? { ...t, archived } : t));
   }
 
   async function addTraveler() {
@@ -148,9 +175,17 @@ export default function SettingsPage() {
 
   async function uploadBackground(file: File) {
     const isVideo = isVideoFile(file);
-    const maxBytes = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+    // Tight caps to keep Supabase cached-egress usage under the Free plan.
+    // Background files are fetched on every page load so even a few MB
+    // multiplied by daily usage burns through the 5 GB monthly quota fast.
+    const maxBytes = isVideo ? 5 * 1024 * 1024 : 1 * 1024 * 1024;
     if (file.size > maxBytes) {
-      setUploadError(isVideo ? "Video must be under 50 MB." : "Image must be under 8 MB.");
+      const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+      setUploadError(
+        isVideo
+          ? `Video is ${sizeMb} MB — max 5 MB. Re-export at 480p or shorter length, then try again.`
+          : `Image is ${sizeMb} MB — max 1 MB. Try compressing at tinypng.com.`
+      );
       return;
     }
     setUploading(true); setUploadError("");
@@ -184,8 +219,9 @@ export default function SettingsPage() {
 
   if (!trip) return null;
 
-  const realTravelers = travelers.filter((t) => !t.is_pool);
-  const pools = travelers.filter((t) => t.is_pool);
+  const realTravelers = travelers.filter((t) => !t.is_pool && (showArchived || !t.archived));
+  const pools = travelers.filter((t) => t.is_pool && (showArchived || !t.archived));
+  const hasArchived = travelers.some((t) => t.archived);
 
   return (
     <>
@@ -430,11 +466,39 @@ export default function SettingsPage() {
 
           {/* Travelers */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-white">Travelers</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Travelers</h2>
+              {hasArchived && (
+                <button
+                  onClick={() => setShowArchived((v) => !v)}
+                  className={`flex items-center gap-1 px-2 py-0.5 border text-xs rounded-lg transition-colors ${
+                    showArchived
+                      ? "bg-amber-900/40 border-amber-700/60 text-amber-200"
+                      : "bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-400"
+                  }`}
+                >
+                  <Archive size={10} /> {showArchived ? "Hide archived" : "Show archived"}
+                </button>
+              )}
+            </div>
             {realTravelers.map((t) => (
-              <div key={t.id} className="flex items-center gap-3">
+              <div key={t.id} className={`flex items-center gap-3 ${t.archived ? "opacity-60" : ""}`}>
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
                 <span className="text-sm text-white flex-1">{t.name}</span>
+                {t.archived && (
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-800/50">
+                    Archived
+                  </span>
+                )}
+                {myRole !== "viewer" && (
+                  <button
+                    onClick={() => archiveTraveler(t.id, t.name, !t.archived)}
+                    className={`p-1 transition-colors ${t.archived ? "text-emerald-500 hover:text-emerald-300" : "text-slate-500 hover:text-amber-400"}`}
+                    title={t.archived ? "Restore traveler" : "Archive traveler"}
+                  >
+                    {t.archived ? <RotateCcw size={13} /> : <Archive size={13} />}
+                  </button>
+                )}
               </div>
             ))}
             {/* Add traveler — editors/admins only */}
@@ -480,6 +544,7 @@ export default function SettingsPage() {
               travelers={realTravelers}
               totalSpent={0}
               readOnly={myRole === "viewer"}
+              onSaved={load}
             />
           )}
 

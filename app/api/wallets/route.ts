@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
     db.from("wallet_topups").select("wallet_id, amount").in("wallet_id", walletIds),
     db.from("expenses").select("wallet_id, myr_amount, foreign_amount").in("wallet_id", walletIds),
     db.from("pool_topups").select("from_wallet_id, myr_amount, foreign_amount").in("from_wallet_id", walletIds),
-    db.from("settlement_payments").select("from_wallet_id, amount").in("from_wallet_id", walletIds),
-    db.from("settlement_payments").select("to_wallet_id, amount").in("to_wallet_id", walletIds),
+    db.from("settlement_payments").select("from_wallet_id, amount, from_foreign_amount").in("from_wallet_id", walletIds),
+    db.from("settlement_payments").select("to_wallet_id, amount, to_foreign_amount").in("to_wallet_id", walletIds),
   ]);
 
   // Build wallet metadata map
@@ -58,17 +58,34 @@ export async function GET(req: NextRequest) {
     const deduct = currency === "MYR" ? Number(p.myr_amount) : Number(p.foreign_amount ?? 0);
     balances[p.from_wallet_id] = (balances[p.from_wallet_id] ?? 0) - deduct;
   }
-  // Settlements paid OUT from wallet (deduct)
+  // Settlements paid OUT from wallet (deduct). Use the frozen foreign amount
+  // when available, falling back to live-rate conversion for legacy rows.
   for (const s of settledFrom ?? []) {
     if (!s.from_wallet_id) continue;
-    const rate = getRate(s.from_wallet_id);
-    balances[s.from_wallet_id] = (balances[s.from_wallet_id] ?? 0) - Number(s.amount) * rate;
+    const isForeign = walletMap[s.from_wallet_id]?.currency !== "MYR";
+    let deduct: number;
+    if (isForeign && s.from_foreign_amount != null) {
+      deduct = Number(s.from_foreign_amount);
+    } else if (isForeign) {
+      deduct = Number(s.amount) * getRate(s.from_wallet_id);
+    } else {
+      deduct = Number(s.amount);
+    }
+    balances[s.from_wallet_id] = (balances[s.from_wallet_id] ?? 0) - deduct;
   }
   // Settlements received INTO wallet (add)
   for (const s of settledTo ?? []) {
     if (!s.to_wallet_id) continue;
-    const rate = getRate(s.to_wallet_id);
-    balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + Number(s.amount) * rate;
+    const isForeign = walletMap[s.to_wallet_id]?.currency !== "MYR";
+    let add: number;
+    if (isForeign && s.to_foreign_amount != null) {
+      add = Number(s.to_foreign_amount);
+    } else if (isForeign) {
+      add = Number(s.amount) * getRate(s.to_wallet_id);
+    } else {
+      add = Number(s.amount);
+    }
+    balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + add;
   }
 
   return NextResponse.json({ wallets: wallets ?? [], balances });

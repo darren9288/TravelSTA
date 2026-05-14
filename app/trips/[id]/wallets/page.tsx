@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { WalletEvent } from "@/app/api/wallet-history/route";
@@ -23,6 +24,8 @@ export default function WalletsPage() {
   const travelers: Traveler[] = (Array.isArray(travelersData) ? travelersData : []).filter((t) => !t.is_pool);
   const wallets: WalletRow[] = walletsData?.wallets ?? [];
   const balances: Record<string, number> = walletsData?.balances ?? {};
+
+  useTripRealtime(id);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTravelerId, setNewTravelerId] = useState("");
@@ -117,7 +120,12 @@ export default function WalletsPage() {
 
   async function deleteWallet(walletId: string) {
     if (!confirm("Delete this wallet and all its top-up history?")) return;
-    await fetch("/api/wallets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: walletId }) });
+    const res = await fetch("/api/wallets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: walletId }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? `Failed to delete wallet (${res.status})`);
+      return;
+    }
     if (selectedWallet === walletId) setSelectedWallet(null);
     mutateWallets();
   }

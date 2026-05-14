@@ -1,22 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Nav from "@/components/Nav";
 import TripCard from "@/components/TripCard";
 import { Trip } from "@/lib/supabase";
 import { Plus, Hash, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 export default function HomePage() {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Switched from useState+fetch to useSWR so the trips list benefits from
+  // the service worker StaleWhileRevalidate cache. After the first visit,
+  // subsequent loads render instantly from cache while a fresh fetch runs
+  // in the background.
+  const { data: tripsData, isLoading: loading } = useSWR<Trip[]>("/api/trips", fetcher);
+  const trips: Trip[] = Array.isArray(tripsData) ? tripsData : [];
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const router = useRouter();
-
-  useEffect(() => {
-    fetch("/api/trips").then((r) => r.json()).then((d) => { setTrips(Array.isArray(d) ? d : []); setLoading(false); });
-  }, []);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();

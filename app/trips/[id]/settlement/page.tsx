@@ -7,6 +7,7 @@ import { NetBalance, PaymentInstruction } from "@/lib/settlement";
 import { ArrowRight, RefreshCw, CheckCircle2, Wallet, History } from "lucide-react";
 import Link from "next/link";
 import { SettlementPayment, Traveler } from "@/lib/supabase";
+import { useTripRealtime } from "@/lib/use-realtime";
 
 type WalletSelection = {
   from_wallet_id: string | null;
@@ -58,6 +59,8 @@ export default function SettlementPage() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [load, router]);
+
+  useTripRealtime(id, load);
 
   async function settleAll() {
     setConfirm(false);

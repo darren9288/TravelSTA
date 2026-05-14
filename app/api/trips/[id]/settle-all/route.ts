@@ -41,17 +41,66 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 2. Calculate instructions so we can record them as history
   const { instructions } = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
 
-  // 3. Record each instruction as a settlement_payment (history) with wallet selections
+  // 3. Record each instruction as a settlement_payment (history) with wallet selections.
+  // We also freeze each side's foreign-currency equivalent so a later rate change
+  // in trip settings doesn't retroactively alter the displayed JPY in wallet history.
   if (instructions.length > 0) {
+    // Look up wallet metadata for all the wallets referenced in this batch.
+    const walletIds = Array.from(
+      new Set(
+        Object.values(walletSelections)
+          .flatMap((s) => [s?.from_wallet_id, s?.to_wallet_id])
+          .filter(Boolean) as string[]
+      )
+    );
+    let walletMap: Record<string, { currency: string; name: string }> = {};
+    if (walletIds.length) {
+      const { data: wallets } = await db
+        .from("wallets")
+        .select("id, currency, name")
+        .in("id", walletIds);
+      walletMap = Object.fromEntries(
+        (wallets ?? []).map((w: { id: string; currency: string; name: string }) => [
+          w.id,
+          { currency: w.currency, name: w.name },
+        ])
+      );
+    }
+
+    // Fetch trip rates once for the conversion.
+    const { data: trip } = await db
+      .from("trips")
+      .select("cash_rate, wise_rate")
+      .eq("id", tripId)
+      .single();
+    const cashRate = Number(trip?.cash_rate ?? 1);
+    const wiseRate = Number(trip?.wise_rate ?? 1);
+
+    // Foreign equivalent for a wallet: amount × wallet's rate. Returns null if
+    // the wallet is MYR or unknown (no conversion needed).
+    function foreignFor(walletId: string | null, amountMyr: number): number | null {
+      if (!walletId) return null;
+      const w = walletMap[walletId];
+      if (!w || w.currency === "MYR") return null;
+      const rate = w.name.toLowerCase().includes("wise") ? wiseRate : cashRate;
+      return parseFloat((amountMyr * rate).toFixed(2));
+    }
+
     await db.from("settlement_payments").insert(
-      instructions.map((inst, i) => ({
-        trip_id: tripId,
-        from_traveler_id: inst.from.id,
-        to_traveler_id: inst.to.id,
-        amount: inst.amount,
-        from_wallet_id: walletSelections[i]?.from_wallet_id ?? null,
-        to_wallet_id: walletSelections[i]?.to_wallet_id ?? null,
-      }))
+      instructions.map((inst, i) => {
+        const fromWalletId = walletSelections[i]?.from_wallet_id ?? null;
+        const toWalletId = walletSelections[i]?.to_wallet_id ?? null;
+        return {
+          trip_id: tripId,
+          from_traveler_id: inst.from.id,
+          to_traveler_id: inst.to.id,
+          amount: inst.amount,
+          from_wallet_id: fromWalletId,
+          to_wallet_id: toWalletId,
+          from_foreign_amount: foreignFor(fromWalletId, inst.amount),
+          to_foreign_amount: foreignFor(toWalletId, inst.amount),
+        };
+      })
     );
   }
 

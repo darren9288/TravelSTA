@@ -1,0 +1,946 @@
+{
+  "_about": {
+    "trip": "Japan 2026 — Tokyo + Kyoto, 10 days",
+    "dates": "2026-07-01 to 2026-07-10",
+    "travelers": [
+      "Darren",
+      "Willy",
+      "Mac",
+      "Cristo"
+    ],
+    "foreign_currency": "JPY",
+    "cash_rate": 33,
+    "wise_rate": 34,
+    "wallets_needed": {
+      "Darren": [
+        "Cash",
+        "Wise"
+      ],
+      "Willy": [
+        "Cash",
+        "Wise"
+      ],
+      "Mac": [
+        "Cash",
+        "Wise"
+      ],
+      "Cristo": [
+        "Cash",
+        "Wise"
+      ]
+    },
+    "manual_pre_import_steps": [
+      "Create trip Japan 2026 with destination Japan, dates 2026-07-01 → 2026-07-10",
+      "Set foreign_currency=JPY, cash_rate=33, wise_rate=34",
+      "Add 4 real travelers: Darren, Willy, Mac, Cristo",
+      "Add 2 pool travelers via Pool page: Pool Cash and Pool Wise (both pool_currency=JPY)",
+      "Create personal wallets for each real traveler: Cash and Wise (both in JPY)",
+      "Top up Pool Cash via pool top-up from each personal Cash wallet",
+      "Top up Pool Wise via pool top-up from each personal Wise wallet",
+      "Import this file via /trips/[id]/import-export → JSON tab"
+    ],
+    "pool_travelers": [
+      "Pool Cash",
+      "Pool Wise"
+    ],
+    "note": "Pool transactions reference the pool traveler name (Pool Cash or Pool Wise) directly. The wallet field is omitted for pool transactions because pool balance is tracked via pool_topups, not wallet records."
+  },
+  "transactions": [
+    {
+      "date": "2026-07-01",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 9880,
+      "myr_amount": 299.39,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Skyliner Narita Airport → Tokyo, 4 pax"
+    },
+    {
+      "date": "2026-07-01",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo Shinjuku hotel — night 1"
+    },
+    {
+      "date": "2026-07-01",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 9600,
+      "myr_amount": 290.91,
+      "paid_by": "Willy",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Welcome ramen at Ichiran Shibuya"
+    },
+    {
+      "date": "2026-07-01",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 800,
+      "myr_amount": 24.24,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Darren",
+          "amount": 24.24
+        }
+      ],
+      "notes": "Tokyo Tower keychain"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo hotel — night 2"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 5200,
+      "myr_amount": 157.58,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Hotel cafe breakfast set ×4"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 3200,
+      "myr_amount": 96.97,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo Metro day passes ×4"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 4200,
+      "myr_amount": 127.27,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Lunch at Tsukiji Outer Market"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 14400,
+      "myr_amount": 436.36,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "teamLab Planets tickets ×4"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 9600,
+      "myr_amount": 290.91,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Izakaya in Shinjuku Golden Gai"
+    },
+    {
+      "date": "2026-07-02",
+      "category": "Entertainment",
+      "currency": "JPY",
+      "amount": 1000,
+      "myr_amount": 30.3,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Mac",
+          "amount": 30.3
+        }
+      ],
+      "notes": "Pachinko tokens"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo hotel — night 3"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 1600,
+      "myr_amount": 48.48,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "7-Eleven onigiri + coffee"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 3200,
+      "myr_amount": 96.97,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Sensoji street food — yakitori, taiyaki"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 1600,
+      "myr_amount": 48.48,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Asakusa to Akihabara train ×4"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 8000,
+      "myr_amount": 242.42,
+      "paid_by": "Cristo",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Cristo",
+          "amount": 242.42
+        }
+      ],
+      "notes": "Anime figurine — Akihabara"
+    },
+    {
+      "date": "2026-07-03",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 12000,
+      "myr_amount": 363.64,
+      "paid_by": "Cristo",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Sushi dinner at Sushi Zanmai"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo hotel — night 4"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 36000,
+      "myr_amount": 1090.91,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo DisneySea tickets ×4"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 6800,
+      "myr_amount": 206.06,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Lunch inside DisneySea"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 3600,
+      "myr_amount": 109.09,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Snacks + churros at DisneySea"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 3500,
+      "myr_amount": 106.06,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Darren",
+          "amount": 106.06
+        }
+      ],
+      "notes": "Mickey ears headband — Darren"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 3500,
+      "myr_amount": 106.06,
+      "paid_by": "Willy",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Willy",
+          "amount": 106.06
+        }
+      ],
+      "notes": "Mickey ears headband — Willy"
+    },
+    {
+      "date": "2026-07-04",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 7200,
+      "myr_amount": 218.18,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Dinner Tokyo Bay area"
+    },
+    {
+      "date": "2026-07-05",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 53280,
+      "myr_amount": 1614.55,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Shinkansen Tokyo → Kyoto ×4"
+    },
+    {
+      "date": "2026-07-05",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 4800,
+      "myr_amount": 145.45,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Ekiben on Shinkansen"
+    },
+    {
+      "date": "2026-07-05",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 11000,
+      "myr_amount": 333.33,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kyoto ryokan-style hotel — night 1"
+    },
+    {
+      "date": "2026-07-05",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 600,
+      "myr_amount": 18.18,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Mac",
+          "amount": 18.18
+        }
+      ],
+      "notes": "Asahi beer at Kyoto station"
+    },
+    {
+      "date": "2026-07-05",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Willy",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Pontocho alley dinner"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 11000,
+      "myr_amount": 333.33,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kyoto hotel — night 2"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 4800,
+      "myr_amount": 145.45,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Cafe breakfast near Gion"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 800,
+      "myr_amount": 24.24,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "JR train to Fushimi Inari"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 2800,
+      "myr_amount": 84.85,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Fushimi Inari street snacks"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 5600,
+      "myr_amount": 169.7,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Udon shop in Fushimi"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 1500,
+      "myr_amount": 45.45,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Cristo",
+          "amount": 45.45
+        }
+      ],
+      "notes": "Omamori — lucky charm at shrine"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 12000,
+      "myr_amount": 363.64,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Traditional tea ceremony experience ×4"
+    },
+    {
+      "date": "2026-07-06",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 18000,
+      "myr_amount": 545.45,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kaiseki multi-course dinner"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 11000,
+      "myr_amount": 333.33,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kyoto hotel — night 3"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 4400,
+      "myr_amount": 133.33,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Hotel breakfast set ×4"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 1200,
+      "myr_amount": 36.36,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Train to Arashiyama"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 6400,
+      "myr_amount": 193.94,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Lunch at Arashiyama bamboo grove"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 2400,
+      "myr_amount": 72.73,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Iwatayama Monkey Park entry"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 16800,
+      "myr_amount": 509.09,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Hozugawa river boat ride"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 2400,
+      "myr_amount": 72.73,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "% Arabica coffee — Arashiyama"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 9500,
+      "myr_amount": 287.88,
+      "paid_by": "Willy",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Willy",
+          "amount": 287.88
+        }
+      ],
+      "notes": "Yamazaki single malt whisky"
+    },
+    {
+      "date": "2026-07-07",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 5600,
+      "myr_amount": 169.7,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Ramen dinner back in Kyoto"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 11000,
+      "myr_amount": 333.33,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kyoto hotel — night 4"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 2800,
+      "myr_amount": 84.85,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Bakery breakfast — Kyoto station"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 4800,
+      "myr_amount": 145.45,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Kyoto ↔ Nara round trip train ×4"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Small Eat",
+      "currency": "JPY",
+      "amount": 800,
+      "myr_amount": 24.24,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Deer crackers in Nara Park"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 5200,
+      "myr_amount": 157.58,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Local Nara lunch — kakinoha sushi"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Activity",
+      "currency": "JPY",
+      "amount": 2400,
+      "myr_amount": 72.73,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Todai-ji temple entry ×4"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 1800,
+      "myr_amount": 54.55,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Mac",
+          "amount": 54.55
+        }
+      ],
+      "notes": "Plush deer souvenir"
+    },
+    {
+      "date": "2026-07-08",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 13000,
+      "myr_amount": 393.94,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Yakitori dinner — Kyoto"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 53280,
+      "myr_amount": 1614.55,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Shinkansen Kyoto → Tokyo ×4"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 3600,
+      "myr_amount": 109.09,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Ekiben breakfast — Kyoto station"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Hotel",
+      "currency": "JPY",
+      "amount": 14000,
+      "myr_amount": 424.24,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tokyo hotel — last night"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 7200,
+      "myr_amount": 218.18,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Tonkatsu Maisen — Aoyama"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 4500,
+      "myr_amount": 136.36,
+      "paid_by": "Darren",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Darren",
+          "amount": 136.36
+        }
+      ],
+      "notes": "Uniqlo limited-edition haul"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 6000,
+      "myr_amount": 181.82,
+      "paid_by": "Willy",
+      "payment_type": "Wise",
+      "wallet": "Wise",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Willy",
+          "amount": 181.82
+        }
+      ],
+      "notes": "MUJI Ginza shopping"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 2400,
+      "myr_amount": 72.73,
+      "paid_by": "Cristo",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Cristo",
+          "amount": 72.73
+        }
+      ],
+      "notes": "Tokyo Banana for family"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "Dinner",
+      "currency": "JPY",
+      "amount": 18000,
+      "myr_amount": 545.45,
+      "paid_by": "Pool Wise",
+      "payment_type": "Wise",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Final yakiniku dinner — Ushigoro"
+    },
+    {
+      "date": "2026-07-10",
+      "category": "Breakfast",
+      "currency": "JPY",
+      "amount": 3200,
+      "myr_amount": 96.97,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Hotel breakfast checkout day"
+    },
+    {
+      "date": "2026-07-10",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 4000,
+      "myr_amount": 121.21,
+      "paid_by": "Darren",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Darren",
+          "amount": 121.21
+        }
+      ],
+      "notes": "Royce chocolate haul — Narita Duty Free"
+    },
+    {
+      "date": "2026-07-10",
+      "category": "Souvenirs",
+      "currency": "JPY",
+      "amount": 5500,
+      "myr_amount": 166.67,
+      "paid_by": "Mac",
+      "payment_type": "Cash",
+      "wallet": "Cash",
+      "split_type": "individual",
+      "split_participants": [
+        {
+          "name": "Mac",
+          "amount": 166.67
+        }
+      ],
+      "notes": "KitKat assortment + matcha snacks"
+    },
+    {
+      "date": "2026-07-10",
+      "category": "Lunch",
+      "currency": "JPY",
+      "amount": 4800,
+      "myr_amount": 145.45,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Final lunch at Narita airport"
+    },
+    {
+      "date": "2026-07-10",
+      "category": "Transport",
+      "currency": "JPY",
+      "amount": 9880,
+      "myr_amount": 299.39,
+      "paid_by": "Pool Cash",
+      "payment_type": "Cash",
+      "split_type": "even",
+      "split_participants": "Darren; Willy; Mac; Cristo",
+      "notes": "Skyliner back to Narita airport"
+    }
+  ]
+}

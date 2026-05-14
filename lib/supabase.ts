@@ -46,6 +46,7 @@ export type Traveler = {
   color: string;
   is_pool: boolean;
   pool_currency: string | null;
+  archived?: boolean;
   created_at: string;
 };
 

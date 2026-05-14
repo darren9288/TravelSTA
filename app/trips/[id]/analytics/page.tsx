@@ -9,6 +9,7 @@ import CumulativeLine from "@/components/charts/CumulativeLine";
 import { RefreshCw } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { useTripRealtime } from "@/lib/use-realtime";
 
 type StatsData = {
   byCategory: { name: string; amount: number; color: string }[];
@@ -22,6 +23,8 @@ export default function AnalyticsPage() {
 
   const { data: trip } = useSWR<Trip>(`/api/trips/${id}`, fetcher);
   const { data: stats, isLoading: loading, mutate } = useSWR<StatsData>(`/api/stats?trip_id=${id}`, fetcher);
+
+  useTripRealtime(id);
 
   return (
     <>
