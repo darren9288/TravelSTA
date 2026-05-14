@@ -4,6 +4,8 @@ import { serverDb } from "@/lib/supabase";
 import { calculateSettlement } from "@/lib/settlement";
 import { Traveler, Expense } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
+import { getSessionUser } from "@/lib/supabase-server";
+import { sendPushToTripMembers } from "@/lib/push";
 
 type WalletSelection = {
   from_wallet_id: string | null;
@@ -113,6 +115,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .update({ is_settled: true, locked: true })
       .in("expense_id", expenseIds)
       .eq("is_settled", false);
+  }
+
+  // Fire push to every trip member except the user who pressed Settle All.
+  // Wrapped so push failures can never break the actual settle flow.
+  try {
+    const me = await getSessionUser();
+    const { data: trip } = await db.from("trips").select("name").eq("id", tripId).single();
+    const tripName = trip?.name ?? "your trip";
+    const count = instructions.length;
+    void sendPushToTripMembers(
+      tripId,
+      {
+        title: `Settle All done — ${tripName}`,
+        body: count > 0
+          ? `${count} transfer${count === 1 ? "" : "s"} recorded. Tap to see who paid whom.`
+          : "Everyone is square — no transfers needed.",
+        url: `/trips/${tripId}/settlement`,
+        tag: `settle-${tripId}`,
+      },
+      me?.id
+    ).catch((e) => console.error("[push.settle-all]", (e as Error).message));
+  } catch (e) {
+    console.error("[push.settle-all] setup failed:", (e as Error).message);
   }
 
   return NextResponse.json({ success: true });
