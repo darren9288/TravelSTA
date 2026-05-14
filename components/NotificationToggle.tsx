@@ -102,20 +102,39 @@ export default function NotificationToggle() {
     // Deep SW inspection — getRegistrations() returns ALL registrations
     // including ones that are installing/waiting/redundant. This catches the
     // case where registration happened but the SW didn't reach 'active'.
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((regs) => {
+    // We poll every 2s while the SW is in a non-terminal state so the user
+    // sees real progress (esp. important on iOS where install can take 30-60s
+    // because workbox precaches the whole Next.js build before activating).
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    const pollSW = async () => {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
         let state = "";
+        let ready = false;
         if (regs.length > 0) {
           const r = regs[0];
-          if (r.active) state = "active";
-          else if (r.waiting) state = "waiting";
+          if (r.active) {
+            state = "active";
+            ready = true;
+          } else if (r.waiting) state = "waiting";
           else if (r.installing) state = "installing";
           else state = "redundant";
         }
-        setDiag((d) => ({ ...d, swRegistrationCount: regs.length, swState: state }));
-      })
-      .catch((e) => setDiag((d) => ({ ...d, lastSWError: (e as Error).message })));
+        setDiag((d) => ({
+          ...d,
+          swRegistrationCount: regs.length,
+          swState: state,
+          swReady: ready,
+        }));
+        // Keep polling while we're in a non-terminal state.
+        if (!ready && (state === "installing" || state === "waiting")) {
+          pollTimer = setTimeout(pollSW, 2000);
+        }
+      } catch (e) {
+        setDiag((d) => ({ ...d, lastSWError: (e as Error).message }));
+      }
+    };
+    pollSW();
 
     // Check if /sw.js is actually being served. If this 404s, the build/deploy
     // is broken or next-pwa didn't run — completely separate from the registration issue.
@@ -140,6 +159,10 @@ export default function NotificationToggle() {
       .then((r) => r.json())
       .then((data) => setDiag((d) => ({ ...d, vapidLoaded: Boolean(data.public_key) })))
       .catch(() => setDiag((d) => ({ ...d, vapidLoaded: false })));
+
+    return () => {
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, []);
 
   async function enable() {
@@ -248,26 +271,29 @@ export default function NotificationToggle() {
       // Step 3: register and capture the full state transition.
       const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
 
-      // Poll for state changes. We track which phase it reaches so we can
-      // tell the user "installed but won't activate" vs "registration never
-      // even started installing".
+      // Poll for state changes. iOS Safari precaches the entire Next.js build
+      // (50+ files) before activating, so install can legitimately take 30-60s
+      // on a fresh deploy. We track each phase observed so the user sees
+      // progress and can tell waiting/installing apart.
       const start = Date.now();
       let observedState = "registered";
-      while (Date.now() - start < 12_000) {
+      const MAX_WAIT_MS = 60_000;
+      while (Date.now() - start < MAX_WAIT_MS) {
         if (reg.active) {
           observedState = "active";
           break;
         }
         if (reg.installing) observedState = "installing";
         else if (reg.waiting) observedState = "waiting";
-        await new Promise((r) => setTimeout(r, 250));
+        // Live update the diag panel so the user sees the wheel turning
+        setDiag((d) => ({ ...d, swState: observedState, swRegistrationCount: 1 }));
+        await new Promise((r) => setTimeout(r, 500));
       }
-      setDiag((d) => ({ ...d, swState: observedState, swRegistrationCount: 1 }));
 
       if (observedState !== "active") {
         setMessage({
           kind: "err",
-          text: `Service worker registered but stuck in state: ${observedState}. Try fully closing Safari and the PWA, then reopening.`,
+          text: `Service worker still in '${observedState}' after 60s. This usually means workbox is still precaching files in the background — wait another minute then refresh the page. If it stays stuck, fully close the PWA and reopen.`,
         });
         return;
       }

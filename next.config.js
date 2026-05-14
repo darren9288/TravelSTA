@@ -8,6 +8,19 @@ const withPWA = require("next-pwa")({
   // generated sw.js will importScripts() this file at runtime so the
   // `push` and `notificationclick` handlers are part of the active SW.
   importScripts: ["/push-sw.js"],
+  // Trim the precache list. Default next-pwa precaches the entire Next.js
+  // build (50+ files) which on iOS Safari can take 30-60s to install on a
+  // fresh registration. Excluding manifests + map files cuts that down so
+  // the SW activates faster — pages will still be cached on first visit
+  // via the runtimeCaching rules below.
+  buildExcludes: [
+    /middleware-manifest\.json$/,
+    /_buildManifest\.js$/,
+    /_ssgManifest\.js$/,
+    /\.map$/,
+    /app-build-manifest\.json$/,
+    /react-loadable-manifest\.json$/,
+  ],
   // Auth/admin endpoints must always hit the network — never serve a cached response.
   runtimeCaching: [
     {
