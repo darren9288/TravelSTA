@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 import { serverDb } from "@/lib/supabase";
 import TripBackground from "@/components/TripBackground";
 import DevPanel from "@/components/DevPanel";
+import AIAssistant from "@/components/AIAssistant";
+import AnomalyWatcher from "@/components/AnomalyWatcher";
 import { isSuperAdmin } from "@/lib/admin";
 
 export default async function TripLayout({
@@ -29,6 +31,8 @@ export default async function TripLayout({
   return (
     <TripBackground imageUrl={imageUrl}>
       {children}
+      <AIAssistant />
+      <AnomalyWatcher />
       {showDevPanel && <DevPanel />}
     </TripBackground>
   );

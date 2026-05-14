@@ -35,6 +35,10 @@ export default function AddExpensePage() {
   const [splits, setSplits] = useState<SplitEntry[]>([]);
   const [walletId, setWalletId] = useState<string>("");
   const [walletOptions, setWalletOptions] = useState<{ id: string; name: string; currency: string; traveler_id: string }[]>([]);
+  // Tracks whether the user has manually picked a category. If true, we stop
+  // auto-categorizing on note edits to avoid stomping their choice.
+  const [categoryTouched, setCategoryTouched] = useState(false);
+  const [categorySuggesting, setCategorySuggesting] = useState(false);
 
   // AI tab — now matches the Form tab's field set so entries created via AI
   // have the same shape (date, wallet, currency, etc.) as ones typed manually.
@@ -79,6 +83,25 @@ export default function AddExpensePage() {
     load();
   }, [id]);
 
+  // If we were navigated to with #ai=<encoded text> (from the voice input
+  // flow in the AI Assistant), pre-fill the AI tab and switch to it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    const match = hash.match(/^#ai=(.+)/);
+    if (match) {
+      try {
+        const text = decodeURIComponent(match[1]);
+        setAiText(text);
+        setTab("ai");
+        // Clear the hash so a manual reload doesn't keep re-importing it.
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch {
+        // ignore malformed hash
+      }
+    }
+  }, []);
+
   // Refresh only the traveler + wallet dropdowns when someone else makes
   // changes mid-form. We deliberately keep the current paid_by/splits state
   // so the user doesn't lose what they were typing — new travelers just
@@ -117,6 +140,33 @@ export default function AddExpensePage() {
     const myr = parseFloat(foreignAmount) / rate;
     if (!isNaN(myr)) setMyrAmount(myr.toFixed(2));
   }, [foreignAmount, paymentType, trip, currency]);
+
+  // Auto-suggest a category from the notes after the user stops typing.
+  // Only runs if they haven't manually chosen a category yet.
+  useEffect(() => {
+    if (categoryTouched) return;
+    const trimmed = notes.trim();
+    if (trimmed.length < 4) return;
+    const handle = setTimeout(async () => {
+      setCategorySuggesting(true);
+      try {
+        const res = await fetch("/api/ai/categorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: trimmed }),
+        });
+        const data = await res.json();
+        if (res.ok && data.category && CATEGORIES.includes(data.category)) {
+          setCategory(data.category);
+        }
+      } catch {
+        // Silent — category auto-suggest is a nicety, not critical.
+      } finally {
+        setCategorySuggesting(false);
+      }
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [notes, categoryTouched]);
 
   // Only active (non-archived) non-pool travelers are eligible for new even-splits.
   const realTravelers = travelers.filter((t) => !t.is_pool && !t.archived);
@@ -340,11 +390,20 @@ export default function AddExpensePage() {
                 <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
                   <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Category</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)}
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+                    Category
+                    {categorySuggesting && (
+                      <span className="text-[10px] text-emerald-400 inline-flex items-center gap-0.5">
+                        <Sparkles size={9} /> suggesting…
+                      </span>
+                    )}
+                  </label>
+                  <select value={category} onChange={(e) => { setCategory(e.target.value); setCategoryTouched(true); }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                     {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                  </select></div>
+                  </select>
+                </div>
               </div>
               <div><label className="text-xs text-slate-400 mb-1 block">Paid By</label>
                 <select value={paidById} onChange={(e) => { setPaidById(e.target.value); setWalletId(""); }}
