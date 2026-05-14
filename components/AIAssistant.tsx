@@ -7,7 +7,7 @@ import { useToast } from "@/components/Toaster";
 import {
   Sparkles, X, ArrowLeft, Receipt, CalendarDays, ArrowRightLeft,
   Banknote, BarChart3, MessageSquare, Wand2, FileText, Mic,
-  Loader2, Send,
+  Loader2, Send, ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { Trip, Traveler, Expense } from "@/lib/supabase";
 import { CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
@@ -164,10 +164,35 @@ function MenuView({ setMode }: { setMode: (m: Mode) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Parse Expense — text in, parses via /api/parse, saves via /api/expenses
+// Parse Expense — text in, parses via /api/parse, saves via /api/expenses.
+// Each parsed entry is independently editable: tap any row to expand it
+// into a mini Add-Expense form (date, paid by, wallet, payment type,
+// currency, amount, split type, notes).
 // ─────────────────────────────────────────────────────────────────────────
 
 type ParsedExpense = { description: string; category: string; foreign_amount: number | null; myr_amount: number | null };
+
+type EditableEntry = {
+  // Identity
+  id: string;
+  // Content
+  description: string;
+  category: string;
+  notes: string;
+  // Money
+  currency: string;          // "MYR" | trip.foreign_currency | trip.foreign_currency_2
+  foreignAmount: string;     // string for input control
+  myrAmount: string;
+  // Other expense fields
+  date: string;
+  paidById: string;
+  walletId: string;
+  paymentType: string;
+  splitType: "even" | "individual";
+  splits: { traveler_id: string; amount: string }[];
+  // UI
+  expanded: boolean;
+};
 
 function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => void }) {
   const router = useRouter();
@@ -175,26 +200,50 @@ function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => vo
   const { toast } = useToast();
   const { data: trip } = useSWR<Trip>(`/api/trips/${tripId}`, fetcher);
   const { data: travelers } = useSWR<Traveler[]>(`/api/travelers?trip_id=${tripId}`, fetcher);
+  const { data: walletsData } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(
+    `/api/wallets?trip_id=${tripId}`,
+    fetcher
+  );
 
   const active = (travelers ?? []).filter((t) => !t.archived);
   const realTravelers = active.filter((t) => !t.is_pool);
+  const wallets = walletsData?.wallets ?? [];
 
   const [text, setText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [entries, setEntries] = useState<ParsedExpense[] | null>(null);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [paidBy, setPaidBy] = useState("");
-  const [payType, setPayType] = useState("Cash");
+  const [entries, setEntries] = useState<EditableEntry[] | null>(null);
+
+  // Shared defaults — applied at parse time. After that, each entry owns
+  // its own copy and can override independently.
+  const [sharedDate, setSharedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sharedPaidBy, setSharedPaidBy] = useState("");
+  const [sharedPayType, setSharedPayType] = useState("Cash");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!paidBy && active[0]) setPaidBy(active[0].id);
+    if (!sharedPaidBy && active[0]) setSharedPaidBy(active[0].id);
   }, [active.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pick the exchange rate for a wallet (or fall back to payment type).
+  function rateFor(currency: string, walletId: string, paymentType: string): number {
+    if (!trip || currency === "MYR") return 1;
+    const wallet = wallets.find((w) => w.id === walletId);
+    const useWise = wallet
+      ? wallet.name.toLowerCase().includes("wise")
+      : paymentType === "Wise";
+    if (currency === trip.foreign_currency) {
+      return useWise ? trip.wise_rate : trip.cash_rate;
+    }
+    if (trip.foreign_currency_2 && currency === trip.foreign_currency_2) {
+      return useWise ? (trip.wise_rate_2 ?? 1) : (trip.cash_rate_2 ?? 1);
+    }
+    return 1;
+  }
 
   async function parse() {
     if (!text.trim()) return;
-    setParsing(true); setError("");
+    setParsing(true); setError(""); setEntries(null);
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
@@ -203,8 +252,44 @@ function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => vo
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Parse failed");
-      setEntries(data.entries ?? []);
-      if (data.date) setDate(data.date);
+      const claudeDate = data.date as string | undefined;
+      const dateToUse = claudeDate || sharedDate;
+      if (claudeDate) setSharedDate(claudeDate);
+
+      // Map each parsed entry into an EditableEntry with shared defaults.
+      const newEntries: EditableEntry[] = (data.entries ?? []).map((e: ParsedExpense, i: number) => {
+        // Figure out the entry's currency from what Claude returned.
+        const inferredCurrency = e.foreign_amount && trip?.foreign_currency
+          ? trip.foreign_currency
+          : "MYR";
+        // Derive amounts in the currency we picked.
+        const rate = rateFor(inferredCurrency, "", sharedPayType);
+        const foreign = e.foreign_amount ? String(e.foreign_amount) : "";
+        const myr = e.myr_amount
+          ? e.myr_amount.toFixed(2)
+          : e.foreign_amount
+            ? (e.foreign_amount / rate).toFixed(2)
+            : "0.00";
+        const myrNum = parseFloat(myr);
+        const splitAmt = realTravelers.length > 0 ? (myrNum / realTravelers.length).toFixed(2) : "0";
+        return {
+          id: `${Date.now()}-${i}`,
+          description: e.description,
+          category: e.category,
+          notes: e.description,
+          currency: inferredCurrency,
+          foreignAmount: foreign,
+          myrAmount: myr,
+          date: dateToUse,
+          paidById: sharedPaidBy || active[0]?.id || "",
+          walletId: "",
+          paymentType: sharedPayType,
+          splitType: "even",
+          splits: realTravelers.map((t) => ({ traveler_id: t.id, amount: splitAmt })),
+          expanded: false,
+        };
+      });
+      setEntries(newEntries);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -212,32 +297,82 @@ function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => vo
     }
   }
 
+  function update(id: string, patch: Partial<EditableEntry>) {
+    setEntries((prev) => prev?.map((e) => (e.id === id ? { ...e, ...patch } : e)) ?? null);
+  }
+
+  // When user changes currency or payment type or wallet on an entry, recompute
+  // the MYR amount from foreign amount (or vice versa) at the appropriate rate.
+  function recalcAmounts(
+    entry: EditableEntry,
+    changes: Partial<Pick<EditableEntry, "currency" | "paymentType" | "walletId" | "foreignAmount" | "myrAmount">>
+  ): Partial<EditableEntry> {
+    const next = { ...entry, ...changes };
+    const rate = rateFor(next.currency, next.walletId, next.paymentType);
+    // If foreign changed → recompute MYR.
+    if ("foreignAmount" in changes) {
+      const fv = parseFloat(next.foreignAmount);
+      if (!isNaN(fv) && next.currency !== "MYR") {
+        return { ...changes, myrAmount: (fv / rate).toFixed(2) };
+      }
+    }
+    // If MYR changed directly while in foreign mode → recompute foreign.
+    if ("myrAmount" in changes && next.currency !== "MYR") {
+      const mv = parseFloat(next.myrAmount);
+      if (!isNaN(mv)) {
+        return { ...changes, foreignAmount: (mv * rate).toFixed(0) };
+      }
+    }
+    // If currency/payment/wallet changed and there's a foreign amount, reconvert.
+    if (("currency" in changes || "paymentType" in changes || "walletId" in changes) && next.currency !== "MYR") {
+      const fv = parseFloat(next.foreignAmount);
+      if (!isNaN(fv)) {
+        return { ...changes, myrAmount: (fv / rate).toFixed(2) };
+      }
+    }
+    return changes;
+  }
+
   async function save() {
-    if (!entries || !paidBy) return;
-    setSaving(true);
+    if (!entries || entries.length === 0) return;
+    // Validate individual splits if any entry uses them.
+    for (const entry of entries) {
+      if (entry.splitType === "individual") {
+        const total = parseFloat(entry.myrAmount) || 0;
+        const sum = entry.splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+        if (Math.abs(sum - total) > 0.05) {
+          setError(`Splits in "${entry.description}" (RM ${sum.toFixed(2)}) must equal total (RM ${total.toFixed(2)})`);
+          return;
+        }
+      }
+    }
+    setSaving(true); setError("");
     try {
       for (const entry of entries) {
-        const cashRate = trip?.cash_rate ?? 1;
-        const wiseRate = trip?.wise_rate ?? 1;
-        const rate = payType === "Wise" ? wiseRate : cashRate;
-        const myr = entry.myr_amount ?? (entry.foreign_amount ? entry.foreign_amount / rate : 0);
-        const splitAmount = realTravelers.length > 0 ? parseFloat((myr / realTravelers.length).toFixed(2)) : 0;
+        const myr = parseFloat(entry.myrAmount) || 0;
+        const splitData = entry.splitType === "even"
+          ? realTravelers.map((t) => ({
+              traveler_id: t.id,
+              amount: realTravelers.length > 0 ? parseFloat((myr / realTravelers.length).toFixed(2)) : 0,
+            }))
+          : entry.splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
 
         await fetch("/api/expenses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             trip_id: tripId,
-            date,
+            date: entry.date,
             category: entry.category,
-            split_type: "even",
-            paid_by_id: paidBy,
-            payment_type: payType,
-            currency: entry.foreign_amount ? trip?.foreign_currency : "MYR",
-            foreign_amount: entry.foreign_amount,
+            split_type: entry.splitType,
+            paid_by_id: entry.paidById,
+            payment_type: entry.paymentType,
+            currency: entry.currency,
+            foreign_amount: entry.currency !== "MYR" ? (parseFloat(entry.foreignAmount) || null) : null,
             myr_amount: myr,
-            notes: entry.description,
-            splits: realTravelers.map((t) => ({ traveler_id: t.id, amount: splitAmount })),
+            notes: entry.notes || null,
+            splits: splitData,
+            wallet_id: entry.walletId || null,
           }),
         });
       }
@@ -259,48 +394,207 @@ function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => vo
         rows={3}
         className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
       />
+
+      {/* Shared defaults — applied to each entry on parse. */}
+      {!entries && (
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Default Date</label>
+            <input type="date" value={sharedDate} onChange={(e) => setSharedDate(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Default Paid By</label>
+            <select value={sharedPaidBy} onChange={(e) => setSharedPaidBy(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+              {active.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Default Payment</label>
+            <select value={sharedPayType} onChange={(e) => setSharedPayType(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+              {PAYMENT_TYPES.map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={parse}
         disabled={parsing || !text.trim()}
         className="flex items-center justify-center gap-2 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
       >
         {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-        {parsing ? "Parsing…" : "Parse with AI"}
+        {parsing ? "Parsing…" : entries ? "Re-parse" : "Parse with AI"}
       </button>
 
       {entries && entries.length > 0 && (
         <>
+          <p className="text-xs text-slate-500">Tap any row to edit details for that entry only.</p>
           <div className="flex flex-col gap-1.5">
-            {entries.map((e, i) => (
-              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-white">{e.description}</p>
-                  <p className="text-xs text-slate-500">{e.category}</p>
+            {entries.map((entry) => {
+              const entryWallets = wallets.filter((w) => w.traveler_id === entry.paidById);
+              return (
+                <div key={entry.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+                  {/* Compact summary row — always visible */}
+                  <button
+                    onClick={() => update(entry.id, { expanded: !entry.expanded })}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800/60 text-left transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{entry.description || entry.category}</p>
+                      <p className="text-xs text-slate-500">
+                        {entry.category} · {entry.date} · {active.find((t) => t.id === entry.paidById)?.name ?? "?"}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {entry.currency !== "MYR" && entry.foreignAmount && (
+                        <p className="text-xs text-slate-400">{entry.currency} {Number(entry.foreignAmount).toLocaleString()}</p>
+                      )}
+                      <p className="text-sm font-bold text-white">RM {Number(entry.myrAmount).toFixed(2)}</p>
+                    </div>
+                    {entry.expanded ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+                  </button>
+
+                  {/* Expanded mini-form */}
+                  {entry.expanded && (
+                    <div className="px-3 pb-3 flex flex-col gap-2 border-t border-slate-700/50">
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">Date</label>
+                          <input type="date" value={entry.date} onChange={(e) => update(entry.id, { date: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">Category</label>
+                          <select value={entry.category} onChange={(e) => update(entry.id, { category: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-slate-500 mb-0.5 block">Paid By</label>
+                        <select value={entry.paidById} onChange={(e) => update(entry.id, { paidById: e.target.value, walletId: "" })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                          {active.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
+                        </select>
+                      </div>
+
+                      {entryWallets.length > 0 && (
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">Paid from Wallet</label>
+                          <select value={entry.walletId} onChange={(e) => {
+                            const wId = e.target.value;
+                            const w = wallets.find((x) => x.id === wId);
+                            let newPayType = entry.paymentType;
+                            let newCurrency = entry.currency;
+                            if (w) {
+                              const n = w.name.toLowerCase();
+                              if (n.includes("wise")) newPayType = "Wise";
+                              else if (n.includes("credit")) newPayType = "Credit Card";
+                              else if (n.includes("debit") || n.includes("card")) newPayType = "Debit Card";
+                              else if (n.includes("tng") || n.includes("touch")) newPayType = "TNG";
+                              else newPayType = "Cash";
+                              if (w.currency === "MYR" || w.currency === trip?.foreign_currency || w.currency === trip?.foreign_currency_2) {
+                                newCurrency = w.currency;
+                              }
+                            }
+                            update(entry.id, recalcAmounts(entry, { walletId: wId, paymentType: newPayType, currency: newCurrency }));
+                          }}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            <option value="">— not linked —</option>
+                            {entryWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.currency})</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">Payment</label>
+                          <select value={entry.paymentType} onChange={(e) => update(entry.id, recalcAmounts(entry, { paymentType: e.target.value }))}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            {PAYMENT_TYPES.map((p) => <option key={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">Currency</label>
+                          <select value={entry.currency} onChange={(e) => update(entry.id, recalcAmounts(entry, { currency: e.target.value }))}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            <option value="MYR">MYR</option>
+                            {trip?.foreign_currency && <option value={trip.foreign_currency}>{trip.foreign_currency}</option>}
+                            {trip?.foreign_currency_2 && <option value={trip.foreign_currency_2}>{trip.foreign_currency_2}</option>}
+                          </select>
+                        </div>
+                      </div>
+
+                      {entry.currency !== "MYR" ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-slate-500 mb-0.5 block">{entry.currency} Amount</label>
+                            <input type="number" value={entry.foreignAmount} step="1"
+                              onChange={(e) => update(entry.id, recalcAmounts(entry, { foreignAmount: e.target.value }))}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500 mb-0.5 block">MYR Amount</label>
+                            <input type="number" value={entry.myrAmount} step="0.01"
+                              onChange={(e) => update(entry.id, recalcAmounts(entry, { myrAmount: e.target.value }))}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-xs text-slate-500 mb-0.5 block">MYR Amount</label>
+                          <input type="number" value={entry.myrAmount} step="0.01"
+                            onChange={(e) => update(entry.id, { myrAmount: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-xs text-slate-500 mb-0.5 block">Split</label>
+                        <select value={entry.splitType} onChange={(e) => update(entry.id, { splitType: e.target.value as "even" | "individual" })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                          <option value="even">Even</option>
+                          <option value="individual">Individual</option>
+                        </select>
+                      </div>
+
+                      {entry.splitType === "individual" && (
+                        <div className="flex flex-col gap-1 bg-slate-900/40 rounded-lg p-2">
+                          <p className="text-xs text-slate-500">Per-traveler share (must total RM {entry.myrAmount})</p>
+                          {entry.splits.map((s, idx) => {
+                            const t = realTravelers.find((x) => x.id === s.traveler_id);
+                            return (
+                              <div key={s.traveler_id} className="flex items-center gap-2">
+                                <span className="text-xs text-slate-300 flex-1 truncate">{t?.name}</span>
+                                <input type="number" value={s.amount} step="0.01"
+                                  onChange={(e) => update(entry.id, {
+                                    splits: entry.splits.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x),
+                                  })}
+                                  className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white text-right focus:outline-none focus:border-emerald-500" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-xs text-slate-500 mb-0.5 block">Notes</label>
+                        <input type="text" value={entry.notes}
+                          onChange={(e) => update(entry.id, { notes: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-bold text-white">
-                  {e.foreign_amount ? `${trip?.foreign_currency} ${e.foreign_amount.toLocaleString()}` : `RM ${(e.myr_amount ?? 0).toFixed(2)}`}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">Paid By</label>
-              <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
-                {active.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_pool ? " (Pool)" : ""}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">Payment</label>
-              <select value={payType} onChange={(e) => setPayType(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
-                {PAYMENT_TYPES.map((p) => <option key={p}>{p}</option>)}
-              </select>
-            </div>
-          </div>
+
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button onClick={save} disabled={saving} className="py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
             {saving ? "Saving…" : `Save ${entries.length} expense${entries.length === 1 ? "" : "s"}`}
