@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing, Loader2, Send } from "lucide-react";
+import { Bell, BellOff, BellRing, Loader2, Send, Info } from "lucide-react";
 
 // One-button UI to enable / disable web push notifications.
 //
@@ -32,6 +32,27 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return out;
 }
 
+// navigator.serviceWorker.ready can hang forever if no SW is installed
+// (most common cause: user opened the URL in Safari instead of from the
+// homescreen icon, so the next-pwa SW never registered). Race it against
+// a timeout so the spinner doesn't spin forever.
+function readyOrTimeout(ms = 8000): Promise<ServiceWorkerRegistration> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<ServiceWorkerRegistration>((_, rej) =>
+      setTimeout(
+        () =>
+          rej(
+            new Error(
+              "Service worker isn't registered on this device. On iPhone: open the app FROM the homescreen icon (not Safari). On Android/desktop: install via Add to Home Screen / Install App."
+            )
+          ),
+        ms
+      )
+    ),
+  ]);
+}
+
 export default function NotificationToggle() {
   // null = haven't checked yet; otherwise current state
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -40,6 +61,16 @@ export default function NotificationToggle() {
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // Live diagnostic state — surfaces the silent-failure cases (no SW, no PWA install,
+  // missing VAPID env vars) so the user knows what to fix instead of staring at a spinner.
+  const [diag, setDiag] = useState({
+    swReady: false,
+    swController: false,
+    standalone: false,           // running from homescreen icon, not a browser tab
+    vapidLoaded: false,
+    existingSub: false,
+  });
+  const [showDiag, setShowDiag] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -52,12 +83,35 @@ export default function NotificationToggle() {
 
     setPermission(Notification.permission);
 
+    // Standalone = launched from the homescreen icon. iOS Safari only allows
+    // push from standalone PWAs.
+    const standalone =
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      // iOS legacy flag — still set on iPhone PWA contexts
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setDiag((d) => ({
+      ...d,
+      standalone,
+      swController: Boolean(navigator.serviceWorker.controller),
+    }));
+
     // See if we already have a subscription on this device — keeps the toggle
-    // accurate across page refreshes.
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      setSubscribed(Boolean(sub));
-    });
+    // accurate across page refreshes. Race against a timeout so we don't hang.
+    readyOrTimeout(4000)
+      .then(async (reg) => {
+        const sub = await reg.pushManager.getSubscription();
+        setSubscribed(Boolean(sub));
+        setDiag((d) => ({ ...d, swReady: true, existingSub: Boolean(sub) }));
+      })
+      .catch(() => {
+        setDiag((d) => ({ ...d, swReady: false }));
+      });
+
+    // Light VAPID check so the diagnostic panel shows whether the server side is wired.
+    fetch("/api/push/vapid-public-key", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => setDiag((d) => ({ ...d, vapidLoaded: Boolean(data.public_key) })))
+      .catch(() => setDiag((d) => ({ ...d, vapidLoaded: false })));
   }, []);
 
   async function enable() {
@@ -78,7 +132,8 @@ export default function NotificationToggle() {
         return;
       }
 
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await readyOrTimeout(8000);
+      setDiag((d) => ({ ...d, swReady: true }));
 
       const keyRes = await fetch("/api/push/vapid-public-key", { cache: "no-store" });
       const { public_key, error } = await keyRes.json();
@@ -119,7 +174,7 @@ export default function NotificationToggle() {
     setBusy(true);
     setMessage(null);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await readyOrTimeout(8000);
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         const endpoint = sub.endpoint;
@@ -239,6 +294,54 @@ export default function NotificationToggle() {
           {message.text}
         </p>
       )}
+
+      {/* Diagnostic panel — surfaces silent failures so the user knows what to fix */}
+      <button
+        onClick={() => setShowDiag((s) => !s)}
+        className="self-start flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300"
+      >
+        <Info size={10} /> {showDiag ? "Hide" : "Show"} diagnostic info
+      </button>
+      {showDiag && (
+        <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg p-3 text-[11px] font-mono space-y-1">
+          <DiagRow label="Browser supports push" ok={Boolean(supported)} />
+          <DiagRow
+            label="Running as installed PWA"
+            ok={diag.standalone}
+            hint={!diag.standalone ? "On iPhone: install via Share → Add to Home Screen, then OPEN from the homescreen icon (not Safari)." : undefined}
+          />
+          <DiagRow
+            label="Service worker active"
+            ok={diag.swReady}
+            hint={!diag.swReady ? "Service worker isn't registered. This usually means the page is open in Safari instead of the installed PWA. Reload after installing." : undefined}
+          />
+          <DiagRow
+            label="Permission granted"
+            ok={permission === "granted"}
+            hint={permission === "denied" ? "Blocked in browser settings — must be unblocked there before this app can re-ask." : permission === "default" ? "Not asked yet (will prompt on Enable)." : undefined}
+          />
+          <DiagRow
+            label="Server VAPID key loaded"
+            ok={diag.vapidLoaded}
+            hint={!diag.vapidLoaded ? "VAPID_PUBLIC_KEY env var isn't set in Vercel, or this deploy hasn't picked it up yet. Add it and redeploy." : undefined}
+          />
+          <DiagRow label="Existing subscription on this device" ok={diag.existingSub} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiagRow({ label, ok, hint }: { label: string; ok: boolean; hint?: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-slate-400">{label}</span>
+        <span className={ok ? "text-emerald-400" : "text-amber-400"}>
+          {ok ? "✓ yes" : "✗ no"}
+        </span>
+      </div>
+      {hint && !ok && <p className="text-slate-500 mt-0.5 ml-1 leading-snug">{hint}</p>}
     </div>
   );
 }
