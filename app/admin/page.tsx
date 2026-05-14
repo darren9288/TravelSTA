@@ -44,6 +44,12 @@ type TokenRow = {
   created_at: string;
 };
 
+type EffectiveAI = {
+  source: "db" | "env";
+  key_masked: string;
+  base_url: string;
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -60,6 +66,7 @@ export default function AdminPage() {
 
   // AI Token Manager state — list of tokens with per-row test results.
   const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [effective, setEffective] = useState<EffectiveAI | null>(null);
   const [tokensLoading, setTokensLoading] = useState(false);
   const [tokensBusy, setTokensBusy] = useState(false);    // global save/activate/delete spinner
   const [testingId, setTestingId] = useState<string | null>(null); // which row is currently being tested
@@ -102,7 +109,10 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/ai-tokens", { cache: "no-store" });
       const data = await res.json();
-      if (res.ok && data.tokens) setTokens(data.tokens);
+      if (res.ok) {
+        if (data.tokens) setTokens(data.tokens);
+        if (data.effective) setEffective(data.effective);
+      }
     } finally {
       setTokensLoading(false);
     }
@@ -478,6 +488,36 @@ export default function AdminPage() {
                 Pre-stage AI tokens here. The active one powers every AI feature (Parse Expense, Ask, Recap, Itinerary, Categorize) across <span className="text-white font-semibold">all trips</span>. When a key hits its monthly cap, click <span className="text-emerald-400 font-semibold">Use</span> on another row to flip — no redeploy.
               </p>
             </div>
+
+            {/* Live "what's actually running" banner — proves which source AI routes resolve to. */}
+            {effective && (
+              <div className={`rounded-xl px-4 py-3 border ${
+                effective.source === "db"
+                  ? "bg-emerald-950/30 border-emerald-800/50"
+                  : "bg-amber-950/30 border-amber-800/50"
+              }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                    effective.source === "db"
+                      ? "bg-emerald-700 text-emerald-100"
+                      : "bg-amber-700 text-amber-100"
+                  }`}>
+                    {effective.source === "db" ? "ACTIVE: DB TOKEN" : "ACTIVE: ENV VAR"}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {effective.source === "db"
+                      ? "All AI calls now read from the saved token below."
+                      : "No DB token activated — AI calls read from Vercel env var."}
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-white break-all">
+                  Key: <span className="text-emerald-300">{effective.key_masked}</span>
+                </div>
+                <div className="text-xs font-mono text-slate-400 break-all">
+                  Proxy: {effective.base_url}
+                </div>
+              </div>
+            )}
 
             {aiMessage && (
               <div className={`rounded-xl px-3 py-2 text-sm flex items-center justify-between border ${

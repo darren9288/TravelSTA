@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireSuperAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/supabase-server";
-import { invalidateAIConfigCache, maskSecret } from "@/lib/ai-config";
+import { invalidateAIConfigCache, maskSecret, getAIConfig } from "@/lib/ai-config";
 
 // GET /api/admin/ai-tokens
 // Returns every saved token (masked) + which one is active.
@@ -45,7 +45,20 @@ export async function GET() {
     created_at: t.created_at,
   }));
 
-  return NextResponse.json({ tokens: masked, active_id: activeId });
+  // Ground truth: what would the AI routes actually use right now?
+  // Bypass the cache so the UI shows the live resolved value, not stale.
+  invalidateAIConfigCache();
+  const effective = await getAIConfig();
+
+  return NextResponse.json({
+    tokens: masked,
+    active_id: activeId,
+    effective: {
+      source: effective.source.apiKey,           // "db" | "env"
+      key_masked: maskSecret(effective.apiKey),
+      base_url: effective.baseURL,
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {
