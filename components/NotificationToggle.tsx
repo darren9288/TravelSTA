@@ -69,6 +69,10 @@ export default function NotificationToggle() {
     standalone: false,           // running from homescreen icon, not a browser tab
     vapidLoaded: false,
     existingSub: false,
+    swFileReachable: null as boolean | null, // /sw.js fetch result
+    swRegistrationCount: 0,                  // how many SW registrations the browser knows about
+    swState: "" as string,                   // "active" | "installing" | "waiting" | "redundant" | "" if no reg
+    lastSWError: "" as string,               // surfaces register() error message if any
   });
   const [showDiag, setShowDiag] = useState(false);
 
@@ -94,6 +98,30 @@ export default function NotificationToggle() {
       standalone,
       swController: Boolean(navigator.serviceWorker.controller),
     }));
+
+    // Deep SW inspection — getRegistrations() returns ALL registrations
+    // including ones that are installing/waiting/redundant. This catches the
+    // case where registration happened but the SW didn't reach 'active'.
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => {
+        let state = "";
+        if (regs.length > 0) {
+          const r = regs[0];
+          if (r.active) state = "active";
+          else if (r.waiting) state = "waiting";
+          else if (r.installing) state = "installing";
+          else state = "redundant";
+        }
+        setDiag((d) => ({ ...d, swRegistrationCount: regs.length, swState: state }));
+      })
+      .catch((e) => setDiag((d) => ({ ...d, lastSWError: (e as Error).message })));
+
+    // Check if /sw.js is actually being served. If this 404s, the build/deploy
+    // is broken or next-pwa didn't run — completely separate from the registration issue.
+    fetch("/sw.js", { method: "HEAD", cache: "no-store" })
+      .then((res) => setDiag((d) => ({ ...d, swFileReachable: res.ok })))
+      .catch(() => setDiag((d) => ({ ...d, swFileReachable: false })));
 
     // See if we already have a subscription on this device — keeps the toggle
     // accurate across page refreshes. Race against a timeout so we don't hang.
@@ -199,30 +227,56 @@ export default function NotificationToggle() {
   async function reregisterSW() {
     setBusy(true);
     setMessage(null);
+    setDiag((d) => ({ ...d, lastSWError: "" }));
     try {
-      // Try to unregister any existing registration first so we start clean.
+      // Step 1: confirm /sw.js exists. If 404, registration will never succeed.
+      const fileCheck = await fetch("/sw.js", { method: "HEAD", cache: "no-store" });
+      if (!fileCheck.ok) {
+        const err = `/sw.js returned ${fileCheck.status}. The PWA build is broken — contact admin.`;
+        setDiag((d) => ({ ...d, swFileReachable: false, lastSWError: err }));
+        setMessage({ kind: "err", text: err });
+        return;
+      }
+      setDiag((d) => ({ ...d, swFileReachable: true }));
+
+      // Step 2: unregister any existing registration so we start clean.
       const existing = await navigator.serviceWorker.getRegistration();
       if (existing) {
         await existing.unregister();
       }
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      // Wait up to 10s for it to activate.
+
+      // Step 3: register and capture the full state transition.
+      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+
+      // Poll for state changes. We track which phase it reaches so we can
+      // tell the user "installed but won't activate" vs "registration never
+      // even started installing".
       const start = Date.now();
-      while (Date.now() - start < 10_000) {
-        if (reg.active) break;
+      let observedState = "registered";
+      while (Date.now() - start < 12_000) {
+        if (reg.active) {
+          observedState = "active";
+          break;
+        }
+        if (reg.installing) observedState = "installing";
+        else if (reg.waiting) observedState = "waiting";
         await new Promise((r) => setTimeout(r, 250));
       }
-      if (!reg.active) {
+      setDiag((d) => ({ ...d, swState: observedState, swRegistrationCount: 1 }));
+
+      if (observedState !== "active") {
         setMessage({
           kind: "err",
-          text: "Tried to register the service worker but it didn't activate in 10s. Try force-quitting the app (swipe up) and reopening.",
+          text: `Service worker registered but stuck in state: ${observedState}. Try fully closing Safari and the PWA, then reopening.`,
         });
         return;
       }
       setDiag((d) => ({ ...d, swReady: true, swController: Boolean(navigator.serviceWorker.controller) }));
       setMessage({ kind: "ok", text: "Service worker is now active. Try Enable Notifications again." });
     } catch (e) {
-      setMessage({ kind: "err", text: (e as Error).message });
+      const err = (e as Error).message;
+      setDiag((d) => ({ ...d, lastSWError: err }));
+      setMessage({ kind: "err", text: `Registration failed: ${err}` });
     } finally {
       setBusy(false);
     }
@@ -361,9 +415,44 @@ export default function NotificationToggle() {
             hint={!diag.standalone ? "On iPhone: install via Share → Add to Home Screen, then OPEN from the homescreen icon (not Safari)." : undefined}
           />
           <DiagRow
+            label="/sw.js file reachable"
+            ok={diag.swFileReachable === true}
+            hint={
+              diag.swFileReachable === false
+                ? "The PWA service worker file isn't being served by the deployment. The build didn't run next-pwa correctly — this is a deploy bug, not a device issue."
+                : diag.swFileReachable === null
+                ? "Still checking…"
+                : undefined
+            }
+          />
+          <DiagRow
+            label={`SW registrations on this device (${diag.swRegistrationCount})`}
+            ok={diag.swRegistrationCount > 0}
+            hint={
+              diag.swRegistrationCount === 0
+                ? "No SW has ever registered here. Tap 'Re-register service worker' below to try manually."
+                : undefined
+            }
+          />
+          {diag.swState && (
+            <DiagRow
+              label={`SW state: ${diag.swState}`}
+              ok={diag.swState === "active"}
+              hint={
+                diag.swState === "waiting"
+                  ? "New SW installed but waiting — close ALL TravelSTA windows then reopen."
+                  : diag.swState === "installing"
+                  ? "SW is still installing. Wait a few seconds and refresh."
+                  : diag.swState === "redundant"
+                  ? "SW is in redundant state — registration failed. Try Re-register button."
+                  : undefined
+              }
+            />
+          )}
+          <DiagRow
             label="Service worker active"
             ok={diag.swReady}
-            hint={!diag.swReady ? "Service worker isn't registered. This usually means the page is open in Safari instead of the installed PWA. Reload after installing." : undefined}
+            hint={!diag.swReady && diag.swRegistrationCount > 0 ? "SW exists but isn't 'active' yet. Check SW state above for why." : undefined}
           />
           <DiagRow
             label="Permission granted"
@@ -376,6 +465,12 @@ export default function NotificationToggle() {
             hint={!diag.vapidLoaded ? "VAPID_PUBLIC_KEY env var isn't set in Vercel, or this deploy hasn't picked it up yet. Add it and redeploy." : undefined}
           />
           <DiagRow label="Existing subscription on this device" ok={diag.existingSub} />
+          {diag.lastSWError && (
+            <div className="pt-2 mt-2 border-t border-slate-700/40">
+              <p className="text-red-400">Last SW error:</p>
+              <p className="text-slate-400 mt-0.5 break-all">{diag.lastSWError}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
