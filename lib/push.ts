@@ -11,14 +11,28 @@ import { serverDb } from "./supabase";
 let configured = false;
 function ensureConfigured() {
   if (configured) return;
-  const pub = process.env.VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  const subj = process.env.VAPID_SUBJECT ?? "mailto:noreply@travelsta.app";
+  // Vercel sometimes preserves whitespace from copy-paste. Trim everything
+  // so a stray newline doesn't break web-push's strict url validation.
+  const pub = process.env.VAPID_PUBLIC_KEY?.trim();
+  const priv = process.env.VAPID_PRIVATE_KEY?.trim();
+  let subj = (process.env.VAPID_SUBJECT ?? "mailto:noreply@travelsta.app").trim();
+
   if (!pub || !priv) {
     throw new Error(
       "VAPID keys not set. Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to Vercel env vars."
     );
   }
+
+  // Subject must start with mailto: or https://. If it doesn't (typo, missing
+  // prefix, hidden chars left over after trim) fall back to a safe default
+  // instead of failing every push.
+  if (!subj.startsWith("mailto:") && !subj.startsWith("https://")) {
+    console.warn(
+      `[push] VAPID_SUBJECT was malformed (raw bytes: ${JSON.stringify(subj)}). Falling back to default.`
+    );
+    subj = "mailto:noreply@travelsta.app";
+  }
+
   webpush.setVapidDetails(subj, pub, priv);
   configured = true;
 }
