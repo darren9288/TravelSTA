@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing, Loader2, Send, Info } from "lucide-react";
+import { Bell, BellOff, BellRing, Loader2, Send, Info, RefreshCw } from "lucide-react";
 
 // One-button UI to enable / disable web push notifications.
 //
@@ -192,6 +192,42 @@ export default function NotificationToggle() {
     }
   }
 
+  // Manual recovery for the "SW stuck in waiting" case — forces a fresh
+  // registration of /sw.js and waits for it to become active. Useful on
+  // iOS where the auto-update is conservative and an old SW can linger
+  // across deploys.
+  async function reregisterSW() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      // Try to unregister any existing registration first so we start clean.
+      const existing = await navigator.serviceWorker.getRegistration();
+      if (existing) {
+        await existing.unregister();
+      }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      // Wait up to 10s for it to activate.
+      const start = Date.now();
+      while (Date.now() - start < 10_000) {
+        if (reg.active) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (!reg.active) {
+        setMessage({
+          kind: "err",
+          text: "Tried to register the service worker but it didn't activate in 10s. Try force-quitting the app (swipe up) and reopening.",
+        });
+        return;
+      }
+      setDiag((d) => ({ ...d, swReady: true, swController: Boolean(navigator.serviceWorker.controller) }));
+      setMessage({ kind: "ok", text: "Service worker is now active. Try Enable Notifications again." });
+    } catch (e) {
+      setMessage({ kind: "err", text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendTest() {
     setTesting(true);
     setMessage(null);
@@ -281,6 +317,20 @@ export default function NotificationToggle() {
           >
             {testing ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
             Send test
+          </button>
+        )}
+
+        {/* Recovery: only surfaces when the SW isn't active. Lets the user
+            re-register without having to force-quit and reopen the PWA. */}
+        {!diag.swReady && (
+          <button
+            onClick={reregisterSW}
+            disabled={busy}
+            title="Force the service worker to re-register. Use this if Enable is hanging or the diagnostic shows 'Service worker active: no'."
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/70 hover:bg-amber-500 disabled:opacity-50 text-white text-xs rounded-md transition-colors"
+          >
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+            Re-register service worker
           </button>
         )}
       </div>
