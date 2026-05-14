@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Plane, Eye, EyeOff, ArrowLeftCircle, KeyRound, User, Shield } from "lucide-react";
 import Link from "next/link";
+import NotificationToggle from "@/components/NotificationToggle";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -142,6 +143,9 @@ export default function AccountPage() {
             </Link>
           )}
         </div>
+
+        {/* Push notifications */}
+        <NotificationToggle />
 
         {/* Change password */}
         <form

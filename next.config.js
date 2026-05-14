@@ -4,6 +4,10 @@ const withPWA = require("next-pwa")({
   register: true,
   skipWaiting: true,
   clientsClaim: true,
+  // Pull in our custom push-notification event listeners. The next-pwa
+  // generated sw.js will importScripts() this file at runtime so the
+  // `push` and `notificationclick` handlers are part of the active SW.
+  importScripts: ["/push-sw.js"],
   // Auth/admin endpoints must always hit the network — never serve a cached response.
   runtimeCaching: [
     {
