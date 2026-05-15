@@ -271,13 +271,21 @@ export default function ExpensesPage() {
                     }
                     const fv = editState.foreign_amount;
                     const rate = newPayType === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
-                    const newMyr = fv && parseFloat(fv) > 0 ? (parseFloat(fv) / rate).toFixed(2) : editState.myr_amount;
+                    let newMyr = fv && parseFloat(fv) > 0 ? (parseFloat(fv) / rate).toFixed(2) : editState.myr_amount;
+                    let newForeign = fv;
+                    // If the chosen wallet is foreign (non-MYR) and the foreign amount is
+                    // empty/0, back-fill it from MYR × rate so the wallet history doesn't
+                    // record a -JPY 0 entry. Same logic as the Add page's currency lock.
+                    if (w && w.currency && w.currency !== "MYR" && (!fv || parseFloat(fv) <= 0) && editState.myr_amount && parseFloat(editState.myr_amount) > 0) {
+                      newForeign = (parseFloat(editState.myr_amount) * rate).toFixed(0);
+                      newMyr = editState.myr_amount;
+                    }
                     const newSplits = editState.splits.map((s) =>
                       s.foreignAmount && parseFloat(s.foreignAmount) > 0
                         ? { ...s, amount: (parseFloat(s.foreignAmount) / rate).toFixed(2) }
                         : s
                     );
-                    setEditState({ ...editState, wallet_id: wId, payment_type: newPayType, myr_amount: newMyr, splits: newSplits });
+                    setEditState({ ...editState, wallet_id: wId, payment_type: newPayType, foreign_amount: newForeign, myr_amount: newMyr, splits: newSplits });
                   }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
                     <option value="">— no wallet —</option>
@@ -323,7 +331,19 @@ export default function ExpensesPage() {
                   }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               <div><label className="text-xs text-slate-400 mb-1 block">MYR Amount *</label>
-                <input type="number" value={editState.myr_amount} onChange={(e) => setEditState({ ...editState, myr_amount: e.target.value })} step="0.01"
+                <input type="number" value={editState.myr_amount} onChange={(e) => {
+                  const myr = e.target.value;
+                  // Mirror to foreign_amount if a foreign wallet is selected, so
+                  // the wallet history sees a non-zero JPY deduction.
+                  const w = wallets.find((x) => x.id === editState.wallet_id);
+                  if (w && w.currency && w.currency !== "MYR" && myr && parseFloat(myr) > 0) {
+                    const rate = editState.payment_type === "Wise" ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                    const foreign = (parseFloat(myr) * rate).toFixed(0);
+                    setEditState({ ...editState, myr_amount: myr, foreign_amount: foreign });
+                  } else {
+                    setEditState({ ...editState, myr_amount: myr });
+                  }
+                }} step="0.01"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
             </div>
 

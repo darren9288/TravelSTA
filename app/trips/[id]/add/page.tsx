@@ -424,6 +424,16 @@ export default function AddExpensePage() {
                         else if (n.includes("debit") || n.includes("card")) setPaymentType("Debit Card");
                         else if (n.includes("tng") || n.includes("touch")) setPaymentType("TNG");
                         else setPaymentType("Cash");
+                        // Lock the currency to the wallet's currency. Stops users
+                        // from paying a JPY wallet with an MYR-typed amount, which
+                        // would record a foreign_amount=null and wreck the wallet
+                        // history (-JPY 0 entries).
+                        if (w.currency && (w.currency === "MYR" || w.currency === trip.foreign_currency || w.currency === trip.foreign_currency_2)) {
+                          setCurrency(w.currency);
+                          // Clear stale amounts so user re-enters in the right currency.
+                          setForeignAmount("");
+                          setMyrAmount("");
+                        }
                       }
                     }
                   }}
@@ -448,9 +458,13 @@ export default function AddExpensePage() {
                   </select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                <div><label className="text-xs text-slate-400 mb-1 block">
+                  Currency{walletId && <span className="text-slate-500 ml-1">(locked to wallet)</span>}
+                </label>
                   <select value={currency} onChange={(e) => { setCurrency(e.target.value); setForeignAmount(""); setMyrAmount(""); }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    disabled={!!walletId}
+                    title={walletId ? "Currency is locked to the selected wallet" : ""}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed">
                     <option value="MYR">MYR</option>
                     <option value={trip.foreign_currency}>{trip.foreign_currency}</option>
                     {trip.foreign_currency_2 && <option value={trip.foreign_currency_2}>{trip.foreign_currency_2}</option>}
@@ -588,11 +602,15 @@ export default function AddExpensePage() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Currency</label>
+                      <label className="text-xs text-slate-400 mb-1 block">
+                        Currency{aiWalletId && <span className="text-slate-500 ml-1">(locked)</span>}
+                      </label>
                       <select
                         value={aiCurrency}
                         onChange={(e) => setAiCurrency(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                        disabled={!!aiWalletId}
+                        title={aiWalletId ? "Currency is locked to the selected wallet" : ""}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="MYR">MYR</option>
                         <option value={trip.foreign_currency}>{trip.foreign_currency}</option>
