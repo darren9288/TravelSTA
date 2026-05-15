@@ -45,14 +45,15 @@ export default function NotificationFrequencySelector({ tripId }: { tripId: stri
       .then((d) => {
         if (cancelled) return;
         const v = d.interval_minutes as Interval | undefined;
-        setInterval(typeof v === "number" ? v : 0);
+        setInterval(typeof v === "number" ? v : 1);
         const lvl = d.detail_level as DetailLevel | undefined;
-        setDetail(lvl ?? "summary");
+        setDetail(lvl ?? "detailed");
       })
       .catch(() => {
         if (!cancelled) {
-          setInterval(0);
-          setDetail("summary");
+          // Match the API + DB defaults — Medium 1-min summary with Detailed bullets.
+          setInterval(1);
+          setDetail("detailed");
         }
       });
     return () => {

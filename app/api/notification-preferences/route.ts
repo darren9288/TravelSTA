@@ -28,9 +28,10 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   const row = data as { interval_minutes?: number; detail_level?: DetailLevel } | null;
+  // Defaults match migration 024 — Medium 1-min batch with Detailed bullets.
   return NextResponse.json({
-    interval_minutes: row?.interval_minutes ?? 0,
-    detail_level: row?.detail_level ?? "summary",
+    interval_minutes: row?.interval_minutes ?? 1,
+    detail_level: row?.detail_level ?? "detailed",
   });
 }
 
@@ -53,8 +54,8 @@ export async function PUT(req: NextRequest) {
   const existingRow = existing as { interval_minutes?: number; detail_level?: DetailLevel } | null;
 
   // Apply the diff. Either field can be omitted; we'll keep the previous
-  // value (or defaults) in that case.
-  let interval = existingRow?.interval_minutes ?? 0;
+  // value (or defaults — see migration 024) in that case.
+  let interval = existingRow?.interval_minutes ?? 1;
   if (body.interval_minutes != null) {
     const n = Number(body.interval_minutes);
     if (![-1, 0, 1, 5].includes(n)) {
@@ -63,7 +64,7 @@ export async function PUT(req: NextRequest) {
     interval = n;
   }
 
-  let detailLevel: DetailLevel = existingRow?.detail_level ?? "summary";
+  let detailLevel: DetailLevel = existingRow?.detail_level ?? "detailed";
   if (body.detail_level != null) {
     if (body.detail_level !== "summary" && body.detail_level !== "detailed") {
       return NextResponse.json({ error: "detail_level must be 'summary' or 'detailed'" }, { status: 400 });

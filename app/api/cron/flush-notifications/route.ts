@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     for (const p of (prefs ?? []) as { user_id: string; trip_id: string; interval_minutes: number; detail_level?: DetailLevel }[]) {
       const key = `${p.user_id}|${p.trip_id}`;
       prefMap[key] = p.interval_minutes;
-      detailMap[key] = p.detail_level ?? "summary";
+      detailMap[key] = p.detail_level ?? "detailed";
     }
   }
 
@@ -163,7 +163,9 @@ export async function POST(req: NextRequest) {
   const now = Date.now();
   for (const r of queue) {
     const key = `${r.user_id}|${r.trip_id ?? ""}`;
-    const interval = prefMap[`${r.user_id}|${r.trip_id ?? ""}`] ?? 0;
+    // Default to Medium (1 min) for users without an explicit row — matches
+    // sendPushToUser's default in lib/push.ts.
+    const interval = prefMap[`${r.user_id}|${r.trip_id ?? ""}`] ?? 1;
     if (interval <= 0) {
       // Shouldn't be queued — flush immediately as catch-up.
       (groups[key] ||= []).push(r);
@@ -194,7 +196,7 @@ export async function POST(req: NextRequest) {
   for (const [key, rows] of Object.entries(groups)) {
     const [userId, tripId] = key.split("|");
     const tripName = tripNameMap[tripId] ?? "your trip";
-    const level: DetailLevel = detailMap[key] ?? "summary";
+    const level: DetailLevel = detailMap[key] ?? "detailed";
     const payload = coalesce(rows, tripName, level);
 
     try {

@@ -138,9 +138,10 @@ async function queuePush(
 
 // Look up the user's notification preference for a specific trip.
 // Returns interval_minutes (0 = Frequent / immediate, 1 = Medium, 5 = Low,
-// -1 = Off / anomalies only). Defaults to 0 if no row exists.
+// -1 = Off / anomalies only). Defaults to 1 (Medium) if no row exists —
+// see migration 024 for the rationale.
 async function getInterval(userId: string, tripId: string | undefined): Promise<number> {
-  if (!tripId) return 0; // no trip context → can't be queued anyway
+  if (!tripId) return 0; // no trip context → send immediately, can't be queued without trip_id
   const db = serverDb();
   const { data } = await db
     .from("user_notification_preferences")
@@ -148,7 +149,7 @@ async function getInterval(userId: string, tripId: string | undefined): Promise<
     .eq("user_id", userId)
     .eq("trip_id", tripId)
     .maybeSingle();
-  return (data as { interval_minutes?: number } | null)?.interval_minutes ?? 0;
+  return (data as { interval_minutes?: number } | null)?.interval_minutes ?? 1;
 }
 
 // Public: route a push for a single user based on their preference.
