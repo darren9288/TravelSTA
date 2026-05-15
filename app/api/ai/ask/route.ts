@@ -74,7 +74,10 @@ export async function POST(req: NextRequest) {
       .map((t: { name: string; is_pool: boolean }) => ({ name: t.name, is_pool: t.is_pool })),
     expense_count: (expenses ?? []).length,
     total_myr: (expenses ?? []).reduce((s: number, e: { myr_amount: number }) => s + Number(e.myr_amount), 0),
-    expenses: (expenses ?? []).slice(0, 80).map((e: { date: string; category: string; payment_type: string; myr_amount: number; foreign_amount: number | null; currency?: string; notes: string | null; paid_by_id: string }) => ({
+    // Each expense gets a short id ("e1", "e2"…) so splits can reference
+    // it by that id without bloating the prompt with full UUIDs.
+    expenses: (expenses ?? []).slice(0, 80).map((e: { id: string; date: string; category: string; payment_type: string; myr_amount: number; foreign_amount: number | null; currency?: string; notes: string | null; paid_by_id: string }, i: number) => ({
+      eid: `e${i + 1}`,
       date: e.date,
       category: e.category,
       paid_by: tName.get(e.paid_by_id) ?? "?",
@@ -84,11 +87,17 @@ export async function POST(req: NextRequest) {
       currency: e.currency ?? "MYR",
       notes: e.notes,
     })),
-    splits: (realSplits ?? []).slice(0, 200).map((s: { traveler_id: string; amount: number; is_settled: boolean }) => ({
-      traveler: tName.get(s.traveler_id) ?? "?",
-      amount: Number(s.amount),
-      settled: s.is_settled,
-    })),
+    splits: (realSplits ?? []).slice(0, 250).map((s: { expense_id: string; traveler_id: string; amount: number; is_settled: boolean }) => {
+      // Match split to short expense id so Claude can answer category
+      // questions ("how much did Mac spend on food?").
+      const idx = (expenses ?? []).findIndex((e: { id: string }) => e.id === s.expense_id);
+      return {
+        eid: idx >= 0 ? `e${idx + 1}` : null,
+        traveler: tName.get(s.traveler_id) ?? "?",
+        amount: Number(s.amount),
+        settled: s.is_settled,
+      };
+    }),
   };
 
   const cfg = await getAIConfig();
@@ -150,16 +159,35 @@ B) App "how do I..." or "where do I find..." questions — use APP_GUIDE.
 
 Decide which kind the question is, then answer.
 
-Rules:
+CRITICAL: "paid" vs "spent" are different — never confuse them.
+- "How much did Darren PAY/lend/cover?" → sum expenses where paid_by = "Darren"
+  (this is what he fronted; the team may owe him back)
+- "How much did Darren SPEND/use/personally spend?" → sum splits where
+  traveler = "Darren" (his actual share — the portion he's truly out of pocket
+  after settlements)
+- If unsure which the user means, COMPUTE BOTH briefly: "You fronted RM X
+  and your share is RM Y."
+- Always do the math from the data. Don't redirect to "go check Analytics
+  page" when the splits/expenses are right here in TRIP_CONTEXT.
+
+Other rules:
 - All amounts in MYR unless otherwise stated.
-- Plain language. No markdown headers, no JSON, no bullet lists unless really helpful.
-- Keep answers short — 2-4 sentences. Specific numbers when from TRIP_CONTEXT.
-- If asking "how do I X", give the exact path: "Account → Notifications" or
-  "Trip Settings → scroll to Notification frequency". Don't invent menu items.
-- If neither context has the answer, say so plainly. Don't make things up.
-- The conversation has memory: prior turns are included as messages. When
-  the user says "and plus RM 30 more" or "what about lunch?", build on what
-  you said earlier in this chat. Don't re-introduce yourself.
+- Plain language. Short answer (1-3 sentences). No markdown headers,
+  no JSON. Bullet lists only when really helpful.
+- Match the user's LANGUAGE FULLY. If they write Mandarin/Malay, reply
+  entirely in that language including translating UI names where natural
+  (e.g. "分析页面" not "Analytics 页面" hybrid). Pure English UI names
+  are OK if there's no clean translation.
+- If asking "how do I X", give the exact path from APP_GUIDE: "Account →
+  Notifications" or "Trip Settings → scroll to Notification frequency".
+  Don't invent menu items.
+- If the data genuinely doesn't contain the answer, say so plainly.
+  Don't make things up.
+- Conversation has memory: prior turns are included as messages. When
+  the user says "and plus RM 30 more" or "what about lunch?", build on
+  what you said earlier. Don't re-introduce yourself.
+- Casual user tone is fine — match their vibe. Don't lecture or add
+  disclaimers like "for accurate figures, please…".
 
 ${appGuide}
 
