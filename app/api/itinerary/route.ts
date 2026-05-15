@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
+import { getSessionUser } from "@/lib/supabase-server";
+import { sendPushToTripMembers } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
@@ -53,6 +55,28 @@ export async function POST(req: NextRequest) {
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Push: "New itinerary item — {title}"
+  try {
+    const me = await getSessionUser();
+    const { data: trip } = await serverDb().from("trips").select("name").eq("id", body.trip_id).single();
+    const tripName = trip?.name ?? "your trip";
+    const title = body.title ?? "New item";
+    const dateStr = body.date ? ` on ${body.date}` : "";
+    void sendPushToTripMembers(
+      body.trip_id,
+      {
+        title: `Itinerary updated — ${tripName}`,
+        body: `${title}${dateStr} was added to the plan`,
+        url: `/trips/${body.trip_id}`,
+        tag: `itinerary-${data.id}`,
+      },
+      me?.id
+    ).catch((e: unknown) => console.error("[push.itinerary]", (e as Error).message));
+  } catch (e) {
+    console.error("[push.itinerary] setup failed:", (e as Error).message);
+  }
+
   return NextResponse.json({ ...data, links: [], files: [] }, { status: 201 });
 }
 
