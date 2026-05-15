@@ -134,8 +134,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         url: `/trips/${tripId}/settlement`,
         tag: `settle-${tripId}`,
       },
-      me?.id
-    ).catch((e) => console.error("[push.settle-all]", (e as Error).message));
+      me?.id,
+      { category: "settle_all" }
+    ).catch((e: unknown) => console.error("[push.settle-all]", (e as Error).message));
   } catch (e) {
     console.error("[push.settle-all] setup failed:", (e as Error).message);
   }

@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
         url: `/trips/${body.trip_id}/wallets`,
         tag: `wallet-topup-${data.id}`,
       },
-      me?.id
+      me?.id,
+      { category: "wallet_topup" }
     ).catch((e: unknown) => console.error("[push.wallet-topup]", (e as Error).message));
   } catch (e) {
     console.error("[push.wallet-topup] setup failed:", (e as Error).message);

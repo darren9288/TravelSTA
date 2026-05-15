@@ -56,7 +56,8 @@ export async function PUT(req: NextRequest) {
             url: `/trips/${tripId}/expenses`,
             tag: `split-${id}`,
           },
-          me?.id
+          me?.id,
+          { category: "split_toggle" }
         ).catch((e: unknown) => console.error("[push.split-toggle]", (e as Error).message));
       }
     } catch (e) {

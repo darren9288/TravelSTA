@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
         url: `/trips/${body.trip_id}/pool`,
         tag: `pool-topup-${data.id}`,
       },
-      me?.id
+      me?.id,
+      { category: "pool_topup" }
     ).catch((e: unknown) => console.error("[push.pool-topup]", (e as Error).message));
   } catch (e) {
     console.error("[push.pool-topup] setup failed:", (e as Error).message);
@@ -88,7 +89,8 @@ export async function POST(req: NextRequest) {
       void sendPushToTripMembers(
         body.trip_id,
         { title: a.title, body: a.body, url: a.url, tag: a.tag },
-        undefined
+        undefined,
+        { category: "anomaly", isAnomaly: true }
       ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
     }
   } catch (e) {

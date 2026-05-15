@@ -71,7 +71,8 @@ export async function POST(req: NextRequest) {
         url: `/trips/${body.trip_id}`,
         tag: `itinerary-${data.id}`,
       },
-      me?.id
+      me?.id,
+      { category: "itinerary_add" }
     ).catch((e: unknown) => console.error("[push.itinerary]", (e as Error).message));
   } catch (e) {
     console.error("[push.itinerary] setup failed:", (e as Error).message);

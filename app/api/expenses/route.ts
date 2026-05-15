@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
         url: `/trips/${body.trip_id}/expenses`,
         tag: `expense-${expense.id}`,
       },
-      me?.id
+      me?.id,
+      { category: "expense_add" }
     ).catch((e: unknown) => console.error("[push.expense]", (e as Error).message));
     void fc;
   } catch (e) {
@@ -138,7 +139,8 @@ export async function POST(req: NextRequest) {
         void sendPushToTripMembers(
           body.trip_id,
           { title: a.title, body: a.body, url: a.url, tag: a.tag },
-          undefined // Anomalies notify EVERYONE including the triggerer — they need to fix it
+          undefined, // Anomalies notify EVERYONE including the triggerer — they need to fix it
+          { category: "anomaly", isAnomaly: true }
         ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
       }
     }
@@ -180,7 +182,8 @@ export async function PUT(req: NextRequest) {
           void sendPushToTripMembers(
             data.trip_id,
             { title: a.title, body: a.body, url: a.url, tag: a.tag },
-            undefined
+            undefined,
+            { category: "anomaly", isAnomaly: true }
           ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
         }
       }
@@ -225,7 +228,8 @@ export async function DELETE(req: NextRequest) {
           url: `/trips/${exp.trip_id}/expenses`,
           tag: `expense-del-${id}`,
         },
-        me?.id
+        me?.id,
+        { category: "expense_delete" }
       ).catch((e: unknown) => console.error("[push.expense-delete]", (e as Error).message));
     } catch (e) {
       console.error("[push.expense-delete] setup failed:", (e as Error).message);

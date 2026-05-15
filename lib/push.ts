@@ -45,24 +45,48 @@ export type PushPayload = {
   icon?: string;      // override the default app icon
 };
 
-// Send a push to every subscription for a given user. Dead endpoints (404/410
-// from FCM) are pruned automatically so we don't keep retrying forever.
-// Returns { sent, failed } so callers can log delivery rate if useful.
-export async function sendPushToUser(
-  userId: string,
-  payload: PushPayload
-): Promise<{ sent: number; failed: number }> {
-  ensureConfigured();
+// Categories used by the queue to group/coalesce pushes. The cron job uses
+// these to build a summary like "2 expenses added, 3 splits settled".
+export type PushCategory =
+  | "expense_add"
+  | "expense_delete"
+  | "split_toggle"
+  | "pool_topup"
+  | "wallet_topup"
+  | "itinerary_add"
+  | "settle_all"
+  | "anomaly"
+  | "other";
 
+export type PushOptions = {
+  tripId?: string;          // used to look up the user's per-trip preference + group queued items
+  category?: PushCategory;  // used by the cron coalescer; defaults to "other"
+  isAnomaly?: boolean;      // anomalies always send immediately, bypassing the queue
+};
+
+// Low-level: send a push payload to one subscription. Used by both the
+// immediate path and the cron flush path. Returns true on success.
+async function deliverPush(sub: PushSubscription, payload: PushPayload): Promise<{ ok: boolean; statusCode?: number }> {
+  try {
+    await webpush.sendNotification(sub, JSON.stringify(payload));
+    return { ok: true };
+  } catch (e) {
+    const err = e as { statusCode?: number };
+    return { ok: false, statusCode: err.statusCode };
+  }
+}
+
+// Immediate send to every subscription for a user. Dead endpoints get pruned.
+// Used directly when the user prefers Frequent mode or for anomaly pushes.
+async function sendImmediate(userId: string, payload: PushPayload): Promise<{ sent: number; failed: number }> {
+  ensureConfigured();
   const db = serverDb();
   const { data: subs } = await db
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("user_id", userId);
 
-  if (!subs || subs.length === 0) {
-    return { sent: 0, failed: 0 };
-  }
+  if (!subs || subs.length === 0) return { sent: 0, failed: 0 };
 
   let sent = 0;
   let failed = 0;
@@ -74,24 +98,17 @@ export async function sendPushToUser(
         endpoint: s.endpoint,
         keys: { p256dh: s.p256dh, auth: s.auth },
       };
-      try {
-        await webpush.sendNotification(sub, JSON.stringify(payload));
+      const { ok, statusCode } = await deliverPush(sub, payload);
+      if (ok) {
         sent++;
-        // Best-effort touch of last_seen_at — failure to write here is fine.
         db.from("push_subscriptions")
           .update({ last_seen_at: new Date().toISOString() })
           .eq("id", s.id)
           .then(() => {}, () => {});
-      } catch (e) {
+      } else {
         failed++;
-        const err = e as { statusCode?: number; body?: string };
-        // 404 / 410 = subscription gone. User uninstalled, revoked permission,
-        // or cleared their browser data. Prune so we don't keep trying.
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          deadIds.push(s.id);
-        } else {
-          console.error("[push.send] non-fatal:", err.statusCode, err.body?.slice(0, 200));
-        }
+        if (statusCode === 404 || statusCode === 410) deadIds.push(s.id);
+        else console.error("[push.send] non-fatal:", statusCode);
       }
     })
   );
@@ -99,16 +116,78 @@ export async function sendPushToUser(
   if (deadIds.length > 0) {
     await db.from("push_subscriptions").delete().in("id", deadIds);
   }
-
   return { sent, failed };
 }
 
+// Queue a push for later flushing. The cron job picks it up after the user's
+// configured interval and coalesces it with other queued items.
+async function queuePush(
+  userId: string,
+  tripId: string | undefined,
+  payload: PushPayload,
+  category: PushCategory
+): Promise<void> {
+  const db = serverDb();
+  await db.from("notification_queue").insert({
+    user_id: userId,
+    trip_id: tripId ?? null,
+    payload: payload as unknown as Record<string, unknown>,
+    category,
+  });
+}
+
+// Look up the user's notification preference for a specific trip.
+// Returns interval_minutes (0 = Frequent / immediate, 1 = Medium, 5 = Low,
+// -1 = Off / anomalies only). Defaults to 0 if no row exists.
+async function getInterval(userId: string, tripId: string | undefined): Promise<number> {
+  if (!tripId) return 0; // no trip context → can't be queued anyway
+  const db = serverDb();
+  const { data } = await db
+    .from("user_notification_preferences")
+    .select("interval_minutes")
+    .eq("user_id", userId)
+    .eq("trip_id", tripId)
+    .maybeSingle();
+  return (data as { interval_minutes?: number } | null)?.interval_minutes ?? 0;
+}
+
+// Public: route a push for a single user based on their preference.
+//   - Anomalies always send immediately (bypass preference).
+//   - "Off" (-1) silently drops non-anomaly pushes.
+//   - "Frequent" (0) sends immediately.
+//   - "Medium" (1) / "Low" (5) queue for the cron job to coalesce.
+export async function sendPushToUser(
+  userId: string,
+  payload: PushPayload,
+  options?: PushOptions
+): Promise<{ sent: number; failed: number; queued?: boolean; skipped?: boolean }> {
+  // Anomalies bypass preferences entirely.
+  if (options?.isAnomaly) {
+    return sendImmediate(userId, payload);
+  }
+
+  const interval = await getInterval(userId, options?.tripId);
+
+  if (interval === -1) {
+    return { sent: 0, failed: 0, skipped: true };
+  }
+  if (interval === 0) {
+    return sendImmediate(userId, payload);
+  }
+
+  // interval > 0 → queue for the cron flush.
+  await queuePush(userId, options?.tripId, payload, options?.category ?? "other");
+  return { sent: 0, failed: 0, queued: true };
+}
+
 // Send the same push to every member of a trip. Useful for "Mac added an
-// expense" — every member except Mac gets the notification.
+// expense" — every member except Mac gets the notification (per their
+// individual preference).
 export async function sendPushToTripMembers(
   tripId: string,
   payload: PushPayload,
-  excludeUserId?: string
+  excludeUserId?: string,
+  options?: Omit<PushOptions, "tripId">
 ): Promise<{ sent: number; failed: number }> {
   const db = serverDb();
   const { data: members } = await db
@@ -126,10 +205,16 @@ export async function sendPushToTripMembers(
   let totalFailed = 0;
   await Promise.all(
     targets.map(async (uid) => {
-      const { sent, failed } = await sendPushToUser(uid, payload);
+      const { sent, failed } = await sendPushToUser(uid, payload, { ...options, tripId });
       totalSent += sent;
       totalFailed += failed;
     })
   );
   return { sent: totalSent, failed: totalFailed };
+}
+
+// Internal helper exported for the cron flush endpoint to use directly,
+// bypassing the preference check (since the cron IS the flush).
+export async function _sendImmediateForFlush(userId: string, payload: PushPayload) {
+  return sendImmediate(userId, payload);
 }

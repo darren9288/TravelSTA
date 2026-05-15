@@ -7,6 +7,7 @@ import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload
 import { useTheme, THEMES } from "@/components/ThemeProvider";
 import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
+import NotificationFrequencySelector from "@/components/NotificationFrequencySelector";
 
 type Member = {
   user_id: string;
@@ -547,6 +548,9 @@ export default function SettingsPage() {
               onSaved={load}
             />
           )}
+
+          {/* Notification frequency — per-user, per-trip */}
+          <NotificationFrequencySelector tripId={id} />
 
           {/* Duplicate Trip — admin/editor */}
           {myRole !== "viewer" && (
