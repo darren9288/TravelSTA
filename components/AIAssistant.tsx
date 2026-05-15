@@ -6,7 +6,7 @@ import { fetcher } from "@/lib/fetcher";
 import { useToast } from "@/components/Toaster";
 import {
   Sparkles, X, ArrowLeft, Receipt, CalendarDays, ArrowRightLeft,
-  Banknote, BarChart3, MessageSquare, Wand2, FileText, Mic,
+  Banknote, BarChart3, Wand2, FileText, Mic,
   Loader2, Send, ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { Trip, Traveler, Expense } from "@/lib/supabase";
@@ -94,7 +94,7 @@ export default function AIAssistant() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto">
-              {mode === "menu" && <MenuView setMode={setMode} />}
+              {mode === "menu" && <MenuView tripId={id} setMode={setMode} />}
               {mode === "parse-expense" && <ParseExpenseView tripId={id} onDone={close} />}
               {mode === "parse-itinerary" && <ParseItineraryView tripId={id} onDone={close} />}
               {mode === "currency-convert" && <CurrencyConvertView tripId={id} />}
@@ -128,37 +128,194 @@ function modeTitle(mode: Mode): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Menu — the home view with action tiles.
+// Menu — the home view. Top: chat input + mic for asking questions about
+// the app or spending (replaces the old "Ask About Spending" and "Voice
+// Input" tiles). Bottom: action tiles for the explicit modes.
 // ─────────────────────────────────────────────────────────────────────────
 
-function MenuView({ setMode }: { setMode: (m: Mode) => void }) {
+function MenuView({ tripId, setMode }: { tripId: string; setMode: (m: Mode) => void }) {
   const tiles: { mode: Mode; icon: React.ComponentType<{ size?: number; className?: string }>; label: string; subtitle: string; color: string }[] = [
     { mode: "parse-expense",      icon: Receipt,       label: "Parse Expense",       subtitle: "Type or paste, AI fills the form", color: "text-emerald-400" },
-    { mode: "voice",              icon: Mic,           label: "Voice Input",         subtitle: "Speak your expense aloud",         color: "text-rose-400" },
     { mode: "parse-itinerary",    icon: CalendarDays,  label: "Parse Itinerary",     subtitle: "Free-text day plan → items",       color: "text-amber-400" },
     { mode: "currency-convert",   icon: ArrowRightLeft,label: "Currency Converter",  subtitle: "Quick math at trip rates",          color: "text-blue-400" },
     { mode: "settlement-summary", icon: Banknote,      label: "Settlement Summary",  subtitle: "Who owes whom right now",           color: "text-emerald-400" },
     { mode: "spending-stats",     icon: BarChart3,     label: "Spending Stats",      subtitle: "Quick total, by category & day",   color: "text-indigo-400" },
-    { mode: "ask-spending",       icon: MessageSquare, label: "Ask About Spending",  subtitle: "Natural-language queries",          color: "text-purple-400" },
     { mode: "suggest-itinerary",  icon: Wand2,         label: "Suggest Activities",  subtitle: "AI ideas for a day",                color: "text-amber-400" },
     { mode: "trip-recap",         icon: FileText,      label: "Trip Recap",          subtitle: "Shareable summary text",            color: "text-slate-300" },
   ];
 
+  // ── Chat state (lifted from the old AskSpendingView) ──────────────────
+  const [question, setQuestion] = useState("");
+  const [answering, setAnswering] = useState(false);
+  const [exchanges, setExchanges] = useState<{ q: string; a: string }[]>([]);
+  const [askError, setAskError] = useState("");
+
+  // ── Voice recognition state for the mic button ────────────────────────
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) setVoiceSupported(false);
+  }, []);
+
+  function startListening() {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setAskError("Voice not supported in this browser.");
+      return;
+    }
+    const recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onresult = (e: { results: { isFinal: boolean; [k: number]: { transcript: string } }[] }) => {
+      const result = e.results[e.results.length - 1];
+      // Append interim text to the question. User can edit before sending.
+      setQuestion(result[0].transcript);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+
+    setListening(true);
+    recognition.start();
+  }
+
+  async function ask() {
+    if (!question.trim() || answering) return;
+    const q = question.trim();
+    setQuestion("");
+    setAnswering(true); setAskError("");
+    try {
+      const res = await fetch("/api/ai/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, trip_id: tripId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't answer");
+      setExchanges((prev) => [...prev, { q, a: data.answer ?? "(no answer)" }]);
+    } catch (e) {
+      setAskError((e as Error).message);
+      setQuestion(q);
+    } finally {
+      setAnswering(false);
+    }
+  }
+
+  // Quick-start suggestions shown only before any exchange has happened.
+  const suggestions = [
+    "How much did we spend on food?",
+    "Who paid the most this week?",
+    "Where can I disable notifications?",
+    "How do I change the exchange rate?",
+  ];
+
   return (
-    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {tiles.map((t) => (
-        <button
-          key={t.mode}
-          onClick={() => setMode(t.mode)}
-          className="flex items-center gap-3 px-3 py-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl text-left transition-colors"
-        >
-          <t.icon size={20} className={`${t.color} flex-shrink-0`} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white">{t.label}</p>
-            <p className="text-xs text-slate-500 truncate">{t.subtitle}</p>
+    <div className="flex flex-col gap-3 p-3">
+      {/* Chat input row — always at the top, primary action of the panel. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2 items-center">
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !answering) ask(); }}
+            placeholder="Ask anything about this app or spending"
+            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+          />
+          {voiceSupported && (
+            <button
+              onClick={startListening}
+              disabled={listening || answering}
+              title={listening ? "Listening…" : "Speak your question"}
+              aria-label="Voice input"
+              className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
+                listening
+                  ? "bg-rose-600 text-white animate-pulse"
+                  : "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300"
+              }`}
+            >
+              <Mic size={18} />
+            </button>
+          )}
+          <button
+            onClick={ask}
+            disabled={answering || !question.trim()}
+            aria-label="Send"
+            className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0"
+          >
+            {answering ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
+        </div>
+
+        {/* Suggestion chips — only before first message, only when input is empty */}
+        {exchanges.length === 0 && question.length === 0 && !answering && (
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                onClick={() => setQuestion(s)}
+                className="text-xs px-2 py-1 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
           </div>
-        </button>
-      ))}
+        )}
+
+        {/* Conversation thread */}
+        {exchanges.length > 0 && (
+          <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto pr-1">
+            {exchanges.map((ex, i) => (
+              <div key={i} className="flex flex-col gap-1.5">
+                <div className="self-end max-w-[85%] bg-emerald-900/40 border border-emerald-800/50 rounded-2xl rounded-br-sm px-3 py-2">
+                  <p className="text-sm text-white whitespace-pre-wrap">{ex.q}</p>
+                </div>
+                <div className="self-start max-w-[85%] bg-slate-800 border border-slate-700/50 rounded-2xl rounded-bl-sm px-3 py-2">
+                  <p className="text-sm text-slate-200 whitespace-pre-wrap">{ex.a}</p>
+                </div>
+              </div>
+            ))}
+            {answering && (
+              <div className="self-start bg-slate-800 border border-slate-700/50 rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin text-slate-400" />
+                <p className="text-sm text-slate-400">Thinking…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {askError && <p className="text-xs text-red-400">{askError}</p>}
+      </div>
+
+      {/* Divider between chat and action tiles */}
+      <div className="flex items-center gap-2 pt-1">
+        <div className="flex-1 h-px bg-slate-800" />
+        <span className="text-[10px] uppercase tracking-wider text-slate-600">Quick actions</span>
+        <div className="flex-1 h-px bg-slate-800" />
+      </div>
+
+      {/* Action tiles for the explicit modes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {tiles.map((t) => (
+          <button
+            key={t.mode}
+            onClick={() => setMode(t.mode)}
+            className="flex items-center gap-3 px-3 py-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl text-left transition-colors"
+          >
+            <t.icon size={20} className={`${t.color} flex-shrink-0`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">{t.label}</p>
+              <p className="text-xs text-slate-500 truncate">{t.subtitle}</p>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
