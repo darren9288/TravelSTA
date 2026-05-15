@@ -56,19 +56,13 @@ Then redeploy so the env var takes effect.
 
 ---
 
-## 5. Add the secret to Supabase (for pg_cron)
+## 5. Schedule the cron job (hardcode the secret)
 
-In Supabase SQL editor, run (replace `YOUR_SECRET` with the same value):
+> **Note:** Supabase's Hobby plan doesn't allow `ALTER DATABASE SET app.*`,
+> so we hardcode the secret directly inside the cron job. The secret never
+> leaves Supabase + Vercel, both of which are private to you.
 
-```sql
-ALTER DATABASE postgres SET app.cron_secret = 'YOUR_SECRET';
-```
-
----
-
-## 6. Schedule the cron job
-
-In Supabase SQL editor, run (replace `YOUR_APP.vercel.app` with your actual domain):
+In Supabase SQL editor, run (replace BOTH placeholders with your real values):
 
 ```sql
 SELECT cron.schedule(
@@ -78,7 +72,32 @@ SELECT cron.schedule(
   SELECT net.http_post(
     url := 'https://YOUR_APP.vercel.app/api/cron/flush-notifications',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.cron_secret', true),
+      'Authorization', 'Bearer YOUR_SECRET_HERE',
+      'Content-Type', 'application/json'
+    ),
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
+
+### Alternative: use Supabase Vault (more secure)
+
+If you want to keep the secret out of the cron definition, store it in the Vault:
+
+1. Supabase dashboard → **Project Settings → Vault → New secret**
+2. Name: `cron_secret`, value: (paste hex string)
+3. Use this SQL instead:
+
+```sql
+SELECT cron.schedule(
+  'flush-notification-queue',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://YOUR_APP.vercel.app/api/cron/flush-notifications',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret'),
       'Content-Type', 'application/json'
     ),
     body := '{}'::jsonb

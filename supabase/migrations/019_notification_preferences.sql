@@ -74,7 +74,11 @@ create policy "own queue read"
 --      - pg_cron
 --      - pg_net
 --
--- 2. Create the cron job that calls your /api/cron/flush-notifications endpoint:
+-- 2. Add CRON_SECRET to Vercel env vars (a long random hex string).
+--
+-- 3. Schedule the cron job — hardcode the same secret inside the SQL because
+--    Supabase Hobby plan doesn't allow ALTER DATABASE SET. Replace BOTH
+--    placeholders:
 --
 --    SELECT cron.schedule(
 --      'flush-notification-queue',
@@ -83,7 +87,7 @@ create policy "own queue read"
 --      SELECT net.http_post(
 --        url := 'https://YOUR_APP.vercel.app/api/cron/flush-notifications',
 --        headers := jsonb_build_object(
---          'Authorization', 'Bearer ' || current_setting('app.cron_secret', true),
+--          'Authorization', 'Bearer YOUR_SECRET_HERE',
 --          'Content-Type', 'application/json'
 --        ),
 --        body := '{}'::jsonb
@@ -91,9 +95,7 @@ create policy "own queue read"
 --      $$
 --    );
 --
--- 3. Set the cron secret as a Postgres setting (one-time):
---      ALTER DATABASE postgres SET app.cron_secret = 'YOUR_RANDOM_SECRET';
---    Also add CRON_SECRET=YOUR_RANDOM_SECRET to your Vercel env vars.
---
 -- 4. To unschedule later if needed:
 --      SELECT cron.unschedule('flush-notification-queue');
+--
+-- See docs/NOTIFICATION_FREQUENCY_SETUP.md for full instructions.
