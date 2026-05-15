@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { Sparkles, ClipboardList } from "lucide-react";
+import { Sparkles, ClipboardList, Camera, Loader2, X } from "lucide-react";
+import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { enqueue } from "@/lib/offline-queue";
 import { useToast } from "@/components/Toaster";
@@ -18,7 +19,7 @@ export default function AddExpensePage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [myId, setMyId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"form" | "ai">("form");
+  const [tab, setTab] = useState<"form" | "ai" | "receipt">("form");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,6 +56,23 @@ export default function AddExpensePage() {
   // Tracks whether the user has manually touched aiDate. If so, we won't
   // overwrite it with Claude's parsed date on the next Parse click.
   const [aiDateTouched, setAiDateTouched] = useState(false);
+
+  // ── Receipt OCR tab ──────────────────────────────────────────────────────
+  // Snap a photo → compress → send to Claude Vision → preview parsed fields
+  // → "Use these values" pre-fills the Form tab and switches over.
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptParsing, setReceiptParsing] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receiptResult, setReceiptResult] = useState<{
+    amount: number | null;
+    currency: string | null;
+    date: string | null;
+    items: string[];
+    suggested_category: string;
+    confidence: "high" | "medium" | "low";
+    raw_text: string;
+  } | null>(null);
+  const [receiptCompressedKB, setReceiptCompressedKB] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -256,6 +274,89 @@ export default function AddExpensePage() {
     }
   }
 
+  // ── Receipt OCR handlers ─────────────────────────────────────────────────
+  async function handleReceiptFile(file: File) {
+    setReceiptError(null);
+    setReceiptResult(null);
+    setReceiptParsing(true);
+    try {
+      // Show original immediately (object URL) so the user sees feedback fast,
+      // then start compressing in background.
+      const previewUrl = URL.createObjectURL(file);
+      setReceiptPreview(previewUrl);
+
+      const compressed = await compressImage(file);
+      setReceiptCompressedKB(Math.round(compressed.size / 1024));
+
+      const base64 = await blobToBase64(compressed);
+      const res = await fetch("/api/ai/parse-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_base64: base64,
+          trip_id: id,
+          hint_currency: currency, // Pre-bias toward currently selected currency.
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to read receipt");
+      }
+      setReceiptResult(data);
+      if (data.confidence === "low") {
+        toast({
+          kind: "warning",
+          title: "Low confidence",
+          body: "AI wasn't sure about some fields — please double-check before saving.",
+        });
+      }
+    } catch (e) {
+      setReceiptError((e as Error).message);
+      toast({ kind: "error", title: "Receipt parse failed", body: (e as Error).message });
+    } finally {
+      setReceiptParsing(false);
+    }
+  }
+
+  function applyReceiptToForm() {
+    if (!receiptResult || !trip) return;
+    // Choose which input to fill based on the parsed currency.
+    const parsedCurr = (receiptResult.currency ?? "MYR").toUpperCase();
+    const supportedCurr =
+      parsedCurr === "MYR" || parsedCurr === trip.foreign_currency || parsedCurr === trip.foreign_currency_2
+        ? parsedCurr
+        : "MYR";
+    setCurrency(supportedCurr);
+    setForeignAmount("");
+    setMyrAmount("");
+    if (receiptResult.amount != null && receiptResult.amount > 0) {
+      if (supportedCurr === "MYR") {
+        setMyrAmount(String(receiptResult.amount));
+      } else {
+        setForeignAmount(String(receiptResult.amount));
+      }
+    }
+    if (receiptResult.date) setDate(receiptResult.date);
+    setCategory(receiptResult.suggested_category);
+    setCategoryTouched(true); // User reviewed the suggestion via the preview.
+    if (receiptResult.items.length > 0 || receiptResult.raw_text) {
+      const noteParts: string[] = [];
+      if (receiptResult.raw_text) noteParts.push(receiptResult.raw_text);
+      if (receiptResult.items.length > 0) noteParts.push(receiptResult.items.join(", "));
+      setNotes(noteParts.join(" — ").slice(0, 200));
+    }
+    setTab("form");
+    toast({ kind: "success", title: "Receipt loaded", body: "Review the values and Save." });
+  }
+
+  function clearReceipt() {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptPreview(null);
+    setReceiptResult(null);
+    setReceiptError(null);
+    setReceiptCompressedKB(null);
+  }
+
   async function handleAiParse() {
     if (!aiText.trim()) return;
     setAiParsing(true); setError("");
@@ -381,6 +482,10 @@ export default function AddExpensePage() {
             <button onClick={() => setTab("ai")}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "ai" ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
               <Sparkles size={14} /> AI Quick
+            </button>
+            <button onClick={() => setTab("receipt")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "receipt" ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
+              <Camera size={14} /> Receipt
             </button>
           </div>
 
@@ -712,6 +817,111 @@ export default function AddExpensePage() {
                 </>
               )}
               {error && !aiParsed && <p className="text-sm text-red-400">{error}</p>}
+            </div>
+          )}
+
+          {tab === "receipt" && (
+            <div className="flex flex-col gap-4">
+              {/* Camera/upload input — only shown when no preview yet. The
+                  `capture="environment"` hint asks the device for the rear
+                  camera; falls back to file picker on desktop. */}
+              {!receiptPreview && !receiptParsing && (
+                <label className="cursor-pointer flex flex-col items-center justify-center gap-3 py-12 px-4 bg-slate-800/40 hover:bg-slate-800/60 border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-2xl transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <Camera size={28} className="text-emerald-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white font-medium">Snap a receipt</p>
+                    <p className="text-xs text-slate-400 mt-1">Claude reads it and fills the form for you</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleReceiptFile(f);
+                      // Allow re-uploading the same file later by resetting the input.
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+
+              {/* Parsing state — show the preview thumbnail + spinner. */}
+              {receiptParsing && (
+                <div className="flex flex-col items-center gap-3 py-8 bg-slate-800/40 rounded-2xl">
+                  {receiptPreview && (
+                    <img src={receiptPreview} alt="Receipt" className="max-h-64 rounded-lg shadow-lg" />
+                  )}
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <Loader2 size={18} className="animate-spin" />
+                    <span className="text-sm">Reading receipt…</span>
+                  </div>
+                  <p className="text-xs text-slate-500">This usually takes 2-5 seconds</p>
+                </div>
+              )}
+
+              {/* Result preview + Apply button. */}
+              {receiptResult && !receiptParsing && (
+                <>
+                  <div className="bg-slate-800/40 rounded-2xl p-4 flex gap-3">
+                    {receiptPreview && (
+                      <img src={receiptPreview} alt="Receipt" className="w-24 h-32 object-cover rounded-lg flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-2xl font-bold text-white">
+                          {receiptResult.currency ?? "?"} {receiptResult.amount?.toLocaleString() ?? "?"}
+                        </span>
+                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-semibold ${
+                          receiptResult.confidence === "high" ? "bg-emerald-500/20 text-emerald-300" :
+                          receiptResult.confidence === "medium" ? "bg-amber-500/20 text-amber-300" :
+                          "bg-red-500/20 text-red-300"
+                        }`}>
+                          {receiptResult.confidence}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mb-2">
+                        {receiptResult.date ?? "no date"} · {receiptResult.suggested_category}
+                      </p>
+                      {receiptResult.raw_text && (
+                        <p className="text-xs text-slate-500 mb-1 truncate">{receiptResult.raw_text}</p>
+                      )}
+                      {receiptResult.items.length > 0 && (
+                        <p className="text-xs text-slate-500 italic line-clamp-2">{receiptResult.items.join(", ")}</p>
+                      )}
+                      {receiptCompressedKB != null && (
+                        <p className="text-[10px] text-slate-600 mt-2">Sent {receiptCompressedKB}KB to Claude</p>
+                      )}
+                    </div>
+                    <button onClick={clearReceipt}
+                      className="self-start p-1.5 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
+                      title="Discard">
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <button onClick={applyReceiptToForm}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition-colors">
+                    Use these values
+                  </button>
+                  <button onClick={clearReceipt}
+                    className="w-full py-2 text-sm text-slate-400 hover:text-white transition-colors">
+                    Try another photo
+                  </button>
+                </>
+              )}
+
+              {receiptError && (
+                <p className="text-sm text-red-400">{receiptError}</p>
+              )}
+
+              <p className="text-xs text-slate-500 text-center mt-2 leading-relaxed">
+                Tip: get the whole receipt in frame and avoid glare.
+                Claude reads English, Japanese, Chinese, and Malay receipts.
+              </p>
             </div>
           )}
         </div>
