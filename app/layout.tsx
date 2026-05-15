@@ -6,6 +6,7 @@ import OfflineBanner from "@/components/OfflineBanner";
 import NavigationProgress from "@/components/NavigationProgress";
 import { Toaster } from "@/components/Toaster";
 import OfflineQueueWatcher from "@/components/OfflineQueueWatcher";
+import PushToastBridge from "@/components/PushToastBridge";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <OfflineBanner />
             <OfflineQueueWatcher />
             <NavigationProgress />
+            <PushToastBridge />
             {children}
           </Toaster>
         </ThemeProvider>
