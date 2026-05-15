@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor, tripIdFrom } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
+import { detectPoolOverdraft } from "@/lib/anomalies";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
@@ -75,6 +76,23 @@ export async function POST(req: NextRequest) {
     ).catch((e: unknown) => console.error("[push.pool-topup]", (e as Error).message));
   } catch (e) {
     console.error("[push.pool-topup] setup failed:", (e as Error).message);
+  }
+
+  // Anomaly: check pool overdraft AFTER the top-up. If still negative, the
+  // top-up wasn't enough — surface it so someone tops up more.
+  try {
+    const { data: trip } = await serverDb().from("trips").select("name").eq("id", body.trip_id).single();
+    const tripName = trip?.name ?? "your trip";
+    const overdrafts = await detectPoolOverdraft(body.trip_id, tripName);
+    for (const a of overdrafts) {
+      void sendPushToTripMembers(
+        body.trip_id,
+        { title: a.title, body: a.body, url: a.url, tag: a.tag },
+        undefined
+      ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
+    }
+  } catch (e) {
+    console.error("[push.anomaly-pool] setup failed:", (e as Error).message);
   }
 
   return NextResponse.json(data, { status: 201 });

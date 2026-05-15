@@ -4,6 +4,8 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
+import { detectExpenseAnomalies, detectPoolOverdraft } from "@/lib/anomalies";
+import type { Trip } from "@/lib/supabase";
 
 function lastDay(month: string) {
   return new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate();
@@ -111,6 +113,39 @@ export async function POST(req: NextRequest) {
     console.error("[push.expense] setup failed:", (e as Error).message);
   }
 
+  // Anomaly detection: run all 9 detectors and fire one push per anomaly.
+  // Wrapped so detector failures never break the create flow.
+  try {
+    const { data: tripFull } = await supabase
+      .from("trips")
+      .select("*")
+      .eq("id", body.trip_id)
+      .single();
+    if (tripFull) {
+      const anomalies = await detectExpenseAnomalies(expense, tripFull as Trip);
+      // Pool overdraft is trip-scoped, not expense-scoped — only check when
+      // the expense is paid by a pool (likely changes the balance).
+      const { data: payerInfo } = await supabase
+        .from("travelers")
+        .select("is_pool")
+        .eq("id", body.paid_by_id)
+        .single();
+      if ((payerInfo as { is_pool?: boolean } | null)?.is_pool) {
+        const overdrafts = await detectPoolOverdraft(body.trip_id, (tripFull as Trip).name);
+        anomalies.push(...overdrafts);
+      }
+      for (const a of anomalies) {
+        void sendPushToTripMembers(
+          body.trip_id,
+          { title: a.title, body: a.body, url: a.url, tag: a.tag },
+          undefined // Anomalies notify EVERYONE including the triggerer — they need to fix it
+        ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
+      }
+    }
+  } catch (e) {
+    console.error("[push.anomaly] setup failed:", (e as Error).message);
+  }
+
   return NextResponse.json(expense, { status: 201 });
 }
 
@@ -131,6 +166,29 @@ export async function PUT(req: NextRequest) {
       }))
     );
   }
+
+  // Re-run anomaly detection on edit — covers cases like fixing splits or
+  // changing the amount/category. Only push for the high-signal ones (skip
+  // duplicate + unbalanced — those would re-fire annoyingly on every edit).
+  if (data?.trip_id) {
+    try {
+      const { data: tripFull } = await supabase.from("trips").select("*").eq("id", data.trip_id).single();
+      if (tripFull) {
+        const anomalies = await detectExpenseAnomalies(data, tripFull as Trip);
+        const filtered = anomalies.filter(a => a.type !== "duplicate" && a.type !== "unbalanced_payer");
+        for (const a of filtered) {
+          void sendPushToTripMembers(
+            data.trip_id,
+            { title: a.title, body: a.body, url: a.url, tag: a.tag },
+            undefined
+          ).catch((e: unknown) => console.error(`[push.anomaly.${a.type}]`, (e as Error).message));
+        }
+      }
+    } catch (e) {
+      console.error("[push.anomaly-put] setup failed:", (e as Error).message);
+    }
+  }
+
   return NextResponse.json(data);
 }
 
