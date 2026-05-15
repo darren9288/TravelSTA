@@ -5,7 +5,9 @@ import Link from "next/link";
 import {
   Shield, ArrowLeftCircle, Trash2, KeyRound, Users, Plane,
   Search, AlertTriangle, Crown, Key, Save, RefreshCw, Check, X, Play, Loader2, Plus,
+  Activity, DollarSign, Calendar,
 } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type AdminUser = {
   id: string;
@@ -53,7 +55,7 @@ type EffectiveAI = {
 export default function AdminPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<"users" | "trips" | "ai">("users");
+  const [tab, setTab] = useState<"users" | "trips" | "ai" | "usage">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [trips, setTrips] = useState<AdminTrip[]>([]);
   const [search, setSearch] = useState("");
@@ -74,6 +76,33 @@ export default function AdminPage() {
   const [newKey, setNewKey] = useState("");
   const [newProxy, setNewProxy] = useState("");
   const [aiMessage, setAiMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  // ── AI Usage tab ──────────────────────────────────────────────────────
+  type UsageSummary = { calls: number; input_tokens: number; output_tokens: number; est_usd: number };
+  type DailyUsage = { date: string } & UsageSummary;
+  type RouteUsage = { route: string } & UsageSummary;
+  const [usage, setUsage] = useState<{
+    current_month: UsageSummary;
+    all_time: UsageSummary;
+    last_30_days: DailyUsage[];
+    by_route: RouteUsage[];
+  } | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  async function loadUsage() {
+    setUsageLoading(true);
+    try {
+      const res = await fetch("/api/admin/ai-usage", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setUsage(data);
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+  // Re-fetch usage whenever the user opens the tab.
+  useEffect(() => {
+    if (tab === "usage" && allowed) loadUsage();
+  }, [tab, allowed]);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -416,10 +445,20 @@ export default function AdminPage() {
           >
             <Key size={14} /> AI Settings
           </button>
+          <button
+            onClick={() => setTab("usage")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "usage"
+                ? "border-purple-400 text-white"
+                : "border-transparent text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            <Activity size={14} /> AI Usage
+          </button>
         </div>
 
-        {/* Search — hidden on AI tab since there's nothing to search there */}
-        {tab !== "ai" && (
+        {/* Search — hidden on AI/Usage tabs since there's nothing to search there */}
+        {tab !== "ai" && tab !== "usage" && (
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -758,6 +797,150 @@ export default function AdminPage() {
                 The token isn&apos;t activated automatically. Click <span className="text-emerald-400">Test</span> first to verify it works, then <span className="text-emerald-400">Use</span> to make it active.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ─── AI Usage tab ─────────────────────────────────────────── */}
+        {tab === "usage" && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 flex items-start gap-2">
+              <Activity size={14} className="text-purple-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Tracks every Claude API call. Token counts come straight from Anthropic&apos;s <span className="font-mono text-slate-300">usage</span> field, so they&apos;re exact. The dollar estimate uses standard Sonnet 4 pricing — if you go through mirbuds AI, real costs may differ.
+              </p>
+            </div>
+
+            {usageLoading && !usage && (
+              <div className="text-center py-12 text-sm text-slate-400">
+                <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                Loading usage data…
+              </div>
+            )}
+
+            {usage && (
+              <>
+                {/* Top-line cards: current month + all-time */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-gradient-to-br from-purple-950/40 to-slate-900 border border-purple-800/40 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar size={14} className="text-purple-400" />
+                      <p className="text-xs uppercase tracking-wider text-slate-400">This month</p>
+                    </div>
+                    <p className="text-3xl font-bold text-white">{usage.current_month.calls.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 mt-1">calls</p>
+                    <div className="mt-3 pt-3 border-t border-slate-800 flex items-baseline justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Tokens</p>
+                        <p className="text-sm font-mono text-slate-300">
+                          {(usage.current_month.input_tokens + usage.current_month.output_tokens).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Est. cost</p>
+                        <p className="text-base font-bold text-emerald-400">${usage.current_month.est_usd.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={14} className="text-slate-400" />
+                      <p className="text-xs uppercase tracking-wider text-slate-400">All time</p>
+                    </div>
+                    <p className="text-3xl font-bold text-white">{usage.all_time.calls.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 mt-1">calls</p>
+                    <div className="mt-3 pt-3 border-t border-slate-800 flex items-baseline justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Tokens</p>
+                        <p className="text-sm font-mono text-slate-300">
+                          {(usage.all_time.input_tokens + usage.all_time.output_tokens).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Est. cost</p>
+                        <p className="text-base font-bold text-slate-300">${usage.all_time.est_usd.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Daily chart — last 30 days */}
+                <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
+                  <h3 className="text-sm font-semibold text-white mb-3">Last 30 days</h3>
+                  {usage.last_30_days.every((d) => d.calls === 0) ? (
+                    <p className="text-xs text-slate-500 text-center py-8">No calls in the last 30 days.</p>
+                  ) : (
+                    <div style={{ width: "100%", height: 180 }}>
+                      <ResponsiveContainer>
+                        <AreaChart data={usage.last_30_days} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="usageGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#a855f7" stopOpacity={0.6} />
+                              <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                            tickFormatter={(d: string) => d.slice(5)}
+                            interval={Math.ceil(usage.last_30_days.length / 6)}
+                          />
+                          <YAxis tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
+                            labelStyle={{ color: "#cbd5e1" }}
+                            formatter={(value: unknown, name: unknown) => [Number(value), name === "calls" ? "Calls" : String(name)]}
+                          />
+                          <Area type="monotone" dataKey="calls" stroke="#a855f7" strokeWidth={2} fill="url(#usageGrad)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+
+                {/* Per-route breakdown */}
+                <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden">
+                  <h3 className="text-sm font-semibold text-white px-4 pt-4 pb-2">By feature</h3>
+                  {usage.by_route.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6">No data yet.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-900/40 text-[10px] uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="text-left px-4 py-2 font-medium">Route</th>
+                          <th className="text-right px-4 py-2 font-medium">Calls</th>
+                          <th className="text-right px-4 py-2 font-medium">Tokens</th>
+                          <th className="text-right px-4 py-2 font-medium">Est. cost</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {usage.by_route.map((r) => (
+                          <tr key={r.route} className="hover:bg-slate-800/40">
+                            <td className="px-4 py-2 font-mono text-slate-300">{r.route}</td>
+                            <td className="px-4 py-2 text-right text-white font-mono">{r.calls.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-right text-slate-400 font-mono">
+                              {(r.input_tokens + r.output_tokens).toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2 text-right text-emerald-400 font-mono">${r.est_usd.toFixed(3)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+                  <span>Token counts are exact (from Anthropic). Cost is an estimate.</span>
+                  <button
+                    onClick={loadUsage}
+                    disabled={usageLoading}
+                    className="flex items-center gap-1 hover:text-slate-300 disabled:opacity-50"
+                  >
+                    <RefreshCw size={11} className={usageLoading ? "animate-spin" : ""} /> Refresh
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

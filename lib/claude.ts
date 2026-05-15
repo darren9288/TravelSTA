@@ -1,5 +1,6 @@
 import { getAIConfig } from "./ai-config";
 import { mapUpstreamError } from "./ai-errors";
+import { logAIUsage } from "./ai-usage";
 
 function extractJSON(text: string): unknown {
   const start = text.indexOf("{");
@@ -75,6 +76,7 @@ Rules:
     throw new Error(mapped.message);
   }
   const data = await res.json();
+  void logAIUsage("parse-expense", data);
   const content = data.content?.[0];
   if (!content || content.type !== "text") throw new Error("Unexpected response");
   return extractJSON(content.text) as ParsedExpenses;

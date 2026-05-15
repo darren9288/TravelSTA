@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai-config";
 import { mapUpstreamError } from "@/lib/ai-errors";
+import { logAIUsage } from "@/lib/ai-usage";
 
 // POST /api/ai/categorize
 // Body: { description: string }
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: mapped.message }, { status: mapped.status });
     }
     const data = await res.json();
+    void logAIUsage("categorize", data);
     const text: string = data.content?.[0]?.text ?? "";
     const start = text.indexOf("{");
     if (start === -1) return NextResponse.json({ error: "Bad AI response" }, { status: 500 });

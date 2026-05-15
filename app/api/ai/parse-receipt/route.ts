@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 import { getAIConfig } from "@/lib/ai-config";
 import { mapUpstreamError } from "@/lib/ai-errors";
+import { logAIUsage } from "@/lib/ai-usage";
 
 // POST /api/ai/parse-receipt
 // Body: { image_base64: string, trip_id: string, hint_currency?: string }
@@ -137,6 +138,7 @@ Rules:
     }
 
     const data = await res.json();
+    void logAIUsage("parse-receipt", data, { tripId: trip_id });
     const text: string = data.content?.[0]?.text ?? "";
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");

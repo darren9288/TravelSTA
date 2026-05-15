@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/supabase-server";
 import { getAIConfig } from "@/lib/ai-config";
 import { mapUpstreamError } from "@/lib/ai-errors";
+import { logAIUsage } from "@/lib/ai-usage";
 
 // POST /api/ai/recap
 // Body: { trip_id: string }
@@ -117,6 +118,7 @@ ${JSON.stringify(summary)}`;
       return NextResponse.json({ error: mapped.message }, { status: mapped.status });
     }
     const data = await res.json();
+    void logAIUsage("recap", data, { userId: user.id, tripId: trip_id });
     const recap = (data.content?.[0]?.text ?? "").trim();
     return NextResponse.json({ recap });
   } catch (e) {

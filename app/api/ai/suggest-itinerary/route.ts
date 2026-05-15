@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 import { getAIConfig } from "@/lib/ai-config";
 import { mapUpstreamError } from "@/lib/ai-errors";
+import { logAIUsage } from "@/lib/ai-usage";
 
 // POST /api/ai/suggest-itinerary
 // Body: { prompt?: string, date: string, trip_id: string }
@@ -80,6 +81,7 @@ Rules:
       return NextResponse.json({ error: mapped.message }, { status: mapped.status });
     }
     const data = await res.json();
+    void logAIUsage("suggest-itinerary", data, { tripId: trip_id });
     const content = data.content?.[0];
     if (!content || content.type !== "text") {
       return NextResponse.json({ error: "Unexpected AI response" }, { status: 500 });
