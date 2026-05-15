@@ -169,17 +169,36 @@ async function detectUnbalancedPayer(expense: ExpenseRow, trip: Trip): Promise<A
 }
 
 // ── 5. Midnight expense ──────────────────────────────────────────────────────
-// Logged between 1 AM and 5 AM local time, AND > RM 100. Likely late-night
-// drunk-shopping or accidental tap; flag for review.
+// Logged between 1 AM and 5 AM Malaysia time (UTC+8), AND > RM 100. Likely
+// late-night drunk-shopping or accidental tap; flag for review.
+//
+// Vercel servers run in UTC, so a 10:32 AM Malaysia entry has created_at
+// = 02:32 UTC and would wrongly trigger this if we used getHours() directly.
+// We extract the hour/minute in Asia/Kuala_Lumpur using Intl.DateTimeFormat.
+function getMalaysiaHM(iso: string): { hour: number; minute: number } {
+  const d = new Date(iso);
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kuala_Lumpur",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  // Intl returns "24" for midnight in some Node versions — normalize to 0.
+  return { hour: hour === 24 ? 0 : hour, minute };
+}
+
 function detectMidnight(expense: ExpenseRow, trip: Trip): AnomalyResult | null {
   if (Number(expense.myr_amount) < 100) return null;
-  const hour = new Date(expense.created_at).getHours();
+  const { hour, minute } = getMalaysiaHM(expense.created_at);
   if (hour < 1 || hour > 5) return null;
 
   return {
     type: "midnight",
     title: `🌙 Late-night expense — ${trip.name}`,
-    body: `RM ${Number(expense.myr_amount).toFixed(0)} · ${expense.category} logged at ${hour}:${String(new Date(expense.created_at).getMinutes()).padStart(2, "0")} AM. Double-check.`,
+    body: `RM ${Number(expense.myr_amount).toFixed(0)} · ${expense.category} logged at ${hour}:${String(minute).padStart(2, "0")} AM. Double-check.`,
     expenseId: expense.id,
     url: `/trips/${trip.id}/expenses`,
     tag: `anomaly-midnight-${expense.id}`,
@@ -226,6 +245,20 @@ function detectCategoryMismatch(expense: ExpenseRow, trip: Trip): AnomalyResult 
 // An expense was added with date < latest Settle All date. Retroactive
 // additions don't get included in the prior settlement round, so the team
 // needs to know to either skip it or run Settle All again.
+//
+// Same UTC pitfall as detectMidnight — if Settle All runs at MY 1 AM, the
+// UTC date is the previous day. Extract the Malaysia date so we compare
+// like-for-like to expense.date (which is user-entered, Malaysia-local).
+function getMalaysiaDate(iso: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", { // en-CA gives YYYY-MM-DD
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(new Date(iso));
+}
+
 async function detectLateSettleAdd(expense: ExpenseRow, trip: Trip): Promise<AnomalyResult | null> {
   const db = serverDb();
   const { data: lastSettle } = await db
@@ -238,7 +271,7 @@ async function detectLateSettleAdd(expense: ExpenseRow, trip: Trip): Promise<Ano
   const latest = (lastSettle ?? [])[0] as { created_at?: string } | undefined;
   if (!latest?.created_at) return null;
 
-  const settleDate = new Date(latest.created_at).toISOString().slice(0, 10);
+  const settleDate = getMalaysiaDate(latest.created_at);
   if (expense.date >= settleDate) return null;
 
   return {
