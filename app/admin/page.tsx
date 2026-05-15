@@ -81,20 +81,53 @@ export default function AdminPage() {
   type UsageSummary = { calls: number; input_tokens: number; output_tokens: number; est_usd: number };
   type DailyUsage = { date: string } & UsageSummary;
   type RouteUsage = { route: string } & UsageSummary;
+  type CreditInfo = { starting_usd: number; spent_usd: number; remaining_usd: number };
   const [usage, setUsage] = useState<{
     current_month: UsageSummary;
     all_time: UsageSummary;
     last_30_days: DailyUsage[];
     by_route: RouteUsage[];
+    credit: CreditInfo;
   } | null>(null);
+  const [editingCredit, setEditingCredit] = useState(false);
+  const [creditDraft, setCreditDraft] = useState("");
+  const [savingCredit, setSavingCredit] = useState(false);
+
+  async function saveCredit() {
+    const amount = parseFloat(creditDraft);
+    if (isNaN(amount) || amount < 0) return;
+    setSavingCredit(true);
+    try {
+      const res = await fetch("/api/admin/ai-usage", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credit_balance_usd: amount }),
+      });
+      if (res.ok) {
+        setEditingCredit(false);
+        loadUsage();
+      }
+    } finally {
+      setSavingCredit(false);
+    }
+  }
   const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   async function loadUsage() {
     setUsageLoading(true);
+    setUsageError(null);
     try {
       const res = await fetch("/api/admin/ai-usage", { cache: "no-store" });
       const data = await res.json();
-      if (res.ok) setUsage(data);
+      if (res.ok) {
+        setUsage(data);
+      } else {
+        // Common case: table not created yet. Show actionable message.
+        setUsageError(data.error ?? `Failed to load (HTTP ${res.status})`);
+      }
+    } catch (e) {
+      setUsageError((e as Error).message);
     } finally {
       setUsageLoading(false);
     }
@@ -810,15 +843,152 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {usageLoading && !usage && (
+            {usageLoading && !usage && !usageError && (
               <div className="text-center py-12 text-sm text-slate-400">
                 <Loader2 size={20} className="animate-spin mx-auto mb-2" />
                 Loading usage data…
               </div>
             )}
 
-            {usage && (
+            {usageError && (
+              <div className="bg-red-950/30 border border-red-800/50 rounded-2xl p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-red-300 mb-1">Couldn&apos;t load usage data</p>
+                    <p className="text-xs text-slate-400 break-words">{usageError}</p>
+                    {/Could not find the table|does not exist|relation .* does not exist/i.test(usageError) && (
+                      <div className="mt-3 text-xs text-slate-400 leading-relaxed">
+                        <p>The <span className="font-mono text-amber-300">ai_usage_log</span> table doesn&apos;t exist yet. Run this migration in Supabase SQL editor:</p>
+                        <pre className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[10px] font-mono text-slate-300 overflow-x-auto">supabase/migrations/021_ai_usage_log.sql</pre>
+                      </div>
+                    )}
+                    <button onClick={loadUsage} className="mt-3 text-xs text-purple-400 hover:text-purple-300 underline">
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {usage && usage.all_time.calls === 0 && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 text-center">
+                <Activity size={28} className="text-slate-600 mx-auto mb-3" />
+                <p className="text-sm font-medium text-white">No AI calls logged yet</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Use any AI feature in the app (Ask, Parse Expense, Receipt OCR…) and data will appear here within seconds. Existing usage from before today isn&apos;t tracked.
+                </p>
+              </div>
+            )}
+
+            {usage && usage.all_time.calls > 0 && (
               <>
+                {/* Credit balance card — manual tracking of mirbuds AI credit */}
+                <div className="bg-gradient-to-br from-emerald-950/40 to-slate-900 border border-emerald-800/40 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign size={16} className="text-emerald-400" />
+                      <p className="text-sm font-semibold text-white">Credit balance</p>
+                    </div>
+                    {!editingCredit ? (
+                      <button
+                        onClick={() => {
+                          setCreditDraft(String(usage.credit.starting_usd));
+                          setEditingCredit(true);
+                        }}
+                        className="text-xs text-slate-400 hover:text-white underline"
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditingCredit(false)}
+                          className="text-xs text-slate-500 hover:text-white p-1"
+                          aria-label="Cancel"
+                        >
+                          <X size={14} />
+                        </button>
+                        <button
+                          onClick={saveCredit}
+                          disabled={savingCredit}
+                          className="text-xs text-emerald-400 hover:text-emerald-300 p-1 disabled:opacity-50"
+                          aria-label="Save"
+                        >
+                          {savingCredit ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {editingCredit ? (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">
+                        Starting credit in USD (from your mirbuds AI dashboard last time you checked)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg text-slate-400">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          autoFocus
+                          value={creditDraft}
+                          onChange={(e) => setCreditDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveCredit(); }}
+                          placeholder="47.00"
+                          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-base text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Reset this whenever you top up. The app subtracts estimated spend from this number.
+                      </p>
+                    </div>
+                  ) : usage.credit.starting_usd === 0 ? (
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Set your current credit balance to see a running &ldquo;remaining&rdquo; total. Tap <span className="text-slate-300">Edit</span> above.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500">Starting</p>
+                          <p className="text-base font-bold text-slate-300">${usage.credit.starting_usd.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500">Spent (est.)</p>
+                          <p className="text-base font-bold text-amber-400">${usage.credit.spent_usd.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500">Remaining</p>
+                          <p className={`text-base font-bold ${
+                            usage.credit.remaining_usd > 5 ? "text-emerald-400" :
+                            usage.credit.remaining_usd > 1 ? "text-amber-400" :
+                            "text-red-400"
+                          }`}>
+                            ${usage.credit.remaining_usd.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      {/* Burn rate / days remaining */}
+                      {(() => {
+                        // Average daily spend over last 30 days that had any usage.
+                        const daysWithUsage = usage.last_30_days.filter((d) => d.calls > 0);
+                        if (daysWithUsage.length < 2) return null;
+                        const avgPerDay = daysWithUsage.reduce((s, d) => s + d.est_usd, 0) / daysWithUsage.length;
+                        if (avgPerDay <= 0) return null;
+                        const daysLeft = usage.credit.remaining_usd / avgPerDay;
+                        if (daysLeft < 0 || !isFinite(daysLeft)) return null;
+                        return (
+                          <p className="text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-800">
+                            At current rate (avg ${avgPerDay.toFixed(2)}/day over last {daysWithUsage.length} active days),
+                            you&apos;ll run out in <span className="text-slate-300 font-semibold">~{Math.round(daysLeft)} days</span>.
+                          </p>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+
                 {/* Top-line cards: current month + all-time */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="bg-gradient-to-br from-purple-950/40 to-slate-900 border border-purple-800/40 rounded-2xl p-4">

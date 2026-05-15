@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireSuperAdmin } from "@/lib/admin";
 import { estimateUsdCost } from "@/lib/ai-usage";
@@ -84,10 +84,53 @@ export async function GET() {
     .map(([route, subset]) => ({ route, ...summarize(subset) }))
     .sort((a, b) => b.calls - a.calls);
 
+  // Pull the credit balance the user manually entered (singleton row).
+  // If the column doesn't exist yet (migration 022 not run), default to 0
+  // and surface a hint rather than failing the whole endpoint.
+  let creditBalance = 0;
+  try {
+    const { data: settings } = await db
+      .from("app_settings")
+      .select("ai_credit_balance_usd")
+      .eq("id", 1)
+      .single();
+    creditBalance = Number((settings as { ai_credit_balance_usd?: number } | null)?.ai_credit_balance_usd ?? 0);
+  } catch {
+    // Column missing — ignore, return 0.
+  }
+
   return NextResponse.json({
     current_month: summarize(thisMonth),
     all_time: summarize(all),
     last_30_days,
     by_route,
+    credit: {
+      starting_usd: creditBalance,
+      spent_usd: Number(summarize(all).est_usd.toFixed(4)),
+      remaining_usd: Number((creditBalance - summarize(all).est_usd).toFixed(4)),
+    },
   });
+}
+
+// PUT /api/admin/ai-usage  body: { credit_balance_usd: number }
+// Super-admin sets a new starting balance (e.g. after topping up at mirbuds).
+// We don't track historical top-ups — this is just the most recent figure.
+export async function PUT(req: NextRequest) {
+  const denied = await requireSuperAdmin();
+  if (denied) return denied;
+
+  const body = await req.json().catch(() => ({}));
+  const amount = Number(body.credit_balance_usd);
+  if (isNaN(amount) || amount < 0) {
+    return NextResponse.json({ error: "credit_balance_usd must be a non-negative number" }, { status: 400 });
+  }
+
+  const db = serverDb();
+  const { error } = await db
+    .from("app_settings")
+    .update({ ai_credit_balance_usd: amount, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, credit_balance_usd: amount });
 }
