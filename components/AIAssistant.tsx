@@ -192,10 +192,13 @@ function MenuView({ tripId, setMode }: { tripId: string; setMode: (m: Mode) => v
     setQuestion("");
     setAnswering(true); setAskError("");
     try {
+      // Send the last 5 exchanges as history so Claude can follow up on
+      // numbers and references from earlier turns ("plus RM 30 more").
+      const history = exchanges.slice(-5).map((ex) => ({ q: ex.q, a: ex.a }));
       const res = await fetch("/api/ai/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, trip_id: tripId }),
+        body: JSON.stringify({ question: q, trip_id: tripId, history }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't answer");

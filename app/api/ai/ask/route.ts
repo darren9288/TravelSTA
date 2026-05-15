@@ -7,13 +7,18 @@ import { mapUpstreamError } from "@/lib/ai-errors";
 import { logAIUsage } from "@/lib/ai-usage";
 
 // POST /api/ai/ask
-// Body: { question: string, trip_id: string }
+// Body: { question: string, trip_id: string, history?: Array<{q: string, a: string}> }
 // Returns: { answer: string }
 // Builds a compact JSON snapshot of the trip's expenses, travelers, and
 // settlement state, then asks Claude to answer the user's natural-language
 // question with that context.
+//
+// `history` is the recent conversation (last few Q&A pairs) so Claude can
+// follow up on "calculate +RM 30 more" without losing track. Limited to
+// the last 5 pairs server-side to keep token costs bounded — older
+// exchanges naturally drop out as the chat continues.
 export async function POST(req: NextRequest) {
-  const { question, trip_id } = await req.json();
+  const { question, trip_id, history } = await req.json();
   if (!question || !trip_id) {
     return NextResponse.json({ error: "question and trip_id required" }, { status: 400 });
   }
@@ -152,11 +157,29 @@ Rules:
 - If asking "how do I X", give the exact path: "Account → Notifications" or
   "Trip Settings → scroll to Notification frequency". Don't invent menu items.
 - If neither context has the answer, say so plainly. Don't make things up.
+- The conversation has memory: prior turns are included as messages. When
+  the user says "and plus RM 30 more" or "what about lunch?", build on what
+  you said earlier in this chat. Don't re-introduce yourself.
 
 ${appGuide}
 
 TRIP_CONTEXT:
 ${JSON.stringify(summary)}`;
+
+  // Build the message array. Each prior {q, a} becomes a user+assistant pair
+  // so Claude can reference earlier numbers ("yes, plus RM 30 more").
+  type HistoryItem = { q?: string; a?: string };
+  const trimmedHistory: HistoryItem[] = Array.isArray(history) ? history.slice(-5) : [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
+  for (const h of trimmedHistory) {
+    if (typeof h?.q === "string" && h.q.trim()) {
+      messages.push({ role: "user", content: h.q });
+    }
+    if (typeof h?.a === "string" && h.a.trim()) {
+      messages.push({ role: "assistant", content: h.a });
+    }
+  }
+  messages.push({ role: "user", content: question });
 
   try {
     const res = await fetch(cfg.messagesUrl, {
@@ -170,7 +193,7 @@ ${JSON.stringify(summary)}`;
         model: "claude-sonnet-4-6",
         max_tokens: 512,
         system,
-        messages: [{ role: "user", content: question }],
+        messages,
       }),
     });
     if (!res.ok) {
