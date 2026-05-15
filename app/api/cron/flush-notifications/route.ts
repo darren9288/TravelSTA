@@ -29,9 +29,13 @@ type QueueRow = {
 };
 
 // ─── Coalescing logic ────────────────────────────────────────────────────────
-// Counts items per category, builds a "5 updates: 2 expenses added, 3 splits
-// settled, ..." style payload. Tries to be readable rather than complete.
-function coalesce(rows: QueueRow[], tripName: string): PushPayload {
+// Two formats, picked by the user's detail_level preference:
+//   - 'summary' (default): counts per category — "2 expenses added, 3 splits settled"
+//   - 'detailed': bullet list of each event's original body (capped to keep
+//     the notification readable; tail rows summarised as "...and N more")
+type DetailLevel = "summary" | "detailed";
+
+function coalesceSummary(rows: QueueRow[], tripName: string): PushPayload {
   const byCat: Record<string, number> = {};
   for (const r of rows) byCat[r.category] = (byCat[r.category] ?? 0) + 1;
 
@@ -51,18 +55,60 @@ function coalesce(rows: QueueRow[], tripName: string): PushPayload {
     if (byCat[o.cat]) lines.push(`• ${o.label(byCat[o.cat])}`);
   }
 
-  // If only a single item, prefer its original title/body so users see the
-  // detail — no value in wrapping one push into a generic summary.
-  if (rows.length === 1) {
-    return rows[0].payload;
-  }
-
   return {
     title: `${tripName} — ${rows.length} updates`,
     body: lines.join("\n"),
     url: `/trips/${rows[0].trip_id ?? ""}/expenses`,
     tag: `coalesced-${rows[0].trip_id}-${Date.now()}`,
   };
+}
+
+// Caps at 8 bullets — notification bodies above ~250 chars get truncated by
+// the OS anyway. Tail rows past the cap become "...and N more".
+const MAX_DETAILED_BULLETS = 8;
+
+function coalesceDetailed(rows: QueueRow[], tripName: string): PushPayload {
+  // Sort: anomalies first (high signal), then by original timestamp so the
+  // reader sees the chronological story.
+  const sorted = [...rows].sort((a, b) => {
+    if (a.category === "anomaly" && b.category !== "anomaly") return -1;
+    if (b.category === "anomaly" && a.category !== "anomaly") return 1;
+    return a.created_at.localeCompare(b.created_at);
+  });
+
+  const head = sorted.slice(0, MAX_DETAILED_BULLETS);
+  const tailCount = sorted.length - head.length;
+
+  const bullets = head.map((r) => {
+    // Prefer the original body (already designed to be informative). For
+    // anomalies, also prefix with their title so the warning emoji is visible.
+    if (r.category === "anomaly") {
+      // Anomaly title is like "⚠️ Possible duplicate — Japan 2025" — strip
+      // the trip-name suffix to keep the bullet short.
+      const t = (r.payload.title ?? "").split(" — ")[0];
+      return `• ${t}: ${r.payload.body}`;
+    }
+    return `• ${r.payload.body}`;
+  });
+
+  if (tailCount > 0) {
+    bullets.push(`• ...and ${tailCount} more`);
+  }
+
+  return {
+    title: `${tripName} — ${rows.length} updates`,
+    body: bullets.join("\n"),
+    url: `/trips/${rows[0].trip_id ?? ""}/expenses`,
+    tag: `coalesced-${rows[0].trip_id}-${Date.now()}`,
+  };
+}
+
+function coalesce(rows: QueueRow[], tripName: string, level: DetailLevel): PushPayload {
+  // Single-event flush: always render in full detail, regardless of preference.
+  if (rows.length === 1) return rows[0].payload;
+  return level === "detailed"
+    ? coalesceDetailed(rows, tripName)
+    : coalesceSummary(rows, tripName);
 }
 
 export async function POST(req: NextRequest) {
@@ -95,16 +141,19 @@ export async function POST(req: NextRequest) {
   const pairs = new Set<string>();
   for (const r of queue) if (r.trip_id) pairs.add(`${r.user_id}|${r.trip_id}`);
   const prefMap: Record<string, number> = {};
+  const detailMap: Record<string, DetailLevel> = {};
   if (pairs.size > 0) {
     const userIds = Array.from(new Set(queue.map((r) => r.user_id)));
     const tripIds = Array.from(new Set(queue.map((r) => r.trip_id).filter(Boolean) as string[]));
     const { data: prefs } = await db
       .from("user_notification_preferences")
-      .select("user_id, trip_id, interval_minutes")
+      .select("user_id, trip_id, interval_minutes, detail_level")
       .in("user_id", userIds)
       .in("trip_id", tripIds);
-    for (const p of (prefs ?? []) as { user_id: string; trip_id: string; interval_minutes: number }[]) {
-      prefMap[`${p.user_id}|${p.trip_id}`] = p.interval_minutes;
+    for (const p of (prefs ?? []) as { user_id: string; trip_id: string; interval_minutes: number; detail_level?: DetailLevel }[]) {
+      const key = `${p.user_id}|${p.trip_id}`;
+      prefMap[key] = p.interval_minutes;
+      detailMap[key] = p.detail_level ?? "summary";
     }
   }
 
@@ -145,7 +194,8 @@ export async function POST(req: NextRequest) {
   for (const [key, rows] of Object.entries(groups)) {
     const [userId, tripId] = key.split("|");
     const tripName = tripNameMap[tripId] ?? "your trip";
-    const payload = coalesce(rows, tripName);
+    const level: DetailLevel = detailMap[key] ?? "summary";
+    const payload = coalesce(rows, tripName, level);
 
     try {
       const result = await _sendImmediateForFlush(userId, payload);
