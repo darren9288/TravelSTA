@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
 import { detectExpenseAnomalies, detectPoolOverdraft } from "@/lib/anomalies";
 import type { Trip } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 function lastDay(month: string) {
   return new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate();
@@ -72,6 +73,23 @@ export async function POST(req: NextRequest) {
   }).select().single();
 
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
+
+  // Audit log for super-admin review.
+  {
+    const me = await getSessionUser();
+    void logActivity({
+      action: "expense_add",
+      userId: me?.id ?? null,
+      tripId: body.trip_id,
+      details: {
+        expense_id: expense.id,
+        category: body.category,
+        myr_amount: body.myr_amount,
+        paid_by_id: body.paid_by_id,
+      },
+      req,
+    });
+  }
 
   if (body.splits?.length) {
     const { error: splitErr } = await supabase.from("expense_splits").insert(
@@ -160,6 +178,17 @@ export async function PUT(req: NextRequest) {
   const { data, error } = await supabase.from("expenses").update(updates).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  {
+    const me = await getSessionUser();
+    void logActivity({
+      action: "expense_edit",
+      userId: me?.id ?? null,
+      tripId: data?.trip_id ?? null,
+      details: { expense_id: id, fields: Object.keys(updates) },
+      req,
+    });
+  }
+
   if (splits) {
     await supabase.from("expense_splits").delete().eq("expense_id", id);
     await supabase.from("expense_splits").insert(
@@ -210,6 +239,21 @@ export async function DELETE(req: NextRequest) {
   }
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  {
+    const me = await getSessionUser();
+    void logActivity({
+      action: "expense_delete",
+      userId: me?.id ?? null,
+      tripId: exp?.trip_id ?? null,
+      details: {
+        expense_id: id,
+        myr_amount: exp?.myr_amount,
+        category: exp?.category,
+      },
+      req,
+    });
+  }
 
   // Push: "Expense deleted — RM {amount} · {category}"
   if (exp?.trip_id) {

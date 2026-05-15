@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor, tripIdFrom } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(req: NextRequest) {
   const wallet_id = new URL(req.url).searchParams.get("wallet_id");
@@ -30,6 +31,17 @@ export async function POST(req: NextRequest) {
     notes: body.notes ?? null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  {
+    const meUser = await getSessionUser();
+    void logActivity({
+      action: "wallet_topup",
+      userId: meUser?.id ?? null,
+      tripId: body.trip_id,
+      details: { wallet_id: body.wallet_id, amount: body.amount },
+      req,
+    });
+  }
 
   // Push: "Wallet top-up — {wallet name} +RM {amount}"
   try {

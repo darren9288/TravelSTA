@@ -4,6 +4,7 @@ import { serverDb } from "@/lib/supabase";
 import { requireEditor, tripIdForSplit } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PUT(req: NextRequest) {
   const { id, is_settled, from_wallet_id, to_wallet_id } = await req.json();
@@ -25,6 +26,17 @@ export async function PUT(req: NextRequest) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  {
+    const meUser = await getSessionUser();
+    void logActivity({
+      action: "split_toggle",
+      userId: meUser?.id ?? null,
+      tripId,
+      details: { split_id: id, is_settled },
+      req,
+    });
+  }
 
   // Push: "{traveler}'s split marked settled/unsettled"
   if (tripId) {

@@ -55,7 +55,7 @@ type EffectiveAI = {
 export default function AdminPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<"users" | "trips" | "ai" | "usage">("users");
+  const [tab, setTab] = useState<"users" | "trips" | "ai" | "usage" | "activity">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [trips, setTrips] = useState<AdminTrip[]>([]);
   const [search, setSearch] = useState("");
@@ -136,6 +136,49 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === "usage" && allowed) loadUsage();
   }, [tab, allowed]);
+
+  // ── Activity log tab ──────────────────────────────────────────────────
+  type ActivityEntry = {
+    id: string;
+    user_id: string | null;
+    trip_id: string | null;
+    action: string;
+    details: Record<string, unknown>;
+    user_agent: string | null;
+    ip: string | null;
+    created_at: string;
+    username: string | null;
+    trip_name: string | null;
+  };
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityFilterUser, setActivityFilterUser] = useState("");
+  const [activityFilterTrip, setActivityFilterTrip] = useState("");
+  const [activityFilterAction, setActivityFilterAction] = useState("");
+
+  async function loadActivity() {
+    setActivityLoading(true);
+    setActivityError(null);
+    const params = new URLSearchParams();
+    if (activityFilterUser) params.set("user_id", activityFilterUser);
+    if (activityFilterTrip) params.set("trip_id", activityFilterTrip);
+    if (activityFilterAction) params.set("action", activityFilterAction);
+    params.set("limit", "300");
+    try {
+      const res = await fetch(`/api/admin/activity-log?${params}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setActivity(data.entries ?? []);
+      else setActivityError(data.error ?? `HTTP ${res.status}`);
+    } catch (e) {
+      setActivityError((e as Error).message);
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+  useEffect(() => {
+    if (tab === "activity" && allowed) loadActivity();
+  }, [tab, allowed, activityFilterUser, activityFilterTrip, activityFilterAction]);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -488,10 +531,20 @@ export default function AdminPage() {
           >
             <Activity size={14} /> AI Usage
           </button>
+          <button
+            onClick={() => setTab("activity")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "activity"
+                ? "border-purple-400 text-white"
+                : "border-transparent text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            <Calendar size={14} /> Activity
+          </button>
         </div>
 
-        {/* Search — hidden on AI/Usage tabs since there's nothing to search there */}
-        {tab !== "ai" && tab !== "usage" && (
+        {/* Search — hidden on AI/Usage/Activity tabs since they have their own filters */}
+        {tab !== "ai" && tab !== "usage" && tab !== "activity" && (
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -1110,6 +1163,163 @@ export default function AdminPage() {
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ─── Activity log tab ──────────────────────────────────────── */}
+        {tab === "activity" && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 flex items-start gap-2">
+              <Calendar size={14} className="text-purple-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Every page view + every mutation (add/edit/delete/settle) gets logged. Use the filters below to find what someone did and when. Showing the most recent 300 entries.
+              </p>
+            </div>
+
+            {/* Filter row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">User</label>
+                <select
+                  value={activityFilterUser}
+                  onChange={(e) => setActivityFilterUser(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">All users</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">Trip</label>
+                <select
+                  value={activityFilterTrip}
+                  onChange={(e) => setActivityFilterTrip(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">All trips</option>
+                  {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">Action</label>
+                <select
+                  value={activityFilterAction}
+                  onChange={(e) => setActivityFilterAction(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">All actions</option>
+                  <option value="page_view">page_view</option>
+                  <option value="expense_add">expense_add</option>
+                  <option value="expense_edit">expense_edit</option>
+                  <option value="expense_delete">expense_delete</option>
+                  <option value="split_toggle">split_toggle</option>
+                  <option value="settle_all">settle_all</option>
+                  <option value="pool_topup">pool_topup</option>
+                  <option value="wallet_topup">wallet_topup</option>
+                  <option value="ai_ask">ai_ask</option>
+                  <option value="ai_parse_expense">ai_parse_expense</option>
+                  <option value="ai_parse_receipt">ai_parse_receipt</option>
+                </select>
+              </div>
+            </div>
+
+            {activityError && (
+              <div className="bg-red-950/30 border border-red-800/50 rounded-2xl p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-red-300 mb-1">Couldn&apos;t load activity</p>
+                    <p className="text-xs text-slate-400 break-words">{activityError}</p>
+                    {/Could not find the table|does not exist|relation .* does not exist/i.test(activityError) && (
+                      <div className="mt-3 text-xs text-slate-400 leading-relaxed">
+                        <p>The <span className="font-mono text-amber-300">activity_log</span> table doesn&apos;t exist yet. Run this in Supabase SQL editor:</p>
+                        <pre className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[10px] font-mono text-slate-300 overflow-x-auto">supabase/migrations/023_activity_log.sql</pre>
+                      </div>
+                    )}
+                    <button onClick={loadActivity} className="mt-3 text-xs text-purple-400 hover:text-purple-300 underline">
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activityLoading && activity.length === 0 && !activityError && (
+              <div className="text-center py-12 text-sm text-slate-400">
+                <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                Loading activity…
+              </div>
+            )}
+
+            {!activityLoading && !activityError && activity.length === 0 && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 text-center">
+                <Calendar size={28} className="text-slate-600 mx-auto mb-3" />
+                <p className="text-sm font-medium text-white">No activity yet</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Once users start navigating and editing, their actions will show up here.
+                </p>
+              </div>
+            )}
+
+            {activity.length > 0 && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-900/40 text-[10px] uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium w-32">When</th>
+                      <th className="text-left px-3 py-2 font-medium">User</th>
+                      <th className="text-left px-3 py-2 font-medium">Trip</th>
+                      <th className="text-left px-3 py-2 font-medium">Action</th>
+                      <th className="text-left px-3 py-2 font-medium">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {activity.map((row) => {
+                      const dt = new Date(row.created_at);
+                      const time = dt.toLocaleString("en-MY", {
+                        timeZone: "Asia/Kuala_Lumpur",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      const detailStr = (() => {
+                        if (row.action === "page_view") {
+                          return String((row.details as { path?: string })?.path ?? "");
+                        }
+                        const json = JSON.stringify(row.details);
+                        return json === "{}" ? "" : json;
+                      })();
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-800/40 align-top">
+                          <td className="px-3 py-2 text-[11px] text-slate-500 font-mono whitespace-nowrap">{time}</td>
+                          <td className="px-3 py-2 text-xs text-slate-300">{row.username ?? "—"}</td>
+                          <td className="px-3 py-2 text-xs text-slate-400 truncate max-w-[120px]">{row.trip_name ?? "—"}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
+                              row.action.startsWith("expense_") ? "bg-emerald-900/30 text-emerald-300" :
+                              row.action === "settle_all" ? "bg-purple-900/30 text-purple-300" :
+                              row.action.startsWith("ai_") ? "bg-amber-900/30 text-amber-300" :
+                              row.action === "page_view" ? "bg-slate-700/40 text-slate-400" :
+                              "bg-blue-900/30 text-blue-300"
+                            }`}>{row.action}</span>
+                          </td>
+                          <td className="px-3 py-2 text-[11px] text-slate-500 font-mono truncate max-w-[280px]" title={detailStr}>
+                            {detailStr}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="px-3 py-2 text-[11px] text-slate-500 border-t border-slate-800 flex items-center justify-between">
+                  <span>{activity.length} entries · times in Malaysia (KL)</span>
+                  <button onClick={loadActivity} disabled={activityLoading} className="flex items-center gap-1 hover:text-slate-300 disabled:opacity-50">
+                    <RefreshCw size={11} className={activityLoading ? "animate-spin" : ""} /> Refresh
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

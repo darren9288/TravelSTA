@@ -5,6 +5,7 @@ import { requireEditor, tripIdFrom } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
 import { detectPoolOverdraft } from "@/lib/anomalies";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
@@ -54,6 +55,17 @@ export async function POST(req: NextRequest) {
     from_wallet_id: body.from_wallet_id ?? null,
   }).select("*, pool:travelers!pool_id(*), contributed_by:travelers!contributed_by_id(*)").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  {
+    const meUser = await getSessionUser();
+    void logActivity({
+      action: "pool_topup",
+      userId: meUser?.id ?? null,
+      tripId: body.trip_id,
+      details: { pool_id: body.pool_id, myr_amount: body.myr_amount },
+      req,
+    });
+  }
 
   // Push: "{contributor} topped up {pool} — RM {amount}"
   try {

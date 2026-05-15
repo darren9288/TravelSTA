@@ -4,6 +4,7 @@ import TripBackground from "@/components/TripBackground";
 import DevPanel from "@/components/DevPanel";
 import AIAssistant from "@/components/AIAssistant";
 import AnomalyWatcher from "@/components/AnomalyWatcher";
+import OnlinePresence from "@/components/OnlinePresence";
 import { isSuperAdmin } from "@/lib/admin";
 
 export default async function TripLayout({
@@ -33,6 +34,7 @@ export default async function TripLayout({
       {children}
       <AIAssistant />
       <AnomalyWatcher />
+      <OnlinePresence />
       {showDevPanel && <DevPanel />}
     </TripBackground>
   );

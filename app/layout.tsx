@@ -7,6 +7,7 @@ import NavigationProgress from "@/components/NavigationProgress";
 import { Toaster } from "@/components/Toaster";
 import OfflineQueueWatcher from "@/components/OfflineQueueWatcher";
 import PushToastBridge from "@/components/PushToastBridge";
+import ActivityTracker from "@/components/ActivityTracker";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <OfflineQueueWatcher />
             <NavigationProgress />
             <PushToastBridge />
+            <ActivityTracker />
             {children}
           </Toaster>
         </ThemeProvider>

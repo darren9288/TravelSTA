@@ -6,6 +6,7 @@ import { Traveler, Expense } from "@/lib/supabase";
 import { requireEditor } from "@/lib/role";
 import { getSessionUser } from "@/lib/supabase-server";
 import { sendPushToTripMembers } from "@/lib/push";
+import { logActivity } from "@/lib/activity-log";
 
 type WalletSelection = {
   from_wallet_id: string | null;
@@ -115,6 +116,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .update({ is_settled: true, locked: true })
       .in("expense_id", expenseIds)
       .eq("is_settled", false);
+  }
+
+  // Activity log for super-admin review.
+  {
+    const meUser = await getSessionUser();
+    void logActivity({
+      action: "settle_all",
+      userId: meUser?.id ?? null,
+      tripId,
+      details: { instruction_count: instructions.length },
+      req,
+    });
   }
 
   // Fire push to every trip member except the user who pressed Settle All.
