@@ -50,7 +50,12 @@ export async function GET(req: NextRequest) {
     events.push({ id: t.id, type: "topup", date: t.date, created_at: t.created_at, amount: Number(t.amount), sign: 1, description: "Top-up", notes: t.notes });
   }
   for (const e of expenses ?? []) {
-    const amt = isForeign ? Number(e.foreign_amount ?? 0) : Number(e.myr_amount);
+    // For a foreign wallet, prefer the entered foreign_amount when present.
+    // If the user only entered MYR (foreign_amount NULL), convert it using
+    // the trip's exchange rate so the wallet history doesn't show -JPY 0.
+    const amt = isForeign
+      ? (e.foreign_amount != null ? Number(e.foreign_amount) : Number(e.myr_amount) * rate)
+      : Number(e.myr_amount);
     events.push({ id: e.id, type: "expense", date: e.date, created_at: e.created_at, amount: amt, sign: -1, description: e.category, category: e.category, notes: e.notes });
   }
   for (const s of settlementsOut ?? []) {
