@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor, tripIdFrom } from "@/lib/role";
+import { getSessionUser } from "@/lib/supabase-server";
+import { sendPushToTripMembers } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("trip_id");
@@ -51,6 +53,30 @@ export async function POST(req: NextRequest) {
     from_wallet_id: body.from_wallet_id ?? null,
   }).select("*, pool:travelers!pool_id(*), contributed_by:travelers!contributed_by_id(*)").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Push: "{contributor} topped up {pool} — RM {amount}"
+  try {
+    const me = await getSessionUser();
+    const contributorName = (data as { contributed_by?: { name?: string } })?.contributed_by?.name ?? "Someone";
+    const poolName = (data as { pool?: { name?: string } })?.pool?.name ?? "pool";
+    const myr = Number(body.myr_amount ?? 0).toFixed(0);
+    const foreignAmt = body.foreign_amount ? ` (¥${Math.round(body.foreign_amount)})` : "";
+    const { data: trip } = await serverDb().from("trips").select("name").eq("id", body.trip_id).single();
+    const tripName = trip?.name ?? "your trip";
+    void sendPushToTripMembers(
+      body.trip_id,
+      {
+        title: `Pool top-up — ${tripName}`,
+        body: `${contributorName} added RM ${myr}${foreignAmt} to ${poolName}`,
+        url: `/trips/${body.trip_id}/pool`,
+        tag: `pool-topup-${data.id}`,
+      },
+      me?.id
+    ).catch((e: unknown) => console.error("[push.pool-topup]", (e as Error).message));
+  } catch (e) {
+    console.error("[push.pool-topup] setup failed:", (e as Error).message);
+  }
+
   return NextResponse.json(data, { status: 201 });
 }
 

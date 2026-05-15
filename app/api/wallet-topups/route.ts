@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { requireEditor, tripIdFrom } from "@/lib/role";
+import { getSessionUser } from "@/lib/supabase-server";
+import { sendPushToTripMembers } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
   const wallet_id = new URL(req.url).searchParams.get("wallet_id");
@@ -28,6 +30,37 @@ export async function POST(req: NextRequest) {
     notes: body.notes ?? null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Push: "Wallet top-up — {wallet name} +RM {amount}"
+  try {
+    const me = await getSessionUser();
+    const db = serverDb();
+    const [{ data: wallet }, { data: trip }] = await Promise.all([
+      db.from("wallets").select("name, traveler_id").eq("id", body.wallet_id).single(),
+      db.from("trips").select("name").eq("id", body.trip_id).single(),
+    ]);
+    const walletName = wallet?.name ?? "wallet";
+    const tripName = trip?.name ?? "your trip";
+    let ownerName = "Someone";
+    if (wallet?.traveler_id) {
+      const { data: traveler } = await db.from("travelers").select("name").eq("id", wallet.traveler_id).single();
+      ownerName = traveler?.name ?? "Someone";
+    }
+    const amt = Number(body.amount ?? 0).toFixed(0);
+    void sendPushToTripMembers(
+      body.trip_id,
+      {
+        title: `Wallet top-up — ${tripName}`,
+        body: `${ownerName} added RM ${amt} to ${walletName}`,
+        url: `/trips/${body.trip_id}/wallets`,
+        tag: `wallet-topup-${data.id}`,
+      },
+      me?.id
+    ).catch((e: unknown) => console.error("[push.wallet-topup]", (e as Error).message));
+  } catch (e) {
+    console.error("[push.wallet-topup] setup failed:", (e as Error).message);
+  }
+
   return NextResponse.json(data, { status: 201 });
 }
 

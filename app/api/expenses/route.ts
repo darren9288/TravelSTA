@@ -83,12 +83,7 @@ export async function POST(req: NextRequest) {
     if (splitErr) return NextResponse.json({ error: splitErr.message }, { status: 500 });
   }
 
-  // Fire-and-forget push to every other trip member. Wrapped in try/catch
-  // so any push delivery failure can never break the actual create flow.
-  // Body details we want in the notification:
-  //   - Who paid (traveler name)
-  //   - Amount (MYR + foreign optional)
-  //   - Trip name (so members in multiple trips can disambiguate)
+  // Push: "{payer} added an expense — RM {amount} · {category}"
   try {
     const me = await getSessionUser();
     const [{ data: payer }, { data: trip }] = await Promise.all([
@@ -110,8 +105,7 @@ export async function POST(req: NextRequest) {
         tag: `expense-${expense.id}`,
       },
       me?.id
-    ).catch((e) => console.error("[push.expense]", (e as Error).message));
-    // Silence unused-var lint for `fc` if no foreign amount present.
+    ).catch((e: unknown) => console.error("[push.expense]", (e as Error).message));
     void fc;
   } catch (e) {
     console.error("[push.expense] setup failed:", (e as Error).message);
@@ -145,8 +139,8 @@ export async function DELETE(req: NextRequest) {
   const idParam = new URL(req.url).searchParams.get("id");
   const id = idParam ?? (await req.json().catch(() => ({}))).id;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  // Look up the trip_id so we can check the role
-  const { data: exp } = await supabase.from("expenses").select("trip_id").eq("id", id).single();
+  // Look up expense info for role check + push notification
+  const { data: exp } = await supabase.from("expenses").select("trip_id, myr_amount, category, notes, paid_by_id").eq("id", id).single();
   if (exp?.trip_id) { const denied = await requireEditor(exp.trip_id); if (denied) return denied; }
   // Delete receipt photo from storage if it exists
   const { data: files } = await supabase.storage.from("expense-receipts").list(id);
@@ -155,5 +149,30 @@ export async function DELETE(req: NextRequest) {
   }
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Push: "Expense deleted — RM {amount} · {category}"
+  if (exp?.trip_id) {
+    try {
+      const me = await getSessionUser();
+      const { data: trip } = await supabase.from("trips").select("name").eq("id", exp.trip_id).single();
+      const tripName = trip?.name ?? "your trip";
+      const myr = Number(exp.myr_amount ?? 0).toFixed(0);
+      const cat = exp.category ?? "";
+      const desc = exp.notes ? ` — ${String(exp.notes).slice(0, 40)}` : "";
+      void sendPushToTripMembers(
+        exp.trip_id,
+        {
+          title: `Expense deleted — ${tripName}`,
+          body: `RM ${myr} · ${cat}${desc} was removed`,
+          url: `/trips/${exp.trip_id}/expenses`,
+          tag: `expense-del-${id}`,
+        },
+        me?.id
+      ).catch((e: unknown) => console.error("[push.expense-delete]", (e as Error).message));
+    } catch (e) {
+      console.error("[push.expense-delete] setup failed:", (e as Error).message);
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
