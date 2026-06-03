@@ -417,7 +417,16 @@ export default function ItineraryPage() {
                           const isSelected = selectedId === item.id;
                           const timeParts = item.time ? item.time.slice(0, 5) : null;
                           return (
-                            <button key={item.id} onClick={() => setSelectedId(isSelected ? null : item.id)}
+                            <button key={item.id} onClick={() => {
+                                const next = isSelected ? null : item.id;
+                                setSelectedId(next);
+                                // On mobile the detail panel replaces the list, so jump
+                                // to the top to show it. On desktop the panel is sticky
+                                // (see below) and already stays in view — no scroll needed.
+                                if (next && typeof window !== "undefined" && window.innerWidth < 768) {
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
                               className={`w-full text-left px-4 py-3 transition-colors ${isSelected ? "bg-slate-700/40" : "hover:bg-slate-700/20"}`}>
                               <div className="flex items-center gap-3">
                                 {/* Time column — fixed width */}
@@ -458,9 +467,13 @@ export default function ItineraryPage() {
               })}
             </div>
 
-            {/* Detail panel */}
+            {/* Detail panel — sticky on desktop so it stays in the viewport
+                no matter how far down the day list you've scrolled. Without
+                this, selecting (say) day 5 rendered the panel at the top of
+                the row and you had to scroll back up to read it. Internal
+                overflow-y-auto + max-height keep a long panel scrollable. */}
             {selectedId && selectedItem && (
-              <div className="w-full md:flex-1 md:min-w-0 bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden flex flex-col">
+              <div className="w-full md:flex-1 md:min-w-0 md:sticky md:top-4 md:self-start md:max-h-[calc(100vh-2rem)] md:overflow-y-auto bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden flex flex-col">
 
                 {/* Panel header */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
