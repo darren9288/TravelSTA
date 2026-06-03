@@ -117,7 +117,7 @@ export default function TripDashboard() {
             </div>
             {!myId ? (
               <button
-                onClick={() => router.push(`/join/${trip.join_code}`)}
+                onClick={() => router.push(`/join/${trip.join_code}?pick=1`)}
                 className="mt-3 w-full py-2 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
               >
                 Join as traveler

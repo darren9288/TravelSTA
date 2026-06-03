@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Traveler, Trip } from "@/lib/supabase";
-import { setIdentity } from "@/lib/identity";
+import { setIdentity, clearIdentity } from "@/lib/identity";
+
+// Sentinel used as the `joining` value while the "just viewing" (no traveler)
+// button is in flight — keeps the spinner logic working without a real id.
+const VIEWER_SENTINEL = "__viewer__";
 
 // Invite-link landing page. URL: /join/<code>
 //
@@ -51,12 +55,26 @@ export default function JoinPage() {
         return;
       }
 
-      // 3. Already a member with a traveler chosen → straight to the trip.
+      // `?pick=1` forces the picker even for existing members — used by the
+      // dashboard's "Join as traveler" button so a viewer can upgrade to a
+      // real traveler identity.
+      const forcePick =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("pick") === "1";
+
+      // 3. Already a member → straight to the trip, no picker (unless ?pick=1).
+      // Covers both travelers (traveler_id set) and pure viewers (traveler_id
+      // null) so neither gets re-prompted on every normal invite-link tap.
       const memRes = await fetch(`/api/join/membership?code=${code}`, { cache: "no-store" });
       const memData = await memRes.json();
-      if (memRes.ok && memData.member?.traveler_id) {
-        // Refresh the localStorage identity so existing pages keep working.
-        setIdentity(tripData.trip.id, memData.member.traveler_id);
+      if (memRes.ok && memData.member && !forcePick) {
+        if (memData.member.traveler_id) {
+          // Refresh the localStorage identity so existing pages keep working.
+          setIdentity(tripData.trip.id, memData.member.traveler_id);
+        } else {
+          // Pure viewer — make sure no stale identity lingers.
+          clearIdentity(tripData.trip.id);
+        }
         router.replace(`/trips/${tripData.trip.id}`);
         return;
       }
@@ -71,9 +89,10 @@ export default function JoinPage() {
     load();
   }, [code, router]);
 
-  async function pick(travelerId: string) {
+  // travelerId === null → join as a pure viewer (not tied to any person).
+  async function pick(travelerId: string | null) {
     if (!trip) return;
-    setJoining(travelerId);
+    setJoining(travelerId ?? VIEWER_SENTINEL);
     try {
       const res = await fetch("/api/join", {
         method: "POST",
@@ -84,7 +103,8 @@ export default function JoinPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Couldn't join");
       }
-      setIdentity(trip.id, travelerId);
+      if (travelerId) setIdentity(trip.id, travelerId);
+      else clearIdentity(trip.id);
       router.push(`/trips/${trip.id}`);
     } catch (e) {
       setError((e as Error).message);
@@ -146,8 +166,29 @@ export default function JoinPage() {
             );
           })}
         </div>
+
+        {/* Pure-viewer option — join without claiming a traveler. Read-only
+            spectator: can see expenses/settlement but isn't a payer and
+            won't appear in splits. */}
+        <div className="mt-3 pt-3 border-t border-slate-800">
+          <button
+            onClick={() => pick(null)}
+            disabled={joining !== null}
+            className="w-full flex items-center gap-3 px-4 py-3 bg-slate-900/60 border border-slate-700 hover:border-slate-500 rounded-xl transition-colors group disabled:opacity-50"
+          >
+            <div className="w-8 h-8 rounded-full flex-shrink-0 bg-slate-700 flex items-center justify-center text-slate-300 text-sm">
+              👁
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium text-white group-hover:text-slate-200">Just viewing</p>
+              <p className="text-[11px] text-slate-500">Watch only — not splitting expenses</p>
+            </div>
+            {joining === VIEWER_SENTINEL && <span className="text-xs text-emerald-400">Joining…</span>}
+          </button>
+        </div>
+
         {travelers.length === 0 && (
-          <p className="text-center text-slate-500 text-sm">No travelers added yet. Ask the trip admin to add you.</p>
+          <p className="text-center text-slate-500 text-sm mt-3">No travelers added yet — you can still join as a viewer above, or ask the trip admin to add you.</p>
         )}
       </div>
     </div>
