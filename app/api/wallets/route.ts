@@ -23,13 +23,19 @@ export async function GET(req: NextRequest) {
   // Fetch trip for exchange rates (needed for foreign currency settlement conversion)
   const { data: tripData } = await db.from("trips").select("cash_rate, wise_rate, foreign_currency").eq("id", trip_id).single();
 
-  // Fetch top-ups, expenses, pool topups, and net settlement payments in parallel
-  const [{ data: topups }, { data: expenses }, { data: poolTopups }, { data: settledFrom }, { data: settledTo }] = await Promise.all([
+  // Fetch top-ups, expenses, pool topups, net settlement payments, AND any
+  // expense_splits that were manually settled with wallet picks. The split
+  // path is separate from Settle All (which writes settlement_payments and
+  // leaves split wallet ids null) — manual per-split settles store wallet
+  // ids directly on the split row, so balance needs to read both sources.
+  const [{ data: topups }, { data: expenses }, { data: poolTopups }, { data: settledFrom }, { data: settledTo }, { data: splitsFrom }, { data: splitsTo }] = await Promise.all([
     db.from("wallet_topups").select("wallet_id, amount").in("wallet_id", walletIds),
     db.from("expenses").select("wallet_id, myr_amount, foreign_amount").in("wallet_id", walletIds),
     db.from("pool_topups").select("from_wallet_id, myr_amount, foreign_amount").in("from_wallet_id", walletIds),
     db.from("settlement_payments").select("from_wallet_id, amount, from_foreign_amount").in("from_wallet_id", walletIds),
     db.from("settlement_payments").select("to_wallet_id, amount, to_foreign_amount").in("to_wallet_id", walletIds),
+    db.from("expense_splits").select("from_wallet_id, amount").eq("is_settled", true).in("from_wallet_id", walletIds),
+    db.from("expense_splits").select("to_wallet_id, amount").eq("is_settled", true).in("to_wallet_id", walletIds),
   ]);
 
   // Build wallet metadata map
@@ -85,6 +91,21 @@ export async function GET(req: NextRequest) {
     } else {
       add = Number(s.amount);
     }
+    balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + add;
+  }
+  // Per-split manual settlements paid OUT of a wallet. amount on the split
+  // is in MYR; convert to wallet currency if the wallet is foreign.
+  for (const s of (splitsFrom ?? []) as { from_wallet_id: string; amount: number }[]) {
+    if (!s.from_wallet_id) continue;
+    const isForeign = walletMap[s.from_wallet_id]?.currency !== "MYR";
+    const deduct = isForeign ? Number(s.amount) * getRate(s.from_wallet_id) : Number(s.amount);
+    balances[s.from_wallet_id] = (balances[s.from_wallet_id] ?? 0) - deduct;
+  }
+  // Per-split manual settlements received INTO a wallet.
+  for (const s of (splitsTo ?? []) as { to_wallet_id: string; amount: number }[]) {
+    if (!s.to_wallet_id) continue;
+    const isForeign = walletMap[s.to_wallet_id]?.currency !== "MYR";
+    const add = isForeign ? Number(s.amount) * getRate(s.to_wallet_id) : Number(s.amount);
     balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + add;
   }
 

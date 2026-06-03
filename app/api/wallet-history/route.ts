@@ -4,7 +4,7 @@ import { serverDb } from "@/lib/supabase";
 
 export type WalletEvent = {
   id: string;
-  type: "topup" | "expense" | "settlement_out" | "settlement_in" | "pool_topup";
+  type: "topup" | "expense" | "settlement_out" | "settlement_in" | "pool_topup" | "split_settle_out" | "split_settle_in";
   date: string;
   created_at: string;
   amount: number; // in wallet's native currency, always positive
@@ -32,13 +32,17 @@ export async function GET(req: NextRequest) {
     ? (wallet.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1))
     : 1;
 
-  const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }, { data: poolTopups }] = await Promise.all([
+  const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }, { data: poolTopups }, { data: splitsOut }, { data: splitsIn }] = await Promise.all([
     db.from("wallet_topups").select("id, amount, date, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("expenses").select("id, date, myr_amount, foreign_amount, category, notes, created_at").eq("wallet_id", wallet_id).order("date"),
     db.from("settlement_payments").select("id, amount, from_foreign_amount, to_traveler_id, created_at").eq("from_wallet_id", wallet_id),
     db.from("settlement_payments").select("id, amount, to_foreign_amount, from_traveler_id, created_at").eq("to_wallet_id", wallet_id),
     db.from("travelers").select("id, name").eq("trip_id", trip_id),
     db.from("pool_topups").select("id, myr_amount, foreign_amount, date, notes, created_at, pool:travelers!pool_id(name)").eq("from_wallet_id", wallet_id).order("date"),
+    // Per-split manual settles paid OUT of this wallet (one-off Tick UI, not Settle All).
+    db.from("expense_splits").select("id, amount, traveler_id, expense_id, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("from_wallet_id", wallet_id),
+    // Per-split manual settles received INTO this wallet (we're the payer being paid back).
+    db.from("expense_splits").select("id, amount, traveler_id, expense_id, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("to_wallet_id", wallet_id),
   ]);
 
   const travelerMap: Record<string, string> = {};
@@ -82,6 +86,49 @@ export async function GET(req: NextRequest) {
       : Number(s.amount);
     const fromName = travelerMap[(s as unknown as { from_traveler_id: string }).from_traveler_id] ?? null;
     events.push({ id: s.id, type: "settlement_in", date, created_at: s.created_at, amount: amt, sign: 1, description: "Settlement received", counterpart: fromName });
+  }
+  // Per-split manual settles paid OUT (we owed someone for an expense and the
+  // split was ticked with this wallet as the source). amount is MYR — convert.
+  type SplitRow = { id: string; amount: number; traveler_id: string; expense_id: string; expense?: { date?: string; category?: string; paid_by_id?: string; created_at?: string } };
+  for (const sp of (splitsOut ?? []) as SplitRow[]) {
+    const amtMyr = Number(sp.amount);
+    const amt = isForeign ? amtMyr * rate : amtMyr;
+    const exp = sp.expense ?? {};
+    const date = exp.date ?? new Date().toISOString().slice(0, 10);
+    const created_at = exp.created_at ?? date + "T00:00:00.000Z";
+    const payeeName = travelerMap[exp.paid_by_id ?? ""] ?? null;
+    events.push({
+      id: sp.id,
+      type: "split_settle_out",
+      date,
+      created_at,
+      amount: amt,
+      sign: -1,
+      description: `Split settled · ${exp.category ?? ""}`,
+      category: exp.category,
+      counterpart: payeeName,
+    });
+  }
+  // Per-split manual settles received IN (we paid an expense and someone
+  // ticked their split with our wallet as the recipient).
+  for (const sp of (splitsIn ?? []) as SplitRow[]) {
+    const amtMyr = Number(sp.amount);
+    const amt = isForeign ? amtMyr * rate : amtMyr;
+    const exp = sp.expense ?? {};
+    const date = exp.date ?? new Date().toISOString().slice(0, 10);
+    const created_at = exp.created_at ?? date + "T00:00:00.000Z";
+    const payerName = travelerMap[sp.traveler_id] ?? null;
+    events.push({
+      id: sp.id,
+      type: "split_settle_in",
+      date,
+      created_at,
+      amount: amt,
+      sign: 1,
+      description: `Reimbursed · ${exp.category ?? ""}`,
+      category: exp.category,
+      counterpart: payerName,
+    });
   }
 
   events.sort((a, b) => {

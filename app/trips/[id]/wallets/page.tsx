@@ -200,6 +200,8 @@ export default function WalletsPage() {
     settlement_out: "text-orange-400",
     settlement_in: "text-blue-400",
     pool_topup: "text-purple-400",
+    split_settle_out: "text-orange-400",
+    split_settle_in: "text-blue-400",
   };
   const typeLabel: Record<WalletEvent["type"], string> = {
     topup: "Top-up",
@@ -207,6 +209,8 @@ export default function WalletsPage() {
     settlement_out: "Settlement out",
     settlement_in: "Settlement in",
     pool_topup: "Pool top-up",
+    split_settle_out: "Split paid",
+    split_settle_in: "Split received",
   };
 
   return (
