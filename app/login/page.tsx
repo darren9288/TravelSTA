@@ -26,7 +26,15 @@ function safeNext(raw: string | null): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = safeNext(searchParams.get("next"));
+  // Read ?next from both the Next.js search params hook AND raw
+  // window.location as a defensive belt — useSearchParams has occasionally
+  // returned null on first paint when the page was served from the
+  // service worker cache. Either source giving a valid path is fine.
+  const fromHook = searchParams.get("next");
+  const fromLocation = typeof window !== "undefined"
+    ? new URL(window.location.href).searchParams.get("next")
+    : null;
+  const next = safeNext(fromHook ?? fromLocation);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -51,8 +59,14 @@ function LoginForm() {
       return;
     }
 
-    router.push(next);
-    router.refresh();
+    // Hard redirect (not router.push) so:
+    //   1. Supabase's auth cookies fully propagate via browser cookie jar
+    //   2. Middleware on the next request sees the authenticated session
+    //   3. Any cached client-side state from before login is dropped
+    // router.push + router.refresh had a race where the next page loaded
+    // before cookies were ready, landing the user on / instead of `next`.
+    void router; // keep import used; explicit no-op
+    window.location.href = next;
   }
 
   return (

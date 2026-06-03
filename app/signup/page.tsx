@@ -23,7 +23,14 @@ function safeNext(raw: string | null): string {
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = safeNext(searchParams.get("next"));
+  // Belt-and-braces: read ?next from both useSearchParams and raw
+  // window.location in case the page was served from the SW cache and
+  // the hook hasn't hydrated the value yet.
+  const fromHook = searchParams.get("next");
+  const fromLocation = typeof window !== "undefined"
+    ? new URL(window.location.href).searchParams.get("next")
+    : null;
+  const next = safeNext(fromHook ?? fromLocation);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -68,8 +75,9 @@ function SignupForm() {
       await supabase.from("profiles").insert({ id: data.user.id, username: clean });
     }
 
-    router.push(next);
-    router.refresh();
+    // Hard redirect — see login page for the rationale (cookie + cache race).
+    void router;
+    window.location.href = next;
   }
 
   return (

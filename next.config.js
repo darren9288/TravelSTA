@@ -31,6 +31,18 @@ const withPWA = require("next-pwa")({
       urlPattern: /\/auth\/.*/i,
       handler: "NetworkOnly",
     },
+    // Login + signup + join pages: always fetch fresh. The bug was the SW
+    // serving a stale /login that did router.push("/") (ignoring ?next),
+    // breaking the invite-link flow. NetworkOnly guarantees post-deploy
+    // changes to these pages are picked up on the next visit.
+    {
+      urlPattern: /\/(login|signup)\/?$/i,
+      handler: "NetworkOnly",
+    },
+    {
+      urlPattern: /\/join\//i,
+      handler: "NetworkOnly",
+    },
     {
       urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
       handler: "NetworkOnly",
