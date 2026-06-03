@@ -1,12 +1,32 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Plane, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
+// Wrap the form in <Suspense> so useSearchParams doesn't bail out of
+// static rendering at build time.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+// Only redirect to internal paths so a malicious ?next=https://evil.com
+// link can't bounce users off the app post-login.
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,7 +51,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -87,7 +107,10 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           No account?{" "}
-          <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 font-medium">
+          <Link
+            href={next !== "/" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+            className="text-emerald-400 hover:text-emerald-300 font-medium"
+          >
             Sign up
           </Link>
         </p>

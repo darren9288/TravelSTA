@@ -1,12 +1,29 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Plane, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
+// Same Suspense wrapper as login — useSearchParams needs it.
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -51,7 +68,7 @@ export default function SignupPage() {
       await supabase.from("profiles").insert({ id: data.user.id, username: clean });
     }
 
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -120,7 +137,10 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-emerald-400 hover:text-emerald-300 font-medium">
+          <Link
+            href={next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+            className="text-emerald-400 hover:text-emerald-300 font-medium"
+          >
             Sign in
           </Link>
         </p>

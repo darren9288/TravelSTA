@@ -2,30 +2,69 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Traveler, Trip } from "@/lib/supabase";
-import { setIdentity, getIdentity } from "@/lib/identity";
+import { setIdentity } from "@/lib/identity";
+
+// Invite-link landing page. URL: /join/<code>
+//
+// Flow:
+//   1. Hit /api/join?code=... to look up the trip (no auth required for read).
+//   2. Hit /api/me to find out if the user is signed in.
+//      - Not signed in → redirect to /login?next=/join/<code>. After login
+//        they land back here.
+//   3. Signed in → check /api/join/membership?code=... to see if they're
+//      already a trip_member with a traveler_id.
+//      - Already a member → push straight to /trips/{id}, no picker.
+//   4. Otherwise → show the traveler picker. Picking calls POST /api/join
+//      to bind their user → traveler → trip, then redirects to the trip.
 
 export default function JoinPage() {
   const { code } = useParams<{ code: string }>();
   const router = useRouter();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
+  const [claimedTravelerIds, setClaimedTravelerIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [joining, setJoining] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
-      const res = await fetch(`/api/join?code=${code}`);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); setLoading(false); return; }
-      setTrip(data.trip);
-      const realTravelers = (data.travelers as Traveler[]).filter((t) => !t.is_pool);
+      // 1. Fetch trip + travelers by code.
+      const tripRes = await fetch(`/api/join?code=${code}`, { cache: "no-store" });
+      const tripData = await tripRes.json();
+      if (!tripRes.ok) {
+        setError(tripData.error ?? "Trip not found");
+        setLoading(false);
+        return;
+      }
+      setTrip(tripData.trip);
+      const realTravelers = (tripData.travelers as Traveler[]).filter((t) => !t.is_pool && !t.archived);
       setTravelers(realTravelers);
 
-      // If already joined this trip, redirect straight to dashboard
-      const existing = getIdentity(data.trip.id);
-      if (existing) {
-        router.replace(`/trips/${data.trip.id}`);
+      // 2. Are we signed in?
+      const meRes = await fetch("/api/me", { cache: "no-store" });
+      const meData = await meRes.json();
+      if (!meData.user) {
+        // Bounce to login, keeping the invite path so we come back here.
+        const next = encodeURIComponent(`/join/${code}`);
+        router.replace(`/login?next=${next}`);
         return;
+      }
+
+      // 3. Already a member with a traveler chosen → straight to the trip.
+      const memRes = await fetch(`/api/join/membership?code=${code}`, { cache: "no-store" });
+      const memData = await memRes.json();
+      if (memRes.ok && memData.member?.traveler_id) {
+        // Refresh the localStorage identity so existing pages keep working.
+        setIdentity(tripData.trip.id, memData.member.traveler_id);
+        router.replace(`/trips/${tripData.trip.id}`);
+        return;
+      }
+
+      // 4. Show the picker. Mark travelers already claimed by other accounts
+      // so we don't let two accounts hijack the same identity.
+      if (Array.isArray(memData?.claimed_traveler_ids)) {
+        setClaimedTravelerIds(new Set(memData.claimed_traveler_ids as string[]));
       }
       setLoading(false);
     }
@@ -34,14 +73,23 @@ export default function JoinPage() {
 
   async function pick(travelerId: string) {
     if (!trip) return;
-    setIdentity(trip.id, travelerId);
-    // Register this user as a trip member with their chosen traveler identity
-    await fetch("/api/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip_id: trip.id, traveler_id: travelerId }),
-    });
-    router.push(`/trips/${trip.id}`);
+    setJoining(travelerId);
+    try {
+      const res = await fetch("/api/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trip_id: trip.id, traveler_id: travelerId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Couldn't join");
+      }
+      setIdentity(trip.id, travelerId);
+      router.push(`/trips/${trip.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+      setJoining(null);
+    }
   }
 
   if (loading) return (
@@ -70,19 +118,33 @@ export default function JoinPage() {
           <p className="text-4xl mb-3">✈️</p>
           <h1 className="text-2xl font-bold text-white">{trip?.name}</h1>
           {trip?.destination && <p className="text-slate-400 text-sm mt-1">{trip.destination}</p>}
-          <p className="text-xs text-slate-500 mt-3">Who are you?</p>
+          <p className="text-xs text-slate-500 mt-3">Join as which traveler?</p>
         </div>
         <div className="flex flex-col gap-2">
-          {travelers.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => pick(t.id)}
-              className="flex items-center gap-3 px-4 py-3 bg-slate-800 border border-slate-700 hover:border-emerald-500 rounded-xl transition-colors group"
-            >
-              <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-              <span className="text-white font-medium group-hover:text-emerald-400 transition-colors">{t.name}</span>
-            </button>
-          ))}
+          {travelers.map((t) => {
+            const claimed = claimedTravelerIds.has(t.id);
+            const busy = joining === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => !claimed && pick(t.id)}
+                disabled={claimed || joining !== null}
+                title={claimed ? "Already claimed by another account" : ""}
+                className={`flex items-center gap-3 px-4 py-3 bg-slate-800 border rounded-xl transition-colors group ${
+                  claimed
+                    ? "border-slate-800 opacity-50 cursor-not-allowed"
+                    : "border-slate-700 hover:border-emerald-500"
+                }`}
+              >
+                <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                <span className={`font-medium ${claimed ? "text-slate-500" : "text-white group-hover:text-emerald-400"} transition-colors`}>
+                  {t.name}
+                </span>
+                {claimed && <span className="ml-auto text-[10px] uppercase tracking-wider text-slate-500">Claimed</span>}
+                {busy && <span className="ml-auto text-xs text-emerald-400">Joining…</span>}
+              </button>
+            );
+          })}
         </div>
         {travelers.length === 0 && (
           <p className="text-center text-slate-500 text-sm">No travelers added yet. Ask the trip admin to add you.</p>

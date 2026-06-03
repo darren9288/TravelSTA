@@ -8,6 +8,7 @@ import { useTheme, THEMES } from "@/components/ThemeProvider";
 import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
 import NotificationFrequencySelector from "@/components/NotificationFrequencySelector";
+import InviteLinkButton from "@/components/InviteLinkButton";
 
 type Member = {
   user_id: string;
@@ -266,13 +267,10 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Join code */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
-            <h2 className="text-sm font-semibold text-white mb-2">Join Code</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold text-emerald-400 font-mono tracking-widest">{trip.join_code}</span>
-              <p className="text-xs text-slate-500">Share this with travelers to let them join</p>
-            </div>
+          {/* Invite link + join code */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+            <h2 className="text-sm font-semibold text-white">Invite travelers</h2>
+            <InviteLinkButton code={trip.join_code} tripName={trip.name} />
           </div>
 
           {/* Appearance — theme picker, available to everyone */}
