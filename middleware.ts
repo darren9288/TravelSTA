@@ -32,6 +32,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
+  const search = request.nextUrl.search; // includes leading "?" or ""
   const isAuthPage = path === "/login" || path === "/signup";
   const isProtected =
     path === "/" ||
@@ -40,14 +41,29 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/admin") ||
     path.startsWith("/account");
 
-  // Not logged in → redirect to login for protected pages
-  if (!user && isProtected) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Only forward internal paths to ?next. Rejects anything that could be
+  // weaponised to bounce the user off the app post-login.
+  function safeNext(target: string | null): string {
+    if (!target) return "/";
+    if (!target.startsWith("/") || target.startsWith("//")) return "/";
+    return target;
   }
 
-  // Already logged in → redirect away from auth pages
+  // Not logged in + hitting a protected page → bounce to /login with ?next
+  // so the user lands back where they were trying to go after auth.
+  // Without this, an invite link like /join/XYZ dropped users on / after
+  // login and they had to tap the link a second time.
+  if (!user && isProtected) {
+    const next = encodeURIComponent(`${path}${search}`);
+    return NextResponse.redirect(new URL(`/login?next=${next}`, request.url));
+  }
+
+  // Already logged in + on /login or /signup → bounce them to ?next if
+  // present (e.g. they were redirected here mid-invite flow and the auth
+  // cookie was set by another tab), otherwise home.
   if (user && isAuthPage) {
-    return NextResponse.redirect(new URL("/", request.url));
+    const next = safeNext(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next, request.url));
   }
 
   return supabaseResponse;
