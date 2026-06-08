@@ -13,10 +13,13 @@ export async function PUT(req: NextRequest) {
 
   const db = serverDb();
 
-  // Pull current row for guard checks (locked state + settled state).
+  // Guard read — only columns that ALWAYS exist (is_settled, locked). We
+  // deliberately do NOT select lock_source here: if migration 025 hasn't been
+  // run yet, selecting a missing column would error and break even normal
+  // settle-toggling. lock_source is read separately, only in the lock path.
   const { data: current } = await db
     .from("expense_splits")
-    .select("is_settled, locked, lock_source")
+    .select("is_settled, locked")
     .eq("id", id)
     .single();
 
@@ -26,8 +29,26 @@ export async function PUT(req: NextRequest) {
   //   locks ('settle_all') are tied to settlement_payments and must be managed
   //   from the Settlement page — unlocking here would desync the math.
   if (typeof lock === "boolean") {
+    // lock_source is required for this path — read it now and surface a clear
+    // message if the migration is missing (instead of a misleading error).
+    const { data: lockRow, error: lockReadErr } = await db
+      .from("expense_splits")
+      .select("is_settled, locked, lock_source")
+      .eq("id", id)
+      .single();
+    if (lockReadErr) {
+      const missingCol = /lock_source/i.test(lockReadErr.message);
+      return NextResponse.json(
+        {
+          error: missingCol
+            ? "Lock feature needs a one-time DB migration. Run supabase/migrations/025_split_lock_source.sql in Supabase, then try again."
+            : lockReadErr.message,
+        },
+        { status: missingCol ? 503 : 500 }
+      );
+    }
     if (lock) {
-      if (!current?.is_settled) {
+      if (!lockRow?.is_settled) {
         return NextResponse.json({ error: "Only a settled split can be locked." }, { status: 400 });
       }
       const { data, error } = await db
@@ -40,7 +61,7 @@ export async function PUT(req: NextRequest) {
       void logActivity({ action: "split_toggle", userId: (await getSessionUser())?.id ?? null, tripId, details: { split_id: id, locked: true, lock_source: "manual" }, req });
       return NextResponse.json(data);
     } else {
-      if (current?.lock_source !== "manual") {
+      if (lockRow?.lock_source !== "manual") {
         return NextResponse.json(
           { error: "Only manually-locked splits can be unlocked here. Settle-All locks are managed from the Settlement page." },
           { status: 409 }
