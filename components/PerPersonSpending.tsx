@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import type { Expense, Traveler } from "@/lib/supabase";
-import { ArrowDownUp, CalendarRange, X } from "lucide-react";
+import { ArrowDownUp, CalendarRange, X, FileDown } from "lucide-react";
 
 // Per-person spending drill-down for the Analytics page.
 //
@@ -89,6 +89,13 @@ export default function PerPersonSpending({ tripId }: { tripId: string }) {
   const subtotal = rows.reduce((s, r) => s + r.amount, 0);
   const activePerson = people.find((p) => p.id === activeId);
 
+  // Statement PDF respects the current person + date range.
+  const statementUrl = activeId
+    ? `/api/trips/${tripId}/statement-pdf?traveler_id=${activeId}` +
+      (from ? `&from=${from}` : "") +
+      (to ? `&to=${to}` : "")
+    : "#";
+
   function fmtDate(d: string) {
     // d is YYYY-MM-DD; render as "5 Jun" without timezone shifting.
     const [y, m, day] = d.split("-").map(Number);
@@ -167,13 +174,25 @@ export default function PerPersonSpending({ tripId }: { tripId: string }) {
             </div>
           </div>
 
-          {/* Subtotal */}
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs text-slate-500">
+          {/* Subtotal + statement download */}
+          <div className="flex items-center justify-between mb-2 px-1 gap-2">
+            <span className="text-xs text-slate-500 min-w-0 truncate">
               {activePerson?.name}&apos;s share · {rows.length} item{rows.length === 1 ? "" : "s"}
               {(from || to) ? " (filtered)" : ""}
             </span>
-            <span className="text-sm font-bold text-emerald-400">RM {subtotal.toFixed(2)}</span>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {rows.length > 0 && (
+                <a
+                  href={statementUrl}
+                  download
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-emerald-400 transition-colors"
+                  title="Download this person's statement as PDF"
+                >
+                  <FileDown size={12} /> Statement
+                </a>
+              )}
+              <span className="text-sm font-bold text-emerald-400">RM {subtotal.toFixed(2)}</span>
+            </div>
           </div>
 
           {/* List */}

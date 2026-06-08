@@ -7,6 +7,7 @@ import DailyBar from "@/components/charts/DailyBar";
 import TravelerBar from "@/components/charts/TravelerBar";
 import CumulativeLine from "@/components/charts/CumulativeLine";
 import PerPersonSpending from "@/components/PerPersonSpending";
+import SuperlativesCard from "@/components/SuperlativesCard";
 import { RefreshCw } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -51,6 +52,8 @@ export default function AnalyticsPage() {
             <div className="text-center py-12 text-slate-500 text-sm">No data yet</div>
           ) : (
             <>
+              <SuperlativesCard tripId={id} />
+
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">By Category</h2>
                 <CategoryPie data={stats.byCategory} />
