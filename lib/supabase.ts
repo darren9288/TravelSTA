@@ -77,6 +77,7 @@ export type ExpenseSplit = {
   amount: number;
   is_settled: boolean;
   locked?: boolean;
+  lock_source?: "settle_all" | "manual" | null;
   from_wallet_id?: string | null;
   to_wallet_id?: string | null;
   traveler?: Traveler;

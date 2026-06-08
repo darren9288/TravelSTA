@@ -113,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (expenseIds.length > 0) {
     await db
       .from("expense_splits")
-      .update({ is_settled: true, locked: true })
+      .update({ is_settled: true, locked: true, lock_source: "settle_all" })
       .in("expense_id", expenseIds)
       .eq("is_settled", false);
   }

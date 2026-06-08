@@ -7,9 +7,69 @@ import { sendPushToTripMembers } from "@/lib/push";
 import { logActivity } from "@/lib/activity-log";
 
 export async function PUT(req: NextRequest) {
-  const { id, is_settled, from_wallet_id, to_wallet_id } = await req.json();
+  const { id, is_settled, from_wallet_id, to_wallet_id, lock } = await req.json();
   const tripId = await tripIdForSplit(id);
   if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
+
+  const db = serverDb();
+
+  // Pull current row for guard checks (locked state + settled state).
+  const { data: current } = await db
+    .from("expense_splits")
+    .select("is_settled, locked, lock_source")
+    .eq("id", id)
+    .single();
+
+  // ── Explicit lock / unlock request ─────────────────────────────────────
+  // Body { lock: true }  → manually lock a SETTLED split (freeze it).
+  // Body { lock: false } → unlock, but ONLY if it was a MANUAL lock. Settle-All
+  //   locks ('settle_all') are tied to settlement_payments and must be managed
+  //   from the Settlement page — unlocking here would desync the math.
+  if (typeof lock === "boolean") {
+    if (lock) {
+      if (!current?.is_settled) {
+        return NextResponse.json({ error: "Only a settled split can be locked." }, { status: 400 });
+      }
+      const { data, error } = await db
+        .from("expense_splits")
+        .update({ locked: true, lock_source: "manual" })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      void logActivity({ action: "split_toggle", userId: (await getSessionUser())?.id ?? null, tripId, details: { split_id: id, locked: true, lock_source: "manual" }, req });
+      return NextResponse.json(data);
+    } else {
+      if (current?.lock_source !== "manual") {
+        return NextResponse.json(
+          { error: "Only manually-locked splits can be unlocked here. Settle-All locks are managed from the Settlement page." },
+          { status: 409 }
+        );
+      }
+      const { data, error } = await db
+        .from("expense_splits")
+        .update({ locked: false, lock_source: null })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      void logActivity({ action: "split_toggle", userId: (await getSessionUser())?.id ?? null, tripId, details: { split_id: id, locked: false }, req });
+      return NextResponse.json(data);
+    }
+  }
+
+  // ── Normal settle toggle ───────────────────────────────────────────────
+  // Guard: a locked split can't be toggled. This protects against a stale
+  // page (service-worker cache) still showing the checkbox as interactive
+  // after a Settle All / manual lock happened elsewhere — the server is the
+  // source of truth, so even a stale tap can't corrupt the data.
+  if (current?.locked) {
+    return NextResponse.json(
+      { error: "This split is locked and can't be changed. Refresh to see the latest state." },
+      { status: 409 }
+    );
+  }
+
   const update: Record<string, unknown> = { is_settled };
   if (is_settled) {
     update.from_wallet_id = from_wallet_id ?? null;
@@ -19,7 +79,7 @@ export async function PUT(req: NextRequest) {
     update.from_wallet_id = null;
     update.to_wallet_id = null;
   }
-  const { data, error } = await serverDb()
+  const { data, error } = await db
     .from("expense_splits")
     .update(update)
     .eq("id", id)

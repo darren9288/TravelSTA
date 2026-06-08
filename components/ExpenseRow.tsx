@@ -80,6 +80,11 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
     ? expense.notes : null;
   const splitsTotal = splits.reduce((s, x) => s + Number(x.amount), 0);
   const splitsMismatch = splits.length > 0 && Math.abs(splitsTotal - Number(expense.myr_amount)) > 0.05;
+  // Any split a user could long-press to lock (settled, not auto/locked) or
+  // unlock (manually locked)? Drives the "long-press to lock" hint.
+  const hasLockableSplit = splits.some(
+    (s) => (s.is_settled && !s.locked && !autoByRule(s)) || (!!s.locked && s.lock_source === "manual")
+  );
 
   async function doSettle(split: ExpenseSplit, fromWalletId?: string, toWalletId?: string) {
     setSettlingPick(null);
@@ -115,6 +120,82 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
     } else {
       doSettle(split);
     }
+  }
+
+  // ── Long-press to lock / unlock a settled split ──────────────────────────
+  // Long-press (≈500 ms) the ✓ to manually LOCK a settled split so it can't be
+  // toggled by accident. Long-press a manually-locked split to UNLOCK it.
+  // Settle-All locks (lock_source !== "manual") are never unlockable here.
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  // Is THIS split a per-rule auto-settle (pool/payer/RM0), ignoring the
+  // `locked` column? Used to decide whether manual-lock makes sense.
+  function autoByRule(split: ExpenseSplit): boolean {
+    const payer = travelers.find((t) => t.id === expense.paid_by_id);
+    if (payer?.is_pool) return true;
+    if (split.traveler_id === expense.paid_by_id) return true;
+    if (expense.split_type === "individual" && Number(split.amount) === 0) return true;
+    return false;
+  }
+
+  async function doLockToggle(split: ExpenseSplit, lock: boolean) {
+    setToggling(split.id);
+    setToggleError("");
+    // Optimistic update.
+    setSplits((prev) => prev.map((s) => s.id === split.id
+      ? { ...s, locked: lock, lock_source: lock ? "manual" : null }
+      : s));
+    try {
+      const res = await fetch("/api/splits", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: split.id, lock }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSplits((prev) => prev.map((s) => s.id === split.id
+          ? { ...s, locked: split.locked, lock_source: split.lock_source }
+          : s));
+        setToggleError(data.error ?? `Save failed (${res.status})`);
+      }
+    } catch {
+      setSplits((prev) => prev.map((s) => s.id === split.id
+        ? { ...s, locked: split.locked, lock_source: split.lock_source }
+        : s));
+      setToggleError("Network error — could not save");
+    }
+    setToggling(null);
+  }
+
+  function handleLongPress(split: ExpenseSplit) {
+    const name = travelers.find((t) => t.id === split.traveler_id)?.name ?? "this";
+    const manualLocked = !!split.locked && split.lock_source === "manual";
+    const settleAllLocked = !!split.locked && split.lock_source !== "manual";
+    if (settleAllLocked) return; // managed from the Settlement page only
+    if (manualLocked) {
+      if (window.confirm(`Unlock ${name}'s settlement?\n\nYou'll be able to tick / untick it again.`)) {
+        doLockToggle(split, false);
+      }
+      return;
+    }
+    // Not locked — only lockable if it's a real settled split (not auto-settled).
+    if (split.is_settled && !autoByRule(split)) {
+      if (window.confirm(`Lock ${name}'s settlement?\n\nIt can't be changed until you unlock it (long-press again).`)) {
+        doLockToggle(split, true);
+      }
+    }
+  }
+
+  function startPress(split: ExpenseSplit) {
+    longPressFired.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      handleLongPress(split);
+    }, 500);
+  }
+  function cancelPress() {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
   return (
@@ -205,30 +286,64 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
             </p>
           )}
 
+          {hasLockableSplit && (
+            <p className="text-[10px] text-slate-600 mb-1.5 flex items-center gap-1">
+              <Lock size={9} className="text-slate-600" /> Long-press a ✓ to lock / unlock it
+            </p>
+          )}
           <div className="flex flex-col gap-1.5 mb-3">
             {splits.map((s) => {
               const t = travelers.find((x) => x.id === s.traveler_id);
               if (!t) return null;
               const locked = isAutoSettled(s, expense, travelers);
-              const lockReason = s.locked ? "settled" : paidByPool ? "pool" : s.traveler_id === expense.paid_by_id ? "payer" : "RM 0";
+              const manualLocked = !!s.locked && s.lock_source === "manual";
+              const settleAllLocked = !!s.locked && s.lock_source !== "manual";
+              const autoRule = autoByRule(s);
+              // Hard-locked = can't interact at all (Settle-All lock or auto-settle rule).
+              // Manual locks stay interactive so a long-press can unlock them.
+              const hardLocked = settleAllLocked || autoRule;
+              const lockReason = manualLocked ? "locked" : s.locked ? "settled" : paidByPool ? "pool" : s.traveler_id === expense.paid_by_id ? "payer" : "RM 0";
+              const lockTitle = settleAllLocked
+                ? "Locked by Settle All — manage from the Settlement page"
+                : manualLocked
+                  ? "Locked — long-press to unlock"
+                  : autoRule
+                    ? `Auto-settled (${lockReason})`
+                    : s.is_settled
+                      ? "Long-press to lock"
+                      : undefined;
 
               return (
                 <div key={s.id} className="flex items-start gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleSettle(s); }}
-                    disabled={locked || toggling === s.id}
-                    title={locked ? `Auto-settled (${lockReason})` : undefined}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // A completed long-press already handled this press.
+                      if (longPressFired.current) { longPressFired.current = false; return; }
+                      // Manual-locked: short tap does nothing (long-press unlocks).
+                      if (manualLocked) return;
+                      toggleSettle(s);
+                    }}
+                    onPointerDown={(e) => { e.stopPropagation(); if (!hardLocked) startPress(s); }}
+                    onPointerUp={cancelPress}
+                    onPointerLeave={cancelPress}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={hardLocked || toggling === s.id}
+                    title={lockTitle}
+                    style={{ touchAction: "manipulation", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                     className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                      locked
+                      hardLocked
                         ? "bg-slate-600 border-slate-600 cursor-not-allowed"
-                        : s.is_settled
-                          ? "bg-emerald-500 border-emerald-500 cursor-pointer"
-                          : "border-slate-500 hover:border-amber-400 cursor-pointer"
+                        : manualLocked
+                          ? "bg-slate-500 border-slate-400 cursor-pointer"
+                          : s.is_settled
+                            ? "bg-emerald-500 border-emerald-500 cursor-pointer"
+                            : "border-slate-500 hover:border-amber-400 cursor-pointer"
                     } ${toggling === s.id ? "opacity-50" : ""}`}
                   >
                     {(s.is_settled || locked) && (
                       locked
-                        ? <Lock size={8} className="text-slate-400" />
+                        ? <Lock size={8} className="text-slate-300" />
                         : <span className="text-white text-xs leading-none">✓</span>
                     )}
                   </button>

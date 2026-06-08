@@ -4,9 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense } from "@/lib/supabase";
-import { PlusCircle, Banknote, BarChart2, Droplets, Settings2 } from "lucide-react";
+import { PlusCircle, Banknote, BarChart2, Droplets, Settings2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import useSWR, { preload } from "swr";
+import useSWR, { preload, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -29,6 +29,14 @@ export default function TripDashboard() {
   const loading = tripLoading || travelersLoading || expensesLoading;
 
   useTripRealtime(id);
+
+  // Manual refresh — revalidate every trip-scoped SWR key (expenses, stats,
+  // wallets, trip). Useful when split lock state changed on another page and
+  // the cached copy here is stale.
+  const { mutate } = useSWRConfig();
+  function refreshAll() {
+    mutate((key) => typeof key === "string" && (key.includes(`trip_id=${id}`) || key === `/api/trips/${id}`));
+  }
 
   useEffect(() => {
     if (trip && (trip as any).error) router.push("/");
@@ -185,7 +193,13 @@ export default function TripDashboard() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Recent Expenses</h2>
-              <Link href={`/trips/${id}/expenses`} className="text-xs text-emerald-400 hover:text-emerald-300">View all</Link>
+              <div className="flex items-center gap-3">
+                <button onClick={refreshAll} disabled={loading}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50">
+                  <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
+                </button>
+                <Link href={`/trips/${id}/expenses`} className="text-xs text-emerald-400 hover:text-emerald-300">View all</Link>
+              </div>
             </div>
             {expenses.length === 0 ? (
               <div className="text-center py-8 text-slate-600 text-sm">
