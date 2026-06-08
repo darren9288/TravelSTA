@@ -64,8 +64,27 @@ export async function POST(req: NextRequest) {
 
   const db = serverDb();
 
+  // Replace mode: wipe the trip's existing itinerary before importing, so the
+  // file becomes the single source of truth (e.g. re-importing an edited
+  // export to refresh links/notes without manual one-by-one deletes).
+  // We delete children first (links + files rows) then the items, so it works
+  // regardless of the FK cascade config. Storage file objects are left as
+  // harmless orphans — acceptable for a full replace.
+  if (body.replace === true) {
+    const { data: existingItems } = await db
+      .from("itinerary_items")
+      .select("id")
+      .eq("trip_id", tripId);
+    const ids = (existingItems ?? []).map((i: { id: string }) => i.id);
+    if (ids.length) {
+      await db.from("itinerary_links").delete().in("item_id", ids);
+      await db.from("itinerary_files").delete().in("item_id", ids);
+      await db.from("itinerary_items").delete().eq("trip_id", tripId);
+    }
+  }
+
   // Build a duplicate-detection set on (date|title) so re-imports of the same
-  // file don't double-fill the day list.
+  // file don't double-fill the day list. (After a replace this is empty.)
   const { data: existing } = await db
     .from("itinerary_items")
     .select("date, title")

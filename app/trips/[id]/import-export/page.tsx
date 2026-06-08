@@ -38,6 +38,8 @@ export default function ImportExportPage() {
   const [itineraryFile, setItineraryFile] = useState<File | null>(null);
   const [importingItinerary, setImportingItinerary] = useState(false);
   const [itineraryResult, setItineraryResult] = useState<ImportResult | null>(null);
+  // When true, the importer clears the whole itinerary before loading the file.
+  const [replaceItinerary, setReplaceItinerary] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,6 +136,12 @@ export default function ImportExportPage() {
 
   const handleItineraryImport = async () => {
     if (!itineraryFile) return;
+    // Replace mode wipes the current itinerary first — confirm before nuking.
+    if (replaceItinerary && !window.confirm(
+      "Replace the entire current itinerary?\n\nAll existing itinerary items (and their attached links/files) for this trip will be deleted, then the file imported fresh. This can't be undone."
+    )) {
+      return;
+    }
     setImportingItinerary(true);
     setItineraryResult(null);
 
@@ -142,7 +150,7 @@ export default function ImportExportPage() {
       const response = await fetch("/api/itinerary/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trip_id: id, data: text }),
+        body: JSON.stringify({ trip_id: id, data: text, replace: replaceItinerary }),
       });
       const result = await response.json();
       setItineraryResult(result);
@@ -471,13 +479,32 @@ export default function ImportExportPage() {
                 </div>
               )}
 
+              {/* Replace-vs-merge toggle */}
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={replaceItinerary}
+                  onChange={(e) => setReplaceItinerary(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500"
+                />
+                <span className="text-xs text-slate-400 leading-relaxed">
+                  <span className="text-slate-200 font-medium">Replace existing itinerary</span> — clears all
+                  current items first, then imports this file fresh. Leave unchecked to merge (adds new items,
+                  skips ones with the same date + title).
+                </span>
+              </label>
+
               <button
                 onClick={handleItineraryImport}
                 disabled={!itineraryFile || importingItinerary}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className={`flex items-center gap-2 px-4 py-2 text-white text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  replaceItinerary ? "bg-red-600 hover:bg-red-500" : "bg-amber-600 hover:bg-amber-500"
+                }`}
               >
                 <Upload className="w-4 h-4" />
-                {importingItinerary ? "Importing..." : "Import Itinerary"}
+                {importingItinerary
+                  ? "Importing..."
+                  : replaceItinerary ? "Replace & Import Itinerary" : "Import Itinerary"}
               </button>
 
               {itineraryResult && (
