@@ -19,23 +19,39 @@ export async function POST(req: NextRequest) {
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const ext = safeName.split(".").pop()?.toLowerCase() ?? "bin";
+  const isPhoto = type === "photo";
 
-  const path = type === "photo"
+  // Cover photos → public 'itinerary-files' (rendered inline for everyone).
+  // Document attachments → PRIVATE 'itinerary-docs'. Private docs are only
+  // openable via a signed URL minted by /api/itinerary/file/[id] after a
+  // traveler-identity check, so pure viewers can't read the contents.
+  const bucket = isPhoto ? "itinerary-files" : "itinerary-docs";
+  const path = isPhoto
     ? `${itemId}/photo.${ext}`
     : `${itemId}/${Date.now()}-${safeName}`;
 
   const { error } = await serverDb().storage
-    .from("itinerary-files")
-    .upload(path, file, { upsert: type === "photo", contentType: file.type });
+    .from(bucket)
+    .upload(path, file, { upsert: isPhoto, contentType: file.type });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data: { publicUrl } } = serverDb().storage
-    .from("itinerary-files")
-    .getPublicUrl(path);
+  if (isPhoto) {
+    const { data: { publicUrl } } = serverDb().storage
+      .from(bucket)
+      .getPublicUrl(path);
+    return NextResponse.json({
+      url: `${publicUrl}?t=${Date.now()}`,
+      name: file.name,
+      mime_type: file.type,
+    });
+  }
 
+  // Private document — return the storage path (no public URL). The client
+  // saves it via /api/itinerary/files; reads go through the gated endpoint.
   return NextResponse.json({
-    url: type === "photo" ? `${publicUrl}?t=${Date.now()}` : publicUrl,
+    storage_path: path,
+    is_private: true,
     name: file.name,
     mime_type: file.type,
   });

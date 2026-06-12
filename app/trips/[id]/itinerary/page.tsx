@@ -9,12 +9,12 @@ import {
   Plane, Hotel, MapPin, Utensils, Train, Tag,
   ChevronDown, ChevronUp, Plus, Clock, ArrowLeft,
   Upload, Link2, FileText, ImageIcon, Trash2,
-  ExternalLink, X, Check, Pencil, File, FileImage,
+  ExternalLink, X, Check, Pencil, File, FileImage, Lock,
 } from "lucide-react";
 
 type Category = "flight" | "hotel" | "activity" | "food" | "transport" | "other";
 type ItineraryLink = { id: string; item_id: string; label: string | null; url: string };
-type ItineraryFile = { id: string; item_id: string; name: string; url: string; mime_type: string | null };
+type ItineraryFile = { id: string; item_id: string; name: string; url: string | null; mime_type: string | null; is_private?: boolean };
 type ItineraryItem = {
   id: string; trip_id: string; date: string; time: string | null; end_time: string | null;
   title: string; category: Category; notes: string | null; photo_url: string | null;
@@ -45,10 +45,17 @@ function groupByDay(items: ItineraryItem[]) {
 
 export default function ItineraryPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: tripSWR } = useSWR<{ name: string; start_date: string | null; my_role: string | null; error?: string }>(`/api/trips/${id}`, fetcher);
+  const { data: tripSWR } = useSWR<{ name: string; start_date: string | null; my_role: string | null; my_traveler_id?: string | null; error?: string }>(`/api/trips/${id}`, fetcher);
   const { data: itemsSWR, isLoading: itemsLoading, mutate: mutateItems } = useSWR<ItineraryItem[]>(`/api/itinerary?trip_id=${id}`, fetcher);
 
   const trip = tripSWR && !tripSWR.error ? { name: tripSWR.name, start_date: tripSWR.start_date, my_role: tripSWR.my_role } : null;
+  // Can the current user OPEN private documents? Allowed for travelers (have a
+  // traveler identity) and admins/editors. Blocked for pure viewers ("Just
+  // viewing", no traveler). Mirrors the server gate in /api/itinerary/file/[id].
+  const canOpenDocs = Boolean(
+    tripSWR && !tripSWR.error &&
+    (tripSWR.my_traveler_id || tripSWR.my_role === "admin" || tripSWR.my_role === "editor")
+  );
   const items: ItineraryItem[] = Array.isArray(itemsSWR) ? itemsSWR : [];
   const loading = itemsLoading;
 
@@ -269,7 +276,14 @@ export default function ItineraryPage() {
       const fileRes = await fetch("/api/itinerary/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: selectedItem.id, name: data.name, url: data.url, mime_type: data.mime_type }),
+        body: JSON.stringify({
+          item_id: selectedItem.id,
+          name: data.name,
+          url: data.url ?? null,
+          mime_type: data.mime_type,
+          storage_path: data.storage_path ?? null,
+          is_private: data.is_private ?? false,
+        }),
       });
       if (fileRes.ok) {
         const fileRecord = await fileRes.json();
@@ -652,16 +666,34 @@ export default function ItineraryPage() {
                       {selectedItem.files.map((file) => {
                         const isImg = file.mime_type?.startsWith("image/");
                         const isPdf = file.mime_type === "application/pdf";
+                        // Private docs are locked for pure viewers — they see the
+                        // name + a lock but can't open the contents.
+                        const locked = !!file.is_private && !canOpenDocs;
+                        // Private files open through the gated endpoint (signed URL
+                        // after a server-side check); public ones via their URL.
+                        const href = file.is_private ? `/api/itinerary/file/${file.id}` : file.url ?? "#";
+                        const Icon = isImg ? FileImage : isPdf ? FileText : File;
+                        const iconColor = isImg ? "text-blue-400" : isPdf ? "text-red-400" : "text-slate-400";
                         return (
                           <div key={file.id} className="flex items-center gap-2">
-                            <a href={file.url} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 bg-slate-900/60 hover:bg-slate-700/60 rounded-lg transition-colors group">
-                              {isImg ? <FileImage size={12} className="text-blue-400 flex-shrink-0" />
-                                : isPdf ? <FileText size={12} className="text-red-400 flex-shrink-0" />
-                                : <File size={12} className="text-slate-400 flex-shrink-0" />}
-                              <span className="text-xs text-white truncate">{file.name}</span>
-                              <ExternalLink size={10} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 ml-auto" />
-                            </a>
+                            {locked ? (
+                              <div
+                                title="Travelers only — viewers can't open trip documents"
+                                className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 bg-slate-900/40 rounded-lg cursor-not-allowed opacity-70"
+                              >
+                                <Lock size={12} className="text-slate-500 flex-shrink-0" />
+                                <span className="text-xs text-slate-400 truncate">{file.name}</span>
+                                <span className="text-[10px] text-slate-600 flex-shrink-0 ml-auto">Travelers only</span>
+                              </div>
+                            ) : (
+                              <a href={href} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 bg-slate-900/60 hover:bg-slate-700/60 rounded-lg transition-colors group">
+                                <Icon size={12} className={`${iconColor} flex-shrink-0`} />
+                                <span className="text-xs text-white truncate">{file.name}</span>
+                                {file.is_private && <Lock size={9} className="text-slate-500 flex-shrink-0" />}
+                                <ExternalLink size={10} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 ml-auto" />
+                              </a>
+                            )}
                             {!isViewer && (
                               <button onClick={() => removeFile(file.id)} className="p-1.5 text-slate-600 hover:text-red-400 transition-colors">
                                 <X size={12} />
