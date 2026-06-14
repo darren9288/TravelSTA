@@ -23,3 +23,7 @@ on conflict (id) do nothing;
 -- so this only affects newly-uploaded documents going forward.
 alter table itinerary_files add column if not exists storage_path text;
 alter table itinerary_files add column if not exists is_private boolean not null default false;
+
+-- Private files have no public URL (they're served via signed URLs), so the
+-- url column must allow NULL. Legacy public files still set url.
+alter table itinerary_files alter column url drop not null;
