@@ -88,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: wallets } = await db
     .from("wallets")
-    .select("id, name, traveler_id, travelers(name)")
+    .select("id, name, traveler_id, currency, travelers(name)")
     .eq("trip_id", params.id);
 
   // Fetch existing expenses for duplicate detection
@@ -101,10 +101,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     (travelers || []).map((t) => [t.name.toLowerCase(), t.id])
   );
 
-  const walletMap = new Map(
+  const walletMap = new Map<string, { id: string; currency: string }>(
     (wallets || []).map((w) => [
       `${(w.travelers as any)?.name?.toLowerCase()}-${w.name.toLowerCase()}`,
-      w.id,
+      { id: w.id, currency: ((w as any).currency as string) ?? "MYR" },
     ])
   );
 
@@ -136,8 +136,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       errors.push({ row: rowNum, field: "category", message: "Category is required" });
       continue;
     }
-    if (!txn.myr_amount || isNaN(txn.myr_amount)) {
-      errors.push({ row: rowNum, field: "myr_amount", message: "Valid MYR amount is required" });
+    if (txn.myr_amount == null || isNaN(Number(txn.myr_amount)) || Number(txn.myr_amount) <= 0) {
+      errors.push({ row: rowNum, field: "myr_amount", message: "MYR amount must be a positive number" });
       continue;
     }
 
@@ -167,12 +167,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let walletId: string | null = null;
     if (txn.wallet) {
       const walletKey = `${txn.paid_by.toLowerCase()}-${txn.wallet.toLowerCase()}`;
-      walletId = walletMap.get(walletKey) || null;
-      if (!walletId) {
+      const walletEntry = walletMap.get(walletKey);
+      walletId = walletEntry?.id ?? null;
+      if (!walletEntry) {
         errors.push({
           row: rowNum,
           field: "wallet",
           message: `Wallet "${txn.wallet}" not found for ${txn.paid_by}`,
+        });
+        continue;
+      }
+      // The transaction currency must match the wallet's currency — otherwise
+      // the wallet balance would deduct a JPY amount from a USD wallet (etc.)
+      // at the wrong rate and the books wouldn't reconcile.
+      if (walletEntry.currency !== currency) {
+        errors.push({
+          row: rowNum,
+          field: "currency",
+          message: `Currency "${currency}" doesn't match wallet "${txn.wallet}" (${walletEntry.currency}).`,
         });
         continue;
       }
@@ -213,6 +225,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (errors.some((e) => e.row === rowNum)) continue;
+
+    // If split amounts are explicitly provided, they must sum to myr_amount
+    // (within the JPY-rounding tolerance) — otherwise the unaccounted gap
+    // silently distorts the settlement math. Same guard as the expenses POST.
+    const explicit = splitParticipants.filter((sp) => sp.amount !== undefined);
+    if (explicit.length === splitParticipants.length && explicit.length > 0) {
+      const sum = explicit.reduce((s, sp) => s + (Number(sp.amount) || 0), 0);
+      if (Math.abs(sum - Number(txn.myr_amount)) > 0.05) {
+        errors.push({
+          row: rowNum,
+          field: "split_participants",
+          message: `Split amounts total RM ${sum.toFixed(2)} but the expense is RM ${Number(txn.myr_amount).toFixed(2)}.`,
+        });
+        continue;
+      }
+    }
 
     validTransactions.push({
       trip_id: params.id,
@@ -269,7 +297,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       traveler_id: sp.traveler_id,
       amount:
         sp.amount !== undefined
-          ? sp.amount
+          ? Math.round(Number(sp.amount) * 100) / 100
           : Math.round((txn.myr_amount / split_participants.length) * 100) / 100,
       is_settled: false,
     }));

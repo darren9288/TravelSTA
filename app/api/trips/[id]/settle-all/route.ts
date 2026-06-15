@@ -18,7 +18,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const denied = await requireEditor(tripId);
   if (denied) return denied;
   const body = await req.json().catch(() => ({}));
-  const walletSelections: Record<number, WalletSelection> = body.walletSelections ?? {};
+  // Keyed by `${from_traveler_id}|${to_traveler_id}` so each wallet choice
+  // binds to its specific transfer — NOT by array index, which could attach a
+  // wallet to the wrong payer if the recomputed instructions reordered/changed
+  // since the client built its selections.
+  const walletSelections: Record<string, WalletSelection> = body.walletSelections ?? {};
   const db = serverDb();
 
   // 1. Load full trip data to calculate current instructions
@@ -97,9 +101,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     await db.from("settlement_payments").insert(
-      instructions.map((inst, i) => {
-        const fromWalletId = walletSelections[i]?.from_wallet_id ?? null;
-        const toWalletId = walletSelections[i]?.to_wallet_id ?? null;
+      instructions.map((inst) => {
+        // Look up the wallet choice by the transfer's identity, not its index.
+        const sel = walletSelections[`${inst.from.id}|${inst.to.id}`];
+        const fromWalletId = sel?.from_wallet_id ?? null;
+        const toWalletId = sel?.to_wallet_id ?? null;
         return {
           trip_id: tripId,
           from_traveler_id: inst.from.id,

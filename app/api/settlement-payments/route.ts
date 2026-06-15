@@ -97,12 +97,19 @@ export async function DELETE(req: NextRequest) {
     const toExpenseIds = (toExpenses ?? []).map((e: { id: string }) => e.id);
 
     if (toExpenseIds.length > 0) {
+      // Only reverse splits this payment actually settled — i.e. those with NO
+      // wallet ids of their own. A split that was independently settled via the
+      // per-split Tick UI carries its own from_wallet_id/to_wallet_id and
+      // represents a separate cash movement; clearing it here would wipe a
+      // legitimate, unrelated settle and re-open a debt that was already paid.
       await db
         .from("expense_splits")
-        .update({ is_settled: false, from_wallet_id: null, to_wallet_id: null })
+        .update({ is_settled: false })
         .in("expense_id", toExpenseIds)
         .eq("traveler_id", payment.from_traveler_id)
-        .eq("is_settled", true);
+        .eq("is_settled", true)
+        .is("from_wallet_id", null)
+        .is("to_wallet_id", null);
     }
   }
 

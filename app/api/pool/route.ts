@@ -116,8 +116,40 @@ export async function PUT(req: NextRequest) {
   const { id, myr_amount, foreign_amount, date, notes } = await req.json();
   const tripId = await tripIdFrom("pool_topups", id);
   if (tripId) { const denied = await requireEditor(tripId); if (denied) return denied; }
-  const { data, error } = await serverDb().from("pool_topups")
-    .update({ myr_amount, foreign_amount: foreign_amount ?? null, date, notes: notes ?? null })
+  const db = serverDb();
+
+  // Recompute foreign_amount from myr_amount × rate when the top-up came from a
+  // FOREIGN source wallet. Otherwise editing only the MYR field (the UI's MYR
+  // input doesn't touch foreignAmount) leaves a stale foreign_amount that
+  // over/under-deducts the source wallet — the two values would imply
+  // different rates and the JPY books wouldn't reconcile.
+  let finalForeign: number | null = foreign_amount ?? null;
+  try {
+    const { data: row } = await db.from("pool_topups").select("from_wallet_id").eq("id", id).single();
+    const fromWalletId = (row as { from_wallet_id?: string | null } | null)?.from_wallet_id ?? null;
+    if (fromWalletId && tripId && myr_amount != null) {
+      const [{ data: w }, { data: trip }] = await Promise.all([
+        db.from("wallets").select("currency, name").eq("id", fromWalletId).single(),
+        db.from("trips").select("cash_rate, wise_rate, foreign_currency_2, cash_rate_2, wise_rate_2").eq("id", tripId).single(),
+      ]);
+      const wal = w as { currency?: string; name?: string } | null;
+      if (wal && wal.currency && wal.currency !== "MYR") {
+        const isWise = (wal.name ?? "").toLowerCase().includes("wise");
+        const t = trip as { cash_rate?: number; wise_rate?: number; foreign_currency_2?: string | null; cash_rate_2?: number; wise_rate_2?: number } | null;
+        const rate = (t?.foreign_currency_2 && wal.currency === t.foreign_currency_2)
+          ? (isWise ? t?.wise_rate_2 : t?.cash_rate_2)
+          : (isWise ? t?.wise_rate : t?.cash_rate);
+        finalForeign = parseFloat((Number(myr_amount) * Number(rate ?? 1)).toFixed(2));
+      } else {
+        finalForeign = null; // MYR source wallet → no foreign equivalent.
+      }
+    }
+  } catch {
+    // Fall back to the client-sent value if anything fails.
+  }
+
+  const { data, error } = await db.from("pool_topups")
+    .update({ myr_amount, foreign_amount: finalForeign, date, notes: notes ?? null })
     .eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

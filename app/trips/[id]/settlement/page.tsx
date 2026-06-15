@@ -27,7 +27,11 @@ export default function SettlementPage() {
   const [settling, setSettling] = useState(false);
   const [apiError, setApiError] = useState("");
   const [confirm, setConfirm] = useState(false);
-  const [walletSelections, setWalletSelections] = useState<Record<number, WalletSelection>>({});
+  // Keyed by `${from.id}|${to.id}` (NOT array index) so a wallet choice always
+  // travels with its specific payer→payee pair. The server recomputes
+  // instructions at confirm time; if they reordered/changed, an index-based
+  // map would attach a wallet to the wrong transfer.
+  const [walletSelections, setWalletSelections] = useState<Record<string, WalletSelection>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,7 +140,8 @@ export default function SettlementPage() {
                     {instructions.map((inst, i) => {
                       const fromWallets = wallets.filter((w) => w.traveler_id === inst.from.id);
                       const toWallets = wallets.filter((w) => w.traveler_id === inst.to.id);
-                      const selection = walletSelections[i] ?? { from_wallet_id: null, to_wallet_id: null };
+                      const selKey = `${inst.from.id}|${inst.to.id}`;
+                      const selection = walletSelections[selKey] ?? { from_wallet_id: null, to_wallet_id: null };
 
                       return (
                         <div key={i} className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3 flex flex-col gap-3">
@@ -161,7 +166,7 @@ export default function SettlementPage() {
                                 value={selection.from_wallet_id ?? ""}
                                 onChange={(e) => setWalletSelections({
                                   ...walletSelections,
-                                  [i]: { ...selection, from_wallet_id: e.target.value || null }
+                                  [selKey]: { ...selection, from_wallet_id: e.target.value || null }
                                 })}
                                 className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
                               >
@@ -179,7 +184,7 @@ export default function SettlementPage() {
                                 value={selection.to_wallet_id ?? ""}
                                 onChange={(e) => setWalletSelections({
                                   ...walletSelections,
-                                  [i]: { ...selection, to_wallet_id: e.target.value || null }
+                                  [selKey]: { ...selection, to_wallet_id: e.target.value || null }
                                 })}
                                 className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
                               >
