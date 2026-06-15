@@ -70,22 +70,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    // Fetch trip rates once for the conversion.
+    // Fetch trip rates once for the conversion (both foreign-currency pairs).
     const { data: trip } = await db
       .from("trips")
-      .select("cash_rate, wise_rate")
+      .select("cash_rate, wise_rate, foreign_currency_2, cash_rate_2, wise_rate_2")
       .eq("id", tripId)
       .single();
     const cashRate = Number(trip?.cash_rate ?? 1);
     const wiseRate = Number(trip?.wise_rate ?? 1);
+    const cashRate2 = Number(trip?.cash_rate_2 ?? 1);
+    const wiseRate2 = Number(trip?.wise_rate_2 ?? 1);
+    const foreignCurrency2 = trip?.foreign_currency_2 ?? null;
 
     // Foreign equivalent for a wallet: amount × wallet's rate. Returns null if
-    // the wallet is MYR or unknown (no conversion needed).
+    // the wallet is MYR or unknown (no conversion needed). Uses the second
+    // currency's rate pair when the wallet is in foreign_currency_2.
     function foreignFor(walletId: string | null, amountMyr: number): number | null {
       if (!walletId) return null;
       const w = walletMap[walletId];
       if (!w || w.currency === "MYR") return null;
-      const rate = w.name.toLowerCase().includes("wise") ? wiseRate : cashRate;
+      const isWise = w.name.toLowerCase().includes("wise");
+      const rate = (foreignCurrency2 && w.currency === foreignCurrency2)
+        ? (isWise ? wiseRate2 : cashRate2)
+        : (isWise ? wiseRate : cashRate);
       return parseFloat((amountMyr * rate).toFixed(2));
     }
 

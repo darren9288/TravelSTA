@@ -20,8 +20,14 @@ export async function GET(req: NextRequest) {
   const walletIds = (wallets ?? []).map((w) => w.id);
   if (!walletIds.length) return NextResponse.json({ wallets: [], balances: {} });
 
-  // Fetch trip for exchange rates (needed for foreign currency settlement conversion)
-  const { data: tripData } = await db.from("trips").select("cash_rate, wise_rate, foreign_currency").eq("id", trip_id).single();
+  // Fetch trip for exchange rates (needed for foreign currency settlement conversion).
+  // Includes the SECOND foreign currency's rates so wallets in that currency
+  // convert correctly instead of using the first currency's rate.
+  const { data: tripData } = await db
+    .from("trips")
+    .select("cash_rate, wise_rate, foreign_currency, cash_rate_2, wise_rate_2, foreign_currency_2")
+    .eq("id", trip_id)
+    .single();
 
   // Fetch top-ups, expenses, pool topups, net settlement payments, AND any
   // expense_splits that were manually settled with wallet picks. The split
@@ -44,7 +50,13 @@ export async function GET(req: NextRequest) {
   function getRate(walletId: string): number {
     const w = walletMap[walletId];
     if (!w || w.currency === "MYR") return 1;
-    return w.name.includes("wise") ? (tripData?.wise_rate ?? 1) : (tripData?.cash_rate ?? 1);
+    const isWise = w.name.includes("wise");
+    // Pick the correct rate pair for the wallet's currency. A wallet in the
+    // trip's SECOND foreign currency must use cash_rate_2/wise_rate_2.
+    if (tripData?.foreign_currency_2 && w.currency === tripData.foreign_currency_2) {
+      return isWise ? (tripData?.wise_rate_2 ?? 1) : (tripData?.cash_rate_2 ?? 1);
+    }
+    return isWise ? (tripData?.wise_rate ?? 1) : (tripData?.cash_rate ?? 1);
   }
 
   const balances: Record<string, number> = {};
@@ -55,13 +67,20 @@ export async function GET(req: NextRequest) {
   for (const e of expenses ?? []) {
     if (!e.wallet_id) continue;
     const currency = walletMap[e.wallet_id]?.currency;
-    const deduct = currency === "MYR" ? Number(e.myr_amount) : Number(e.foreign_amount ?? 0);
+    // Foreign wallet with no foreign_amount → convert from MYR at the wallet's
+    // rate (mirrors wallet-history). Previously fell back to 0, silently
+    // dropping the spend and overstating the wallet balance.
+    const deduct = currency === "MYR"
+      ? Number(e.myr_amount)
+      : (e.foreign_amount != null ? Number(e.foreign_amount) : Number(e.myr_amount) * getRate(e.wallet_id));
     balances[e.wallet_id] = (balances[e.wallet_id] ?? 0) - deduct;
   }
   for (const p of poolTopups ?? []) {
     if (!p.from_wallet_id) continue;
     const currency = walletMap[p.from_wallet_id]?.currency;
-    const deduct = currency === "MYR" ? Number(p.myr_amount) : Number(p.foreign_amount ?? 0);
+    const deduct = currency === "MYR"
+      ? Number(p.myr_amount)
+      : (p.foreign_amount != null ? Number(p.foreign_amount) : Number(p.myr_amount) * getRate(p.from_wallet_id));
     balances[p.from_wallet_id] = (balances[p.from_wallet_id] ?? 0) - deduct;
   }
   // Settlements paid OUT from wallet (deduct). Use the frozen foreign amount

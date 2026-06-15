@@ -26,11 +26,19 @@ export async function GET(req: NextRequest) {
   const { data: wallet } = await db.from("wallets").select("currency, name").eq("id", wallet_id).single();
   if (!wallet) return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
 
-  const { data: trip } = await db.from("trips").select("cash_rate, wise_rate, foreign_currency").eq("id", trip_id).single();
+  const { data: trip } = await db
+    .from("trips")
+    .select("cash_rate, wise_rate, foreign_currency, cash_rate_2, wise_rate_2, foreign_currency_2")
+    .eq("id", trip_id)
+    .single();
   const isForeign = wallet.currency !== "MYR";
-  const rate = isForeign
-    ? (wallet.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1))
-    : 1;
+  const isWise = wallet.name.toLowerCase().includes("wise");
+  // Use the SECOND currency's rate pair when this wallet is in foreign_currency_2.
+  const rate = !isForeign
+    ? 1
+    : (trip?.foreign_currency_2 && wallet.currency === trip.foreign_currency_2)
+      ? (isWise ? (trip?.wise_rate_2 ?? 1) : (trip?.cash_rate_2 ?? 1))
+      : (isWise ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1));
 
   const [{ data: topups }, { data: expenses }, { data: settlementsOut }, { data: settlementsIn }, { data: travelers }, { data: poolTopups }, { data: splitsOut }, { data: splitsIn }] = await Promise.all([
     db.from("wallet_topups").select("id, amount, date, notes, created_at").eq("wallet_id", wallet_id).order("date"),

@@ -190,11 +190,59 @@ export async function PUT(req: NextRequest) {
   }
 
   if (splits) {
+    // Preserve settled/locked state across the delete+reinsert. Previously this
+    // blindly reset every split to is_settled=false, which silently RE-OPENED
+    // already-settled debts (and dropped locked/lock_source/wallet ids) whenever
+    // anyone edited an expense — even just its note — desyncing the settlement.
+    const { data: existingSplits } = await supabase
+      .from("expense_splits")
+      .select("traveler_id, amount, is_settled, locked, lock_source, from_wallet_id, to_wallet_id")
+      .eq("expense_id", id);
+    const prevByTraveler = new Map(
+      (existingSplits ?? []).map((s: { traveler_id: string } & Record<string, unknown>) => [s.traveler_id, s])
+    );
+
+    // Guard: refuse to change a split that was locked by Settle All. Editing it
+    // would desync the recorded settlement_payments. (Note-only edits keep the
+    // same amount and are allowed — they're preserved unchanged below.)
+    const incomingByTraveler = new Map(
+      (splits as { traveler_id: string; amount: number }[]).map((s) => [s.traveler_id, s])
+    );
+    const wouldBreakSettleAll = (existingSplits ?? []).some((s: Record<string, unknown>) => {
+      if (!(s.locked && s.lock_source === "settle_all")) return false;
+      const inc = incomingByTraveler.get(s.traveler_id as string);
+      return !inc || Math.abs(Number(inc.amount) - Number(s.amount)) >= 0.005;
+    });
+    if (wouldBreakSettleAll) {
+      return NextResponse.json(
+        { error: "This expense is part of a completed Settle All. Editing its split amounts would break the settlement — un-settle it from the Settlement page first." },
+        { status: 409 }
+      );
+    }
+
     await supabase.from("expense_splits").delete().eq("expense_id", id);
     await supabase.from("expense_splits").insert(
-      splits.map((s: { traveler_id: string; amount: number }) => ({
-        expense_id: id, traveler_id: s.traveler_id, amount: s.amount, is_settled: false,
-      }))
+      (splits as { traveler_id: string; amount: number }[]).map((s) => {
+        const prev = prevByTraveler.get(s.traveler_id) as
+          | { amount: number; is_settled: boolean; locked: boolean | null; lock_source: string | null; from_wallet_id: string | null; to_wallet_id: string | null }
+          | undefined;
+        const unchanged = prev && Math.abs(Number(prev.amount) - Number(s.amount)) < 0.005;
+        if (prev && unchanged) {
+          // Same traveler, same share → carry over its full settled/locked state.
+          return {
+            expense_id: id,
+            traveler_id: s.traveler_id,
+            amount: s.amount,
+            is_settled: prev.is_settled,
+            locked: prev.locked ?? false,
+            lock_source: prev.lock_source ?? null,
+            from_wallet_id: prev.from_wallet_id ?? null,
+            to_wallet_id: prev.to_wallet_id ?? null,
+          };
+        }
+        // New traveler or changed share → genuinely needs re-settling.
+        return { expense_id: id, traveler_id: s.traveler_id, amount: s.amount, is_settled: false };
+      })
     );
   }
 
