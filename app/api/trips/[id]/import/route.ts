@@ -246,9 +246,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       trip_id: params.id,
       date: txn.date,
       category: txn.category,
-      currency: txn.currency || "MYR",
+      currency,
       myr_amount: txn.myr_amount,
-      foreign_amount: txn.amount || txn.foreign_amount || null,
+      // Only carry a foreign_amount for non-MYR rows. An MYR expense must have
+      // null foreign_amount — otherwise an export→re-import round-trip (which
+      // can put myr_amount into `amount`) would stamp foreign_amount = myr.
+      foreign_amount: currency !== "MYR" ? (txn.amount || txn.foreign_amount || null) : null,
       paid_by_id: paidByTravelerId,
       payment_type: txn.payment_type,
       wallet_id: walletId,
