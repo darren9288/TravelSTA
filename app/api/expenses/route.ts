@@ -223,13 +223,29 @@ export async function PUT(req: NextRequest) {
     // blindly reset every split to is_settled=false, which silently RE-OPENED
     // already-settled debts (and dropped locked/lock_source/wallet ids) whenever
     // anyone edited an expense — even just its note — desyncing the settlement.
-    const { data: existingSplits } = await supabase
+    //
+    // Defensive about optional columns: lock_source (025) and the frozen
+    // foreign amounts (027) may be absent on an un-migrated DB. We read + write
+    // them via a "rich → minimal" fallback so a missing column can never cause
+    // a delete-then-failed-insert (which would permanently lose all splits).
+    type PrevSplit = {
+      traveler_id: string; amount: number; is_settled: boolean;
+      locked?: boolean | null; lock_source?: string | null;
+      from_wallet_id?: string | null; to_wallet_id?: string | null;
+      from_foreign_amount?: number | null; to_foreign_amount?: number | null;
+    };
+    let existingSplits = (await supabase
       .from("expense_splits")
-      .select("traveler_id, amount, is_settled, locked, lock_source, from_wallet_id, to_wallet_id")
-      .eq("expense_id", id);
-    const prevByTraveler = new Map(
-      (existingSplits ?? []).map((s: { traveler_id: string } & Record<string, unknown>) => [s.traveler_id, s])
-    );
+      .select("traveler_id, amount, is_settled, locked, lock_source, from_wallet_id, to_wallet_id, from_foreign_amount, to_foreign_amount")
+      .eq("expense_id", id)).data as PrevSplit[] | null;
+    if (!existingSplits) {
+      // Optional column(s) missing — fall back to always-present columns.
+      existingSplits = (await supabase
+        .from("expense_splits")
+        .select("traveler_id, amount, is_settled, from_wallet_id, to_wallet_id")
+        .eq("expense_id", id)).data as PrevSplit[] | null;
+    }
+    const prevByTraveler = new Map((existingSplits ?? []).map((s) => [s.traveler_id, s]));
 
     // Guard: refuse to change a split that was locked by Settle All. Editing it
     // would desync the recorded settlement_payments. (Note-only edits keep the
@@ -237,9 +253,9 @@ export async function PUT(req: NextRequest) {
     const incomingByTraveler = new Map(
       (splits as { traveler_id: string; amount: number }[]).map((s) => [s.traveler_id, s])
     );
-    const wouldBreakSettleAll = (existingSplits ?? []).some((s: Record<string, unknown>) => {
+    const wouldBreakSettleAll = (existingSplits ?? []).some((s) => {
       if (!(s.locked && s.lock_source === "settle_all")) return false;
-      const inc = incomingByTraveler.get(s.traveler_id as string);
+      const inc = incomingByTraveler.get(s.traveler_id);
       return !inc || Math.abs(Number(inc.amount) - Number(s.amount)) >= 0.005;
     });
     if (wouldBreakSettleAll) {
@@ -249,30 +265,44 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    await supabase.from("expense_splits").delete().eq("expense_id", id);
-    await supabase.from("expense_splits").insert(
-      (splits as { traveler_id: string; amount: number }[]).map((s) => {
-        const prev = prevByTraveler.get(s.traveler_id) as
-          | { amount: number; is_settled: boolean; locked: boolean | null; lock_source: string | null; from_wallet_id: string | null; to_wallet_id: string | null }
-          | undefined;
-        const unchanged = prev && Math.abs(Number(prev.amount) - Number(s.amount)) < 0.005;
-        if (prev && unchanged) {
-          // Same traveler, same share → carry over its full settled/locked state.
-          return {
-            expense_id: id,
-            traveler_id: s.traveler_id,
-            amount: round2(s.amount),
-            is_settled: prev.is_settled,
-            locked: prev.locked ?? false,
-            lock_source: prev.lock_source ?? null,
-            from_wallet_id: prev.from_wallet_id ?? null,
-            to_wallet_id: prev.to_wallet_id ?? null,
-          };
+    // Build a row, optionally including the columns that may not exist yet.
+    function buildRow(s: { traveler_id: string; amount: number }, withOptional: boolean): Record<string, unknown> {
+      const prev = prevByTraveler.get(s.traveler_id);
+      const unchanged = prev && Math.abs(Number(prev.amount) - Number(s.amount)) < 0.005;
+      const row: Record<string, unknown> = {
+        expense_id: id,
+        traveler_id: s.traveler_id,
+        amount: round2(s.amount),
+        is_settled: prev && unchanged ? prev.is_settled : false,
+      };
+      if (prev && unchanged) {
+        // Carry over wallet links (always-present columns since migration 005).
+        row.from_wallet_id = prev.from_wallet_id ?? null;
+        row.to_wallet_id = prev.to_wallet_id ?? null;
+        if (withOptional) {
+          // Optional columns (025 / 027) — only included in the rich attempt.
+          row.locked = prev.locked ?? false;
+          row.lock_source = prev.lock_source ?? null;
+          row.from_foreign_amount = prev.from_foreign_amount ?? null;
+          row.to_foreign_amount = prev.to_foreign_amount ?? null;
         }
-        // New traveler or changed share → genuinely needs re-settling.
-        return { expense_id: id, traveler_id: s.traveler_id, amount: round2(s.amount), is_settled: false };
-      })
-    );
+      }
+      return row;
+    }
+
+    await supabase.from("expense_splits").delete().eq("expense_id", id);
+    // Try the rich insert (preserves locked/lock_source/frozen amounts). If a
+    // column is missing, retry with only always-present columns so the splits
+    // are never left deleted-without-reinsert.
+    let insErr = (await supabase.from("expense_splits").insert(
+      (splits as { traveler_id: string; amount: number }[]).map((s) => buildRow(s, true))
+    )).error;
+    if (insErr) {
+      insErr = (await supabase.from("expense_splits").insert(
+        (splits as { traveler_id: string; amount: number }[]).map((s) => buildRow(s, false))
+      )).error;
+    }
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
 
   // Re-run anomaly detection on edit — covers cases like fixing splits or
