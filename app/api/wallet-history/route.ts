@@ -48,9 +48,9 @@ export async function GET(req: NextRequest) {
     db.from("travelers").select("id, name").eq("trip_id", trip_id),
     db.from("pool_topups").select("id, myr_amount, foreign_amount, date, notes, created_at, pool:travelers!pool_id(name)").eq("from_wallet_id", wallet_id).order("date"),
     // Per-split manual settles paid OUT of this wallet (one-off Tick UI, not Settle All).
-    db.from("expense_splits").select("id, amount, traveler_id, expense_id, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("from_wallet_id", wallet_id),
+    db.from("expense_splits").select("id, amount, traveler_id, expense_id, from_foreign_amount, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("from_wallet_id", wallet_id),
     // Per-split manual settles received INTO this wallet (we're the payer being paid back).
-    db.from("expense_splits").select("id, amount, traveler_id, expense_id, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("to_wallet_id", wallet_id),
+    db.from("expense_splits").select("id, amount, traveler_id, expense_id, to_foreign_amount, expense:expenses(date, category, paid_by_id, created_at)").eq("is_settled", true).eq("to_wallet_id", wallet_id),
   ]);
 
   const travelerMap: Record<string, string> = {};
@@ -97,10 +97,11 @@ export async function GET(req: NextRequest) {
   }
   // Per-split manual settles paid OUT (we owed someone for an expense and the
   // split was ticked with this wallet as the source). amount is MYR — convert.
-  type SplitRow = { id: string; amount: number; traveler_id: string; expense_id: string; expense?: { date?: string; category?: string; paid_by_id?: string; created_at?: string } };
+  type SplitRow = { id: string; amount: number; traveler_id: string; expense_id: string; from_foreign_amount?: number | null; to_foreign_amount?: number | null; expense?: { date?: string; category?: string; paid_by_id?: string; created_at?: string } };
   for (const sp of (splitsOut ?? []) as SplitRow[]) {
     const amtMyr = Number(sp.amount);
-    const amt = isForeign ? amtMyr * rate : amtMyr;
+    // Prefer the frozen foreign amount (rate-at-settle-time); fall back to live rate.
+    const amt = !isForeign ? amtMyr : (sp.from_foreign_amount != null ? Number(sp.from_foreign_amount) : amtMyr * rate);
     const exp = sp.expense ?? {};
     const date = exp.date ?? new Date().toISOString().slice(0, 10);
     const created_at = exp.created_at ?? date + "T00:00:00.000Z";
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest) {
   // ticked their split with our wallet as the recipient).
   for (const sp of (splitsIn ?? []) as SplitRow[]) {
     const amtMyr = Number(sp.amount);
-    const amt = isForeign ? amtMyr * rate : amtMyr;
+    const amt = !isForeign ? amtMyr : (sp.to_foreign_amount != null ? Number(sp.to_foreign_amount) : amtMyr * rate);
     const exp = sp.expense ?? {};
     const date = exp.date ?? new Date().toISOString().slice(0, 10);
     const created_at = exp.created_at ?? date + "T00:00:00.000Z";

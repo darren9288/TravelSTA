@@ -91,10 +91,42 @@ export async function PUT(req: NextRequest) {
     );
   }
 
+  let fromW: string | null = from_wallet_id ?? null;
+  let toW: string | null = to_wallet_id ?? null;
+
+  // Pool guard: never attach wallet ids when this split belongs to a
+  // pool-paid expense. The member already funded the pool, so charging their
+  // wallet again for a pool-paid expense would double-debit them.
+  if (is_settled && (fromW || toW)) {
+    const { data: splitRow } = await db
+      .from("expense_splits")
+      .select("amount, expense_id")
+      .eq("id", id)
+      .single();
+    if (splitRow?.expense_id) {
+      const { data: exp } = await db
+        .from("expenses")
+        .select("paid_by_id")
+        .eq("id", splitRow.expense_id)
+        .single();
+      if (exp?.paid_by_id) {
+        const { data: payer } = await db
+          .from("travelers")
+          .select("is_pool")
+          .eq("id", exp.paid_by_id)
+          .single();
+        if ((payer as { is_pool?: boolean } | null)?.is_pool) {
+          fromW = null;
+          toW = null;
+        }
+      }
+    }
+  }
+
   const update: Record<string, unknown> = { is_settled };
   if (is_settled) {
-    update.from_wallet_id = from_wallet_id ?? null;
-    update.to_wallet_id = to_wallet_id ?? null;
+    update.from_wallet_id = fromW;
+    update.to_wallet_id = toW;
   } else {
     // Unsettling — clear wallet links
     update.from_wallet_id = null;
@@ -107,6 +139,41 @@ export async function PUT(req: NextRequest) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Freeze the foreign-currency equivalent at settle time so a later rate
+  // change can't retroactively rewrite this settle's JPY in wallet history.
+  // Best-effort + isolated: if migration 027 hasn't run yet the columns are
+  // missing and this silently no-ops (settling itself already succeeded above).
+  try {
+    if (is_settled && (fromW || toW)) {
+      const amtMyr = Number((data as { amount?: number } | null)?.amount ?? 0);
+      const wids = [fromW, toW].filter(Boolean) as string[];
+      const [{ data: ws }, { data: trip }] = await Promise.all([
+        db.from("wallets").select("id, currency, name").in("id", wids),
+        db.from("trips").select("cash_rate, wise_rate, foreign_currency_2, cash_rate_2, wise_rate_2").eq("id", tripId ?? "").single(),
+      ]);
+      const freeze = (wid: string | null): number | null => {
+        if (!wid) return null;
+        const w = (ws ?? []).find((x: { id: string }) => x.id === wid) as { currency?: string; name?: string } | undefined;
+        if (!w || w.currency === "MYR") return null;
+        const isWise = (w.name ?? "").toLowerCase().includes("wise");
+        const t = trip as { cash_rate?: number; wise_rate?: number; foreign_currency_2?: string | null; cash_rate_2?: number; wise_rate_2?: number } | null;
+        const rate = (t?.foreign_currency_2 && w.currency === t.foreign_currency_2)
+          ? (isWise ? t?.wise_rate_2 : t?.cash_rate_2)
+          : (isWise ? t?.wise_rate : t?.cash_rate);
+        return parseFloat((amtMyr * Number(rate ?? 1)).toFixed(2));
+      };
+      await db
+        .from("expense_splits")
+        .update({ from_foreign_amount: freeze(fromW), to_foreign_amount: freeze(toW) })
+        .eq("id", id);
+    } else if (!is_settled) {
+      // Clear frozen values on un-settle too (best-effort).
+      await db.from("expense_splits").update({ from_foreign_amount: null, to_foreign_amount: null }).eq("id", id);
+    }
+  } catch {
+    // columns may not exist yet (migration 027) — settling already succeeded.
+  }
 
   {
     const meUser = await getSessionUser();

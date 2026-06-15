@@ -34,15 +34,21 @@ export async function GET(req: NextRequest) {
   // path is separate from Settle All (which writes settlement_payments and
   // leaves split wallet ids null) — manual per-split settles store wallet
   // ids directly on the split row, so balance needs to read both sources.
-  const [{ data: topups }, { data: expenses }, { data: poolTopups }, { data: settledFrom }, { data: settledTo }, { data: splitsFrom }, { data: splitsTo }] = await Promise.all([
+  const [{ data: topups }, { data: expenses }, { data: poolTopups }, { data: settledFrom }, { data: settledTo }] = await Promise.all([
     db.from("wallet_topups").select("wallet_id, amount").in("wallet_id", walletIds),
     db.from("expenses").select("wallet_id, myr_amount, foreign_amount").in("wallet_id", walletIds),
     db.from("pool_topups").select("from_wallet_id, myr_amount, foreign_amount").in("from_wallet_id", walletIds),
     db.from("settlement_payments").select("from_wallet_id, amount, from_foreign_amount").in("from_wallet_id", walletIds),
     db.from("settlement_payments").select("to_wallet_id, amount, to_foreign_amount").in("to_wallet_id", walletIds),
-    db.from("expense_splits").select("from_wallet_id, amount").eq("is_settled", true).in("from_wallet_id", walletIds),
-    db.from("expense_splits").select("to_wallet_id, amount").eq("is_settled", true).in("to_wallet_id", walletIds),
   ]);
+
+  // Per-split manual settles. Prefer the frozen foreign amount (migration 027);
+  // fall back to a select without those columns if the migration hasn't run yet
+  // (so the wallet balance never breaks during the deploy→migrate window).
+  let splitsFrom = (await db.from("expense_splits").select("from_wallet_id, amount, from_foreign_amount").eq("is_settled", true).in("from_wallet_id", walletIds)).data as ({ from_wallet_id: string; amount: number; from_foreign_amount?: number | null }[]) | null;
+  if (!splitsFrom) splitsFrom = (await db.from("expense_splits").select("from_wallet_id, amount").eq("is_settled", true).in("from_wallet_id", walletIds)).data as ({ from_wallet_id: string; amount: number }[]) | null;
+  let splitsTo = (await db.from("expense_splits").select("to_wallet_id, amount, to_foreign_amount").eq("is_settled", true).in("to_wallet_id", walletIds)).data as ({ to_wallet_id: string; amount: number; to_foreign_amount?: number | null }[]) | null;
+  if (!splitsTo) splitsTo = (await db.from("expense_splits").select("to_wallet_id, amount").eq("is_settled", true).in("to_wallet_id", walletIds)).data as ({ to_wallet_id: string; amount: number }[]) | null;
 
   // Build wallet metadata map
   const walletMap = Object.fromEntries((wallets ?? []).map((w) => [w.id, { currency: w.currency, name: w.name.toLowerCase() }]));
@@ -112,19 +118,24 @@ export async function GET(req: NextRequest) {
     }
     balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + add;
   }
-  // Per-split manual settlements paid OUT of a wallet. amount on the split
-  // is in MYR; convert to wallet currency if the wallet is foreign.
-  for (const s of (splitsFrom ?? []) as { from_wallet_id: string; amount: number }[]) {
+  // Per-split manual settlements paid OUT of a wallet. amount is MYR; for a
+  // foreign wallet prefer the frozen from_foreign_amount (rate-at-settle-time),
+  // falling back to a live-rate conversion for legacy rows.
+  for (const s of (splitsFrom ?? []) as { from_wallet_id: string; amount: number; from_foreign_amount?: number | null }[]) {
     if (!s.from_wallet_id) continue;
     const isForeign = walletMap[s.from_wallet_id]?.currency !== "MYR";
-    const deduct = isForeign ? Number(s.amount) * getRate(s.from_wallet_id) : Number(s.amount);
+    const deduct = !isForeign
+      ? Number(s.amount)
+      : (s.from_foreign_amount != null ? Number(s.from_foreign_amount) : Number(s.amount) * getRate(s.from_wallet_id));
     balances[s.from_wallet_id] = (balances[s.from_wallet_id] ?? 0) - deduct;
   }
   // Per-split manual settlements received INTO a wallet.
-  for (const s of (splitsTo ?? []) as { to_wallet_id: string; amount: number }[]) {
+  for (const s of (splitsTo ?? []) as { to_wallet_id: string; amount: number; to_foreign_amount?: number | null }[]) {
     if (!s.to_wallet_id) continue;
     const isForeign = walletMap[s.to_wallet_id]?.currency !== "MYR";
-    const add = isForeign ? Number(s.amount) * getRate(s.to_wallet_id) : Number(s.amount);
+    const add = !isForeign
+      ? Number(s.amount)
+      : (s.to_foreign_amount != null ? Number(s.to_foreign_amount) : Number(s.amount) * getRate(s.to_wallet_id));
     balances[s.to_wallet_id] = (balances[s.to_wallet_id] ?? 0) + add;
   }
 

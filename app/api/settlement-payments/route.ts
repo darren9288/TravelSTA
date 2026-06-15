@@ -42,6 +42,11 @@ export async function POST(req: NextRequest) {
   // 2. Also mark the payer's (from) splits on the receiver's (to) expenses as settled.
   //    This keeps the expense tab in sync — "Cristo paid Darren" settles Cristo's splits
   //    on all of Darren's expenses.
+  //    IMPORTANT: do NOT stamp wallet ids on the splits here. The wallet movement
+  //    is already recorded in the settlement_payments row above; the wallet-balance
+  //    route sums BOTH settlement_payments AND splits-with-wallet-ids, so writing
+  //    wallet ids here too would double-count the transfer (mirrors Settle All,
+  //    which also leaves split wallet ids null).
   const { data: toExpenses } = await db
     .from("expenses")
     .select("id")
@@ -53,11 +58,7 @@ export async function POST(req: NextRequest) {
   if (toExpenseIds.length > 0) {
     await db
       .from("expense_splits")
-      .update({
-        is_settled: true,
-        from_wallet_id: from_wallet_id ?? null,
-        to_wallet_id: to_wallet_id ?? null,
-      })
+      .update({ is_settled: true })
       .in("expense_id", toExpenseIds)
       .eq("traveler_id", from_traveler_id)
       .eq("is_settled", false);

@@ -51,11 +51,34 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(result);
 }
 
+// Server-side guard: split amounts must sum to the expense total (within the
+// JPY-rounding tolerance). Protects the settlement math from a malformed/
+// tampered/offline-replayed body that bypasses the client-side check.
+function validateSplitsSum(splits: { amount: number }[] | undefined, myrAmount: number): string | null {
+  if (!splits?.length) return null;
+  const sum = splits.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  if (Math.abs(sum - Number(myrAmount)) > 0.05) {
+    return `Splits total RM ${sum.toFixed(2)} must equal the expense total RM ${Number(myrAmount).toFixed(2)}.`;
+  }
+  return null;
+}
+
+// Round a split amount to 2dp so sub-cent values can never persist (they cause
+// 1-cent drift in the greedy settlement transfers).
+function round2(n: number): number {
+  return Math.round(Number(n) * 100) / 100;
+}
+
 export async function POST(req: NextRequest) {
   const supabase = serverDb();
   const body = await req.json();
   const denied = await requireEditor(body.trip_id);
   if (denied) return denied;
+
+  // Validate BEFORE inserting the expense so a bad payload can't leave an
+  // orphaned expense with mismatched splits.
+  const sumErr = validateSplitsSum(body.splits, body.myr_amount);
+  if (sumErr) return NextResponse.json({ error: sumErr }, { status: 400 });
 
   const { data: expense, error: expErr } = await supabase.from("expenses").insert({
     trip_id: body.trip_id,
@@ -96,7 +119,7 @@ export async function POST(req: NextRequest) {
       body.splits.map((s: { traveler_id: string; amount: number }) => ({
         expense_id: expense.id,
         traveler_id: s.traveler_id,
-        amount: s.amount,
+        amount: round2(s.amount),
         is_settled: false,
       }))
     );
@@ -175,6 +198,12 @@ export async function PUT(req: NextRequest) {
   const { id, splits, ...updates } = body;
   if (body.trip_id) { const denied = await requireEditor(body.trip_id); if (denied) return denied; }
 
+  // Validate split sum against the (possibly updated) total before touching anything.
+  if (splits && body.myr_amount != null) {
+    const sumErr = validateSplitsSum(splits, body.myr_amount);
+    if (sumErr) return NextResponse.json({ error: sumErr }, { status: 400 });
+  }
+
   const { data, error } = await supabase.from("expenses").update(updates).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -232,7 +261,7 @@ export async function PUT(req: NextRequest) {
           return {
             expense_id: id,
             traveler_id: s.traveler_id,
-            amount: s.amount,
+            amount: round2(s.amount),
             is_settled: prev.is_settled,
             locked: prev.locked ?? false,
             lock_source: prev.lock_source ?? null,
@@ -241,7 +270,7 @@ export async function PUT(req: NextRequest) {
           };
         }
         // New traveler or changed share → genuinely needs re-settling.
-        return { expense_id: id, traveler_id: s.traveler_id, amount: s.amount, is_settled: false };
+        return { expense_id: id, traveler_id: s.traveler_id, amount: round2(s.amount), is_settled: false };
       })
     );
   }
@@ -280,6 +309,28 @@ export async function DELETE(req: NextRequest) {
   // Look up expense info for role check + push notification
   const { data: exp } = await supabase.from("expenses").select("trip_id, myr_amount, category, notes, paid_by_id").eq("id", id).single();
   if (exp?.trip_id) { const denied = await requireEditor(exp.trip_id); if (denied) return denied; }
+
+  // Block deleting an expense that was settled via Settle All. Its debts are
+  // recorded in settlement_payments (which reference travelers, not the
+  // expense), so deleting the expense would leave dangling settlement history
+  // and skew wallet balances. The user must un-settle it from the Settlement
+  // page first. (Per-split manual settles cascade-delete cleanly, so those are
+  // fine — only settle_all locks are blocked.)
+  {
+    const { data: lockedSplit } = await supabase
+      .from("expense_splits")
+      .select("id")
+      .eq("expense_id", id)
+      .eq("lock_source", "settle_all")
+      .limit(1);
+    if (lockedSplit && lockedSplit.length > 0) {
+      return NextResponse.json(
+        { error: "This expense was settled via Settle All. Un-settle it from the Settlement page before deleting." },
+        { status: 409 }
+      );
+    }
+  }
+
   // Delete receipt photo from storage if it exists
   const { data: files } = await supabase.storage.from("expense-receipts").list(id);
   if (files?.length) {
