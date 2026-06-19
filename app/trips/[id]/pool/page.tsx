@@ -64,6 +64,52 @@ export default function PoolPage() {
   const [newPoolCurrency, setNewPoolCurrency] = useState("MYR");
   const [creatingPool, setCreatingPool] = useState(false);
 
+  // Manual balance adjustment (enter an amount directly in the pool's own
+  // currency, e.g. JPY). Pools are normally funded by contributions in the
+  // CONTRIBUTOR's wallet currency, so there's otherwise no way to put a JPY
+  // amount straight into a JPY pool. Recorded as a pool_topup attributed to
+  // the pool itself, via the existing /api/pool endpoint.
+  const [adjustPoolId, setAdjustPoolId] = useState<string | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
+
+  async function handleAdjust(pool: Traveler) {
+    const amt = parseFloat(adjustAmount);
+    if (!amt || isNaN(amt)) return;
+    setAdjusting(true);
+    const isForeign = pool.pool_currency !== "MYR";
+    const rate = rateForWallet({ name: pool.name, currency: pool.pool_currency ?? "MYR" });
+    // amt is in the pool's own currency. Convert to MYR for the myr side so
+    // both balances stay consistent (foreign = amt drives the JPY balance).
+    const myr = isForeign ? amt / rate : amt;
+    const foreign = isForeign ? amt : null;
+    try {
+      const res = await fetch("/api/pool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: id,
+          pool_id: pool.id,
+          contributed_by_id: pool.id, // adjustment attributed to the pool itself
+          myr_amount: parseFloat(myr.toFixed(2)),
+          foreign_amount: foreign,
+          date: new Date().toISOString().slice(0, 10),
+          notes: adjustNote.trim() ? `Adjustment: ${adjustNote.trim()}` : "Balance adjustment",
+          from_wallet_id: null, // no wallet deducted — manual correction
+        }),
+      });
+      if (res.ok) {
+        setAdjustPoolId(null);
+        setAdjustAmount("");
+        setAdjustNote("");
+        mutatePool();
+      }
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
   const load = useCallback(() => {
     mutatePool();
   }, [mutatePool]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -594,6 +640,19 @@ export default function PoolPage() {
                         )}
                         <p className="text-xs text-slate-600">remaining</p>
                       </div>
+                      {trip?.my_role !== "viewer" && !p.archived && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAdjustPoolId(adjustPoolId === p.id ? null : p.id);
+                            setAdjustAmount(""); setAdjustNote("");
+                          }}
+                          className="p-1.5 text-slate-600 hover:text-emerald-400 transition-colors flex-shrink-0"
+                          title={`Adjust balance (in ${p.pool_currency})`}
+                        >
+                          <Plus size={13} />
+                        </button>
+                      )}
                       {trip?.my_role !== "viewer" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); archivePool(p.id, p.name, !p.archived); }}
@@ -609,7 +668,46 @@ export default function PoolPage() {
                       )}
                       </div>
                     </div>
-                    {!selectedPool && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}
+
+                    {/* Manual balance adjustment — enter directly in the pool's currency */}
+                    {adjustPoolId === p.id && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs text-slate-400">
+                          Adjust balance in <span className="text-white font-medium">{p.pool_currency}</span> (use a negative number to subtract)
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number" value={adjustAmount} step="0.01" autoFocus
+                            onChange={(e) => setAdjustAmount(e.target.value)}
+                            placeholder={`Amount (${p.pool_currency})`}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                          />
+                          <input
+                            type="text" value={adjustNote}
+                            onChange={(e) => setAdjustNote(e.target.value)}
+                            placeholder="Note (optional)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        {adjustAmount && !isNaN(parseFloat(adjustAmount)) && p.pool_currency !== "MYR" && (
+                          <p className="text-[11px] text-slate-500">
+                            ≈ RM {(parseFloat(adjustAmount) / rate).toFixed(2)} at the pool&apos;s rate
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <button onClick={() => setAdjustPoolId(null)}
+                            className="flex-1 py-1.5 border border-slate-600 text-slate-400 hover:text-white text-xs rounded-lg transition-colors">
+                            Cancel
+                          </button>
+                          <button onClick={() => handleAdjust(p)} disabled={adjusting || !adjustAmount}
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                            {adjusting ? "Saving…" : "Apply adjustment"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!selectedPool && adjustPoolId !== p.id && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}
                   </div>
                 );
               })}
