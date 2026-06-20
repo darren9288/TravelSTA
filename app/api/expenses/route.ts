@@ -69,6 +69,14 @@ function round2(n: number): number {
   return Math.round(Number(n) * 100) / 100;
 }
 
+// Current Malaysia time as "HH:MM" (24h). Vercel runs UTC, so we format
+// explicitly in Asia/Kuala_Lumpur — used as the fallback expense time.
+function nowMYT(): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(new Date());
+}
+
 export async function POST(req: NextRequest) {
   const supabase = serverDb();
   const body = await req.json();
@@ -80,7 +88,7 @@ export async function POST(req: NextRequest) {
   const sumErr = validateSplitsSum(body.splits, body.myr_amount);
   if (sumErr) return NextResponse.json({ error: sumErr }, { status: 400 });
 
-  const { data: expense, error: expErr } = await supabase.from("expenses").insert({
+  const baseExpense = {
     trip_id: body.trip_id,
     date: body.date,
     category: body.category,
@@ -93,7 +101,16 @@ export async function POST(req: NextRequest) {
     notes: body.notes ?? null,
     created_by_id: body.created_by_id ?? null,
     wallet_id: body.wallet_id ?? null,
-  }).select().single();
+  };
+  // Optional time of day. Use the client's value, else stamp the live MYT time.
+  // The `time` column may not exist on an un-migrated DB (028), so try with it
+  // and fall back to a plain insert — never let a missing column block creation.
+  const expenseTime = body.time && String(body.time).trim() ? String(body.time).trim() : nowMYT();
+  let insertRes = await supabase.from("expenses").insert({ ...baseExpense, time: expenseTime }).select().single();
+  if (insertRes.error) {
+    insertRes = await supabase.from("expenses").insert(baseExpense).select().single();
+  }
+  const { data: expense, error: expErr } = insertRes;
 
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
 
@@ -204,7 +221,14 @@ export async function PUT(req: NextRequest) {
     if (sumErr) return NextResponse.json({ error: sumErr }, { status: 400 });
   }
 
-  const { data, error } = await supabase.from("expenses").update(updates).eq("id", id).select().single();
+  // `time` (028) may be missing on an un-migrated DB — retry without it so an
+  // edit can never be blocked by a column that isn't there yet.
+  let updRes = await supabase.from("expenses").update(updates).eq("id", id).select().single();
+  if (updRes.error && "time" in updates) {
+    const { time: _t, ...rest } = updates;
+    updRes = await supabase.from("expenses").update(rest).eq("id", id).select().single();
+  }
+  const { data, error } = updRes;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   {

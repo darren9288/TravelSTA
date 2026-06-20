@@ -25,7 +25,13 @@ export default function AddExpensePage() {
 
   // Form fields
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // Optional time of day, pre-filled with the device's current time ("live time").
+  // Sent to the server; if cleared, the server stamps the live time instead.
+  const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [category, setCategory] = useState("Lunch");
+  // Optional manual cashback for this expense, credited to the payer. Recorded in
+  // a separate ledger — never affects the split or settlement.
+  const [cashback, setCashback] = useState("");
   const [splitType, setSplitType] = useState<"even" | "individual">("even");
   const [paidById, setPaidById] = useState("");
   const [paymentType, setPaymentType] = useState("Cash");
@@ -67,14 +73,6 @@ export default function AddExpensePage() {
   const [sepRows, setSepRows] = useState<
     { traveler_id: string; enabled: boolean; currency: string; amount: string; walletId: string }[]
   >([]);
-  // Ryt cashback rate (per-trip, set on the Analytics card). Used only to show a
-  // cashback hint on Ryt-wallet rows so you can see which bills will earn it.
-  const [cashbackRate, setCashbackRate] = useState(1.2);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(`cashback_rate_${id}`);
-    if (saved && !isNaN(parseFloat(saved))) setCashbackRate(parseFloat(saved));
-  }, [id]);
 
   // ── Receipt OCR tab ──────────────────────────────────────────────────────
   // Snap a photo → compress → send to Claude Vision → preview parsed fields
@@ -237,7 +235,7 @@ export default function AddExpensePage() {
       : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
 
     const body = {
-      trip_id: id, date, category, split_type: splitType,
+      trip_id: id, date, time: time || null, category, split_type: splitType,
       paid_by_id: paidById, payment_type: paymentType,
       currency: currency,
       foreign_amount: currency !== "MYR" ? parseFloat(foreignAmount) || null : null,
@@ -273,6 +271,16 @@ export default function AddExpensePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      // Record manual cashback (if any) against the new expense, credited to the
+      // payer. Best-effort — a cashback failure shouldn't block the expense save.
+      const cb = parseFloat(cashback);
+      if (cb && cb > 0 && data?.id) {
+        await fetch("/api/cashback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trip_id: id, expense_id: data.id, traveler_id: paidById, amount: cb }),
+        }).catch(() => {});
+      }
       router.push(`/trips/${id}/expenses`);
     } catch (e) {
       // Network error while we *thought* we were online — fall back to
@@ -579,9 +587,13 @@ export default function AddExpensePage() {
           {tab === "form" && (
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Date &amp; Time</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                      className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                    <input type="time" value={time} onChange={(e) => setTime(e.target.value)} title="Optional — defaults to now"
+                      className="w-[88px] bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                  </div></div>
                 <div>
                   <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
                     Category
@@ -740,6 +752,14 @@ export default function AddExpensePage() {
               <div><label className="text-xs text-slate-400 mb-1 block">Notes</label>
                 <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+              <div><label className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                  <Coins size={12} className="text-emerald-400" /> Cashback (RM) — optional
+                </label>
+                <input type="number" value={cashback} step="0.01" placeholder={`e.g. 1.20 back to ${activeTravelers.find((t) => t.id === paidById)?.name ?? "payer"}`}
+                  onChange={(e) => setCashback(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                <p className="text-[11px] text-slate-600 mt-1">Tracked as pending cashback for the payer — doesn&apos;t change the split. Tick it received later in Analytics.</p>
+              </div>
               {error && <p className="text-sm text-red-400">{error}</p>}
               <button onClick={handleSave} disabled={saving}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
@@ -1039,9 +1059,6 @@ export default function AddExpensePage() {
                   const t = realTravelers.find((x) => x.id === row.traveler_id);
                   const myWallets = walletOptions.filter((w) => w.traveler_id === row.traveler_id);
                   const myr = sepRowMyr(row);
-                  const rowWallet = walletOptions.find((w) => w.id === row.walletId);
-                  const rowIsRyt = (rowWallet?.name ?? "").toLowerCase().includes("ryt");
-                  const rowCashback = rowIsRyt ? myr * (cashbackRate / 100) : 0;
                   return (
                     <div key={row.traveler_id}
                       className={`border rounded-xl p-2.5 transition-colors ${row.enabled ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-800/20 border-slate-800 opacity-60"}`}>
@@ -1051,11 +1068,6 @@ export default function AddExpensePage() {
                           className="accent-emerald-500 w-4 h-4" />
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
                         <span className="text-sm text-white flex-1 truncate">{t?.name}</span>
-                        {row.enabled && rowIsRyt && myr > 0 && (
-                          <span className="text-[10px] text-emerald-400/90 flex items-center gap-0.5 bg-emerald-500/10 px-1.5 py-0.5 rounded-full" title={`Ryt cashback ${cashbackRate}%`}>
-                            <Coins size={9} /> {rowCashback.toFixed(2)}
-                          </span>
-                        )}
                         {row.enabled && row.amount && parseFloat(row.amount) > 0 && (
                           <span className="text-sm font-semibold text-emerald-400">RM {myr.toFixed(2)}</span>
                         )}

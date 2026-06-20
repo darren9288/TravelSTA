@@ -65,9 +65,24 @@ export type Expense = {
   created_by_id: string | null;
   wallet_id?: string | null;
   photo_url?: string | null; // Requires DB migration: ALTER TABLE expenses ADD COLUMN photo_url text;
+  time?: string | null; // Optional "HH:MM" time of day (migration 028). Falls back to created_at.
   created_at: string;
   paid_by?: Traveler;
   splits?: ExpenseSplit[];
+};
+
+export type Cashback = {
+  id: string;
+  trip_id: string;
+  expense_id: string;
+  traveler_id: string;
+  amount: number;
+  received: boolean;
+  note: string | null;
+  created_at: string;
+  // Joined for display in the ledger UI.
+  expense?: { category: string; date: string; myr_amount: number } | null;
+  traveler?: { name: string; color: string } | null;
 };
 
 export type ExpenseSplit = {

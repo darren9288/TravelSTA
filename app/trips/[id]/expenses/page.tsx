@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
-import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { X, RefreshCw, Search } from "lucide-react";
+import { Trip, Traveler, Expense, Cashback, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
+import { X, RefreshCw, Search, Coins } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -12,6 +12,7 @@ import { useTripRealtime } from "@/lib/use-realtime";
 type EditState = {
   id: string;
   date: string;
+  time: string;
   category: string;
   notes: string;
   myr_amount: string;
@@ -21,6 +22,10 @@ type EditState = {
   split_type: string;
   wallet_id: string;
   splits: { traveler_id: string; amount: string; foreignAmount: string }[];
+  // Cashback for this expense (separate ledger). cashbackId = existing record, if any.
+  cashbackId: string | null;
+  cashbackAmount: string;
+  cashbackReceived: boolean;
 };
 
 export default function ExpensesPage() {
@@ -38,10 +43,16 @@ export default function ExpensesPage() {
   const { data: travelersData, isLoading: travelersLoading } = useSWR<Traveler[]>(`/api/travelers?trip_id=${id}`, fetcher);
   const { data: expensesData, isLoading: expensesLoading, mutate: mutateExpenses } = useSWR<Expense[]>(`/api/expenses?trip_id=${id}`, fetcher);
   const { data: walletsData, isLoading: walletsLoading } = useSWR<{ wallets: { id: string; name: string; currency: string; traveler_id: string }[] }>(`/api/wallets?trip_id=${id}`, fetcher);
+  const { data: cashbackData, mutate: mutateCashback } = useSWR<{ cashbacks: Cashback[] }>(`/api/cashback?trip_id=${id}`, fetcher);
 
   const travelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
   const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
   const wallets = walletsData?.wallets ?? [];
+  // One cashback per expense (latest wins) for the row badge + edit modal.
+  const cashbackByExpense: Record<string, Cashback> = {};
+  for (const c of cashbackData?.cashbacks ?? []) {
+    if (!cashbackByExpense[c.expense_id]) cashbackByExpense[c.expense_id] = c;
+  }
   const loading = tripLoading || travelersLoading || expensesLoading || walletsLoading;
 
   useTripRealtime(id);
@@ -55,9 +66,11 @@ export default function ExpensesPage() {
 
   function openEdit(expense: Expense) {
     const realTravelers = travelers.filter((t) => !t.is_pool);
+    const cb = cashbackByExpense[expense.id];
     setEditState({
       id: expense.id,
       date: expense.date,
+      time: expense.time ?? "",
       category: expense.category,
       notes: expense.notes ?? "",
       myr_amount: String(expense.myr_amount),
@@ -70,6 +83,9 @@ export default function ExpensesPage() {
         const existing = expense.splits?.find((s) => s.traveler_id === t.id);
         return { traveler_id: t.id, amount: existing ? String(existing.amount) : "", foreignAmount: "" };
       }),
+      cashbackId: cb?.id ?? null,
+      cashbackAmount: cb ? String(cb.amount) : "",
+      cashbackReceived: cb?.received ?? false,
     });
     setEditError("");
   }
@@ -98,6 +114,7 @@ export default function ExpensesPage() {
         body: JSON.stringify({
           id: editState.id,
           date: editState.date,
+          time: editState.time || null,
           category: editState.category,
           notes: editState.notes || null,
           myr_amount: myr,
@@ -111,8 +128,30 @@ export default function ExpensesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
+      // Sync the cashback ledger entry for this expense (separate from the
+      // expense save). Always credited to the current payer. Best-effort.
+      const cbAmt = parseFloat(editState.cashbackAmount);
+      const hasCb = !!cbAmt && cbAmt > 0;
+      try {
+        if (hasCb && editState.cashbackId) {
+          await fetch("/api/cashback", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: editState.cashbackId, amount: cbAmt, received: editState.cashbackReceived }),
+          });
+        } else if (hasCb && !editState.cashbackId) {
+          await fetch("/api/cashback", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trip_id: id, expense_id: editState.id, traveler_id: editState.paid_by_id, amount: cbAmt }),
+          });
+        } else if (!hasCb && editState.cashbackId) {
+          await fetch(`/api/cashback?id=${editState.cashbackId}`, { method: "DELETE" });
+        }
+      } catch { /* cashback sync is best-effort — never block the expense edit */ }
+
       setEditState(null);
       mutateExpenses();
+      mutateCashback();
     } catch (e) {
       setEditError((e as Error).message);
     } finally {
@@ -214,6 +253,7 @@ export default function ExpensesPage() {
                   {groups[date].map((e) => (
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
                       wallets={wallets}
+                      cashback={cashbackByExpense[e.id]}
                       onDelete={trip?.my_role !== "viewer" ? handleDelete : undefined}
                       onEdit={trip?.my_role !== "viewer" ? openEdit : undefined} />
                   ))}
@@ -236,9 +276,13 @@ export default function ExpensesPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
-                <input type="date" value={editState.date} onChange={(e) => setEditState({ ...editState, date: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Date &amp; Time</label>
+                <div className="flex gap-2">
+                  <input type="date" value={editState.date} onChange={(e) => setEditState({ ...editState, date: e.target.value })}
+                    className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                  <input type="time" value={editState.time} onChange={(e) => setEditState({ ...editState, time: e.target.value })} title="Optional time"
+                    className="w-[80px] bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                </div></div>
               <div><label className="text-xs text-slate-400 mb-1 block">Category</label>
                 <select value={editState.category} onChange={(e) => setEditState({ ...editState, category: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
@@ -414,6 +458,28 @@ export default function ExpensesPage() {
             <div><label className="text-xs text-slate-400 mb-1 block">Notes</label>
               <input value={editState.notes} onChange={(e) => setEditState({ ...editState, notes: e.target.value })} placeholder="Optional"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+
+            {/* Cashback for this expense — credited to the payer, tracked separately */}
+            <div className="border-t border-slate-700/50 pt-3">
+              <label className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                <Coins size={12} className="text-emerald-400" /> Cashback (RM) — optional
+              </label>
+              <div className="flex items-center gap-2">
+                <input type="number" step="0.01" value={editState.cashbackAmount}
+                  onChange={(e) => setEditState({ ...editState, cashbackAmount: e.target.value })}
+                  placeholder={`back to ${travelers.find((t) => t.id === editState.paid_by_id)?.name ?? "payer"}`}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                {editState.cashbackId && (
+                  <label className="flex items-center gap-1.5 text-xs text-slate-400 whitespace-nowrap cursor-pointer">
+                    <input type="checkbox" checked={editState.cashbackReceived}
+                      onChange={(e) => setEditState({ ...editState, cashbackReceived: e.target.checked })}
+                      className="accent-emerald-500 w-4 h-4" />
+                    received
+                  </label>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">Clear the amount to remove it. Doesn&apos;t affect the split or settlement.</p>
+            </div>
 
             {editError && <p className="text-sm text-red-400">{editError}</p>}
             <div className="flex gap-2">

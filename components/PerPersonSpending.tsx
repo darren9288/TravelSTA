@@ -31,6 +31,7 @@ const SORTS: { value: SortMode; label: string }[] = [
 type Row = {
   expenseId: string;
   date: string;
+  time: string; // "HH:MM" or "" — used as a secondary sort key within a day
   category: string;
   notes: string | null;
   amount: number;
@@ -69,16 +70,20 @@ export default function PerPersonSpending({ tripId }: { tripId: string }) {
       out.push({
         expenseId: e.id,
         date: e.date,
+        time: e.time ?? "",
         category: e.category,
         notes: e.notes ?? null,
         amount,
         payer: e.paid_by?.name ?? "?",
       });
     }
+    // Chronological sort keys include the time-of-day so two expenses on the same
+    // date order by when they happened. Missing times sort first within a day.
+    const key = (r: Row) => `${r.date}T${r.time || "00:00"}`;
     out.sort((a, b) => {
       switch (sort) {
-        case "date_asc": return a.date.localeCompare(b.date) || a.category.localeCompare(b.category);
-        case "date_desc": return b.date.localeCompare(a.date) || a.category.localeCompare(b.category);
+        case "date_asc": return key(a).localeCompare(key(b)) || a.category.localeCompare(b.category);
+        case "date_desc": return key(b).localeCompare(key(a)) || a.category.localeCompare(b.category);
         case "amt_desc": return b.amount - a.amount;
         case "amt_asc": return a.amount - b.amount;
       }
@@ -204,7 +209,9 @@ export default function PerPersonSpending({ tripId }: { tripId: string }) {
             <div className="flex flex-col divide-y divide-slate-700/40">
               {rows.map((r) => (
                 <div key={r.expenseId} className="flex items-center gap-3 py-2">
-                  <span className="w-12 text-[11px] font-mono text-slate-500 flex-shrink-0">{fmtDate(r.date)}</span>
+                  <span className="w-14 text-[11px] font-mono text-slate-500 flex-shrink-0 leading-tight">
+                    {fmtDate(r.date)}{r.time ? <span className="block text-slate-600">{r.time}</span> : null}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{r.category}</p>
                     {r.notes && r.notes.trim().toLowerCase() !== r.category.trim().toLowerCase() && (
