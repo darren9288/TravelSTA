@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { Sparkles, ClipboardList, Camera, Loader2, X } from "lucide-react";
+import { Sparkles, ClipboardList, Camera, Loader2, X, Users } from "lucide-react";
 import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { enqueue } from "@/lib/offline-queue";
@@ -19,7 +19,7 @@ export default function AddExpensePage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [myId, setMyId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"form" | "ai" | "receipt">("form");
+  const [tab, setTab] = useState<"form" | "ai" | "receipt" | "separate">("form");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -61,6 +61,17 @@ export default function AddExpensePage() {
   // overwrite it with Claude's parsed date on the next Parse click.
   const [aiDateTouched, setAiDateTouched] = useState(false);
 
+  // ── Separate bills tab ───────────────────────────────────────────────────
+  // One restaurant/place where everyone paid for their own meal. Records N
+  // expenses in one save — each paid by that person and split only to themselves
+  // (so settlement nets to zero; it's pure per-person record-keeping).
+  const [sepDate, setSepDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sepCategory, setSepCategory] = useState("Lunch");
+  const [sepNotes, setSepNotes] = useState("");
+  const [sepRows, setSepRows] = useState<
+    { traveler_id: string; enabled: boolean; currency: string; amount: string; walletId: string }[]
+  >([]);
+
   // ── Receipt OCR tab ──────────────────────────────────────────────────────
   // Snap a photo → compress → send to Claude Vision → preview parsed fields
   // → "Use these values" pre-fills the Form tab and switches over.
@@ -100,6 +111,7 @@ export default function AddExpensePage() {
       const real = all.filter((t) => !t.is_pool && !t.archived);
       setSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
       setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
+      setSepRows(real.map((t) => ({ traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "" })));
       setWalletOptions(walletRes.wallets ?? []);
     }
     load();
@@ -145,6 +157,10 @@ export default function AddExpensePage() {
     setAiSplits((prev) => {
       const existing = new Map(prev.map((s) => [s.traveler_id, s]));
       return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, amount: "", foreignAmount: "" });
+    });
+    setSepRows((prev) => {
+      const existing = new Map(prev.map((r) => [r.traveler_id, r]));
+      return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "" });
     });
   }, [id]);
 
@@ -278,6 +294,65 @@ export default function AddExpensePage() {
       setError(msg);
       setSaving(false);
     }
+  }
+
+  // Map a wallet name to a payment type — same heuristic the Form/AI tabs use.
+  function payTypeFromName(name: string): string {
+    const n = name.toLowerCase();
+    if (n.includes("wise")) return "Wise";
+    if (n.includes("credit")) return "Credit Card";
+    if (n.includes("debit") || n.includes("card")) return "Debit Card";
+    if (n.includes("tng") || n.includes("touch")) return "TNG";
+    return "Cash";
+  }
+
+  // ── Separate bills helpers ───────────────────────────────────────────────
+  function sepRowRate(row: { currency: string; walletId: string }): number {
+    if (!trip || row.currency === "MYR") return 1;
+    const w = walletOptions.find((x) => x.id === row.walletId);
+    const useWise = w ? w.name.toLowerCase().includes("wise") : false;
+    if (row.currency === trip.foreign_currency) return useWise ? trip.wise_rate : trip.cash_rate;
+    if (row.currency === trip.foreign_currency_2) return useWise ? (trip.wise_rate_2 ?? 1) : (trip.cash_rate_2 ?? 1);
+    return 1;
+  }
+  function sepRowMyr(row: { currency: string; amount: string; walletId: string }): number {
+    const amt = parseFloat(row.amount);
+    if (!amt || isNaN(amt)) return 0;
+    return row.currency === "MYR" ? amt : amt / sepRowRate(row);
+  }
+
+  async function handleSepSave() {
+    const active = sepRows.filter((r) => r.enabled && parseFloat(r.amount) > 0);
+    if (!active.length) { setError("Enter an amount for at least one person."); return; }
+    if (!sepCategory) { setError("Pick a category."); return; }
+    setSaving(true); setError("");
+    try {
+      for (const row of active) {
+        const myr = parseFloat(sepRowMyr(row).toFixed(2));
+        const w = walletOptions.find((x) => x.id === row.walletId);
+        await fetch("/api/expenses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trip_id: id,
+            date: sepDate,
+            category: sepCategory,
+            split_type: "individual",
+            paid_by_id: row.traveler_id,
+            payment_type: w ? payTypeFromName(w.name) : "Cash",
+            currency: row.currency,
+            foreign_amount: row.currency !== "MYR" ? parseFloat(row.amount) : null,
+            myr_amount: myr,
+            notes: sepNotes || null,
+            created_by_id: myId,
+            // Split only to the payer → no cross-debt, nets to zero in settlement.
+            splits: [{ traveler_id: row.traveler_id, amount: myr }],
+            wallet_id: row.walletId || null,
+          }),
+        });
+      }
+      router.push(`/trips/${id}/expenses`);
+    } catch (e) { setError((e as Error).message); setSaving(false); }
   }
 
   // ── Receipt OCR handlers ─────────────────────────────────────────────────
@@ -492,6 +567,10 @@ export default function AddExpensePage() {
             <button onClick={() => setTab("receipt")}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "receipt" ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
               <Camera size={14} /> Receipt
+            </button>
+            <button onClick={() => setTab("separate")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "separate" ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
+              <Users size={14} /> Separate
             </button>
           </div>
 
@@ -954,6 +1033,102 @@ export default function AddExpensePage() {
                 Tip: get the whole receipt in frame and avoid glare.
                 Claude reads English, Japanese, Chinese, and Malay receipts.
               </p>
+            </div>
+          )}
+
+          {tab === "separate" && (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-slate-500">
+                Everyone paid for their own meal at the same place. Saves one expense per person — no one owes anyone, it just records each person&apos;s own spend.
+              </p>
+
+              {/* Shared fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
+                  <input type="date" value={sepDate} onChange={(e) => setSepDate(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Category</label>
+                  <select value={sepCategory} onChange={(e) => setSepCategory(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                  </select></div>
+              </div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Place / Note</label>
+                <input value={sepNotes} onChange={(e) => setSepNotes(e.target.value)} placeholder="e.g. Ichiran Shinjuku"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
+
+              {/* One row per traveler */}
+              <div className="flex flex-col gap-2">
+                {sepRows.map((row, i) => {
+                  const t = realTravelers.find((x) => x.id === row.traveler_id);
+                  const myWallets = walletOptions.filter((w) => w.traveler_id === row.traveler_id);
+                  const myr = sepRowMyr(row);
+                  return (
+                    <div key={row.traveler_id}
+                      className={`border rounded-xl p-2.5 transition-colors ${row.enabled ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-800/20 border-slate-800 opacity-60"}`}>
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={row.enabled}
+                          onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, enabled: e.target.checked } : r))}
+                          className="accent-emerald-500 w-4 h-4" />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                        <span className="text-sm text-white flex-1 truncate">{t?.name}</span>
+                        {row.enabled && row.amount && parseFloat(row.amount) > 0 && (
+                          <span className="text-sm font-semibold text-emerald-400">RM {myr.toFixed(2)}</span>
+                        )}
+                      </div>
+                      {row.enabled && (
+                        <div className="flex items-center gap-2 mt-2 pl-6">
+                          <select value={row.currency}
+                            onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, currency: e.target.value } : r))}
+                            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            <option value="MYR">MYR</option>
+                            <option value={trip.foreign_currency}>{trip.foreign_currency}</option>
+                            {trip.foreign_currency_2 && <option value={trip.foreign_currency_2}>{trip.foreign_currency_2}</option>}
+                          </select>
+                          <input type="number" value={row.amount} step={row.currency === "MYR" ? "0.01" : "1"} placeholder="amount"
+                            onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: e.target.value } : r))}
+                            className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                          {myWallets.length > 0 && (
+                            <select value={row.walletId}
+                              onChange={(e) => {
+                                const wId = e.target.value;
+                                const w = walletOptions.find((x) => x.id === wId);
+                                setSepRows(sepRows.map((r, idx) => idx === i ? {
+                                  ...r, walletId: wId,
+                                  currency: (w && (w.currency === "MYR" || w.currency === trip.foreign_currency || w.currency === trip.foreign_currency_2)) ? w.currency : r.currency,
+                                } : r));
+                              }}
+                              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 max-w-[110px] focus:outline-none focus:border-emerald-500">
+                              <option value="">wallet?</option>
+                              {myWallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total + save */}
+              {(() => {
+                const active = sepRows.filter((r) => r.enabled && parseFloat(r.amount) > 0);
+                const total = active.reduce((s, r) => s + sepRowMyr(r), 0);
+                return (
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs text-slate-500">{active.length} expense{active.length === 1 ? "" : "s"} · each pays own</span>
+                    <span className="text-sm font-bold text-emerald-400">RM {total.toFixed(2)}</span>
+                  </div>
+                );
+              })()}
+              {error && <p className="text-sm text-red-400">{error}</p>}
+              <button onClick={handleSepSave} disabled={saving}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
+                {saving ? "Saving..." : (() => {
+                  const n = sepRows.filter((r) => r.enabled && parseFloat(r.amount) > 0).length;
+                  return `Save ${n} Separate Bill${n === 1 ? "" : "s"}`;
+                })()}
+              </button>
             </div>
           )}
         </div>
