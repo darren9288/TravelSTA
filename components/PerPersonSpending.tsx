@@ -22,8 +22,8 @@ import { ArrowDownUp, CalendarRange, X, FileDown } from "lucide-react";
 type SortMode = "date_asc" | "date_desc" | "amt_desc" | "amt_asc";
 
 const SORTS: { value: SortMode; label: string }[] = [
-  { value: "date_asc", label: "Date — oldest first" },
-  { value: "date_desc", label: "Date — newest first" },
+  { value: "date_asc", label: "Date & time — oldest first" },
+  { value: "date_desc", label: "Date & time — newest first" },
   { value: "amt_desc", label: "Amount — high → low" },
   { value: "amt_asc", label: "Amount — low → high" },
 ];
