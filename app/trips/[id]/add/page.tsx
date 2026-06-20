@@ -217,6 +217,41 @@ export default function AddExpensePage() {
     return realTravelers.length > 0 ? total / realTravelers.length : 0;
   }
 
+  // Base splits (before cashback) for the Form tab — even or individual.
+  function buildBaseSplits(total: number): { traveler_id: string; amount: number }[] {
+    return splitType === "even"
+      ? realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(total).toFixed(2)) }))
+      : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
+  }
+
+  // Share a cashback amount across the splits: each splitter's share drops by
+  // their PROPORTIONAL credit (even → equal; individual → by amount), and the
+  // payer's share rises by the full cashback (they front it now and recoup it
+  // when the rebate lands). Splits still sum to the real charged total, so the
+  // wallet deduction and settlement stay correct.
+  function applyCashback(
+    base: { traveler_id: string; amount: number }[],
+    cashbackAmt: number, payerId: string, total: number
+  ): { traveler_id: string; amount: number }[] {
+    if (!cashbackAmt || cashbackAmt <= 0 || !total) return base;
+    const rows = base.map((s) => ({ ...s }));
+    if (!rows.some((s) => s.traveler_id === payerId)) rows.push({ traveler_id: payerId, amount: 0 });
+    const out = rows.map((s) => {
+      const credit = cashbackAmt * (Number(s.amount) / total);
+      let amt = Number(s.amount) - credit;
+      if (s.traveler_id === payerId) amt += cashbackAmt; // payer fronts + recoups it
+      return { traveler_id: s.traveler_id, amount: Math.round(amt * 100) / 100 };
+    });
+    // Put any rounding residual on the payer so the splits sum EXACTLY to total.
+    const sum = out.reduce((a, s) => a + s.amount, 0);
+    const residual = Math.round((total - sum) * 100) / 100;
+    if (residual !== 0) {
+      const p = out.find((s) => s.traveler_id === payerId) ?? out[0];
+      p.amount = Math.round((p.amount + residual) * 100) / 100;
+    }
+    return out;
+  }
+
   async function handleSave() {
     if (!myrAmount || !paidById) { setError("Fill in amount and who paid."); return; }
     if (splitType === "individual") {
@@ -230,9 +265,14 @@ export default function AddExpensePage() {
     setSaving(true); setError("");
 
     const total = parseFloat(myrAmount);
-    const splitData = splitType === "even"
-      ? realTravelers.map((t) => ({ traveler_id: t.id, amount: parseFloat(evenSplitAmount(total).toFixed(2)) }))
-      : splits.map((s) => ({ traveler_id: s.traveler_id, amount: parseFloat(s.amount) || 0 }));
+    let splitData = buildBaseSplits(total);
+    // Share the cashback into the splits (settlers pay less; payer's share covers
+    // the rebate they'll recoup) — only when the payer is a real traveller.
+    const cbNum = parseFloat(cashback);
+    const payerT = activeTravelers.find((t) => t.id === paidById);
+    if (cbNum > 0 && payerT && !payerT.is_pool) {
+      splitData = applyCashback(splitData, cbNum, paidById, total);
+    }
 
     const body = {
       trip_id: id, date, time: time || null, category, split_type: splitType,
@@ -767,11 +807,37 @@ export default function AddExpensePage() {
               <div><label className="text-xs text-slate-400 mb-1 flex items-center gap-1">
                   <Coins size={12} className="text-emerald-400" /> Cashback (RM) — optional
                 </label>
-                <input type="number" value={cashback} step="0.01" placeholder={`e.g. 1.20 back to ${activeTravelers.find((t) => t.id === paidById)?.name ?? "payer"}`}
+                <input type="number" value={cashback} step="0.01" placeholder={`e.g. 1.20 from ${activeTravelers.find((t) => t.id === paidById)?.name ?? "payer"}'s card`}
                   onChange={(e) => setCashback(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-                <p className="text-[11px] text-slate-600 mt-1">Tracked as pending cashback for the payer — doesn&apos;t change the split. Tick it received later in Analytics.</p>
+                <p className="text-[11px] text-slate-600 mt-1">Shared across the split — settlers pay a little less; the payer fronts it and recoups it (tick received in Analytics when it lands).</p>
               </div>
+              {/* Live before → after preview once a cashback is entered */}
+              {(() => {
+                const cbNum = parseFloat(cashback);
+                const total = parseFloat(myrAmount) || 0;
+                const payerT = activeTravelers.find((t) => t.id === paidById);
+                if (!(cbNum > 0 && total > 0 && payerT && !payerT.is_pool)) return null;
+                const base = buildBaseSplits(total);
+                const baseById: Record<string, number> = Object.fromEntries(base.map((s) => [s.traveler_id, s.amount]));
+                const after = applyCashback(base, cbNum, paidById, total);
+                return (
+                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-2.5 text-xs flex flex-col gap-0.5">
+                    <p className="text-emerald-400 mb-0.5">After RM {cbNum.toFixed(2)} cashback shared:</p>
+                    {after.map((s) => {
+                      const t = travelers.find((x) => x.id === s.traveler_id);
+                      const b = baseById[s.traveler_id] ?? 0;
+                      const isPayer = s.traveler_id === paidById;
+                      return (
+                        <div key={s.traveler_id} className="flex justify-between text-slate-400">
+                          <span className="truncate">{t?.name}{isPayer ? " (payer)" : ""}</span>
+                          <span className="font-mono">RM {b.toFixed(2)} → <span className={isPayer ? "text-amber-400" : "text-emerald-400"}>{s.amount.toFixed(2)}</span></span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               {error && <p className="text-sm text-red-400">{error}</p>}
               <button onClick={handleSave} disabled={saving}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">

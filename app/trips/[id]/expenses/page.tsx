@@ -478,7 +478,7 @@ export default function ExpensesPage() {
                   </label>
                 )}
               </div>
-              <p className="text-[11px] text-slate-600 mt-1">Clear the amount to remove it. Doesn&apos;t affect the split or settlement.</p>
+              <p className="text-[11px] text-slate-600 mt-1">Records cashback for the payer. On an existing expense the split isn&apos;t auto-adjusted — edit the split amounts yourself if you want to share it.</p>
             </div>
 
             {editError && <p className="text-sm text-red-400">{editError}</p>}

@@ -8,8 +8,9 @@ import { Coins, Check, Trash2, Clock } from "lucide-react";
 // Manual cashback ledger (Analytics).
 //
 // Each entry is recorded against an expense and credited to that expense's payer
-// — it's money the payer will get back later (e.g. Ryt card cashback). Pure
-// side-ledger: it never affects splits or settlement.
+// — money the payer gets back later (e.g. Ryt card cashback). On NEW expenses the
+// cashback is shared into the split at creation (settlers pay a little less, the
+// payer fronts + recoups it); this ledger row is the payer's IOU for that float.
 //
 // Here you can: filter by traveller, tick an entry received (pending -> done),
 // and delete one. Adding/editing the amount happens on the expense itself (its
