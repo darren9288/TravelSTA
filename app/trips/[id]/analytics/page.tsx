@@ -7,6 +7,7 @@ import DailyBar from "@/components/charts/DailyBar";
 import TravelerBar from "@/components/charts/TravelerBar";
 import CumulativeLine from "@/components/charts/CumulativeLine";
 import PerPersonSpending from "@/components/PerPersonSpending";
+import CashbackReport from "@/components/CashbackReport";
 import SuperlativesCard from "@/components/SuperlativesCard";
 import { RefreshCw } from "lucide-react";
 import useSWR from "swr";
@@ -78,6 +79,9 @@ export default function AnalyticsPage() {
               {/* Per-person drill-down: sortable, date-range filterable list of
                   each traveler's individual expense shares. */}
               <PerPersonSpending tripId={id} />
+
+              {/* Ryt cashback tracker — read-only, computed live, never writes */}
+              <CashbackReport tripId={id} />
 
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">Category Breakdown</h2>
