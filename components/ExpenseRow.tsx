@@ -1,7 +1,7 @@
 "use client";
 import { Expense, Traveler, ExpenseSplit } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
-import { Trash2, Pencil, ChevronDown, ChevronUp, Lock, Camera, X, Image } from "lucide-react";
+import { Trash2, Pencil, ChevronDown, ChevronUp, Lock, Camera, X, Image, Coins } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
 const CAT_COLORS: Record<string, string> = {
@@ -44,6 +44,22 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   const [photoUploading, setPhotoUploading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Ryt cashback indicator. Mirrors the Analytics CashbackReport: an expense
+  // counts toward cashback when its wallet name (or payment type) contains "ryt".
+  // The % is the per-trip rate the user set on the Analytics card (localStorage),
+  // defaulting to 1.2%. Display-only — never changes the split or settlement.
+  const [cashbackRate, setCashbackRate] = useState(1.2);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(`cashback_rate_${expense.trip_id}`);
+    if (saved && !isNaN(parseFloat(saved))) setCashbackRate(parseFloat(saved));
+  }, [expense.trip_id]);
+  const rytWallet = expense.wallet_id ? wallets.find((w) => w.id === expense.wallet_id) : undefined;
+  const isRyt =
+    (rytWallet?.name ?? "").toLowerCase().includes("ryt") ||
+    (expense.payment_type ?? "").toLowerCase().includes("ryt");
+  const cashback = isRyt ? Number(expense.myr_amount) * (cashbackRate / 100) : 0;
 
   // Wallet picker shown when settling a split that involves wallets
   const [settlingPick, setSettlingPick] = useState<{ split: ExpenseSplit; fromWalletId: string; toWalletId: string } | null>(null);
@@ -213,6 +229,14 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {paidBy && <TravelerBadge traveler={paidBy} />}
             <span className="text-xs text-slate-500">{expense.payment_type}</span>
+            {isRyt && (
+              <span
+                className="text-xs text-emerald-400 flex-shrink-0 flex items-center gap-0.5 bg-emerald-500/10 px-1.5 py-0.5 rounded-full"
+                title={`Counts toward Ryt cashback (${cashbackRate}%) — RM ${cashback.toFixed(2)} back to ${paidBy?.name ?? "payer"}`}
+              >
+                <Coins size={10} /> RM {cashback.toFixed(2)}
+              </span>
+            )}
             {expense.split_type === "even" && <span className="text-xs text-slate-600">Even split</span>}
           </div>
         </div>

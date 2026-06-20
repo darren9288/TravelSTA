@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { Sparkles, ClipboardList, Camera, Loader2, X, Users } from "lucide-react";
+import { Sparkles, ClipboardList, Camera, Loader2, X, Users, Coins } from "lucide-react";
 import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { enqueue } from "@/lib/offline-queue";
@@ -32,10 +32,6 @@ export default function AddExpensePage() {
   const [currency, setCurrency] = useState("MYR");
   const [foreignAmount, setForeignAmount] = useState("");
   const [myrAmount, setMyrAmount] = useState("");
-  // When true, the user typed the MYR amount directly (e.g. the exact figure a
-  // Wise charge showed) so we STOP auto-converting from the trip rate. Lets you
-  // record a per-transaction rate without a calculator.
-  const [myrManual, setMyrManual] = useState(false);
   const [notes, setNotes] = useState("");
   const [splits, setSplits] = useState<SplitEntry[]>([]);
   const [walletId, setWalletId] = useState<string>("");
@@ -71,6 +67,14 @@ export default function AddExpensePage() {
   const [sepRows, setSepRows] = useState<
     { traveler_id: string; enabled: boolean; currency: string; amount: string; walletId: string }[]
   >([]);
+  // Ryt cashback rate (per-trip, set on the Analytics card). Used only to show a
+  // cashback hint on Ryt-wallet rows so you can see which bills will earn it.
+  const [cashbackRate, setCashbackRate] = useState(1.2);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(`cashback_rate_${id}`);
+    if (saved && !isNaN(parseFloat(saved))) setCashbackRate(parseFloat(saved));
+  }, [id]);
 
   // ── Receipt OCR tab ──────────────────────────────────────────────────────
   // Snap a photo → compress → send to Claude Vision → preview parsed fields
@@ -166,11 +170,9 @@ export default function AddExpensePage() {
 
   useTripRealtime(id, refreshLists);
 
-  // Auto-convert foreign → MYR for form tab. Skips once the user has typed the
-  // MYR directly (myrManual) — e.g. entering the exact MYR a Wise charge showed,
-  // whose rate differs from the trip's stored rate.
+  // Auto-convert foreign → MYR for form tab
   useEffect(() => {
-    if (!trip || !foreignAmount || currency === "MYR" || myrManual) return;
+    if (!trip || !foreignAmount || currency === "MYR") return;
     let rate = 1;
     if (currency === trip.foreign_currency) {
       rate = paymentType === "Wise" ? trip.wise_rate : trip.cash_rate;
@@ -179,7 +181,7 @@ export default function AddExpensePage() {
     }
     const myr = parseFloat(foreignAmount) / rate;
     if (!isNaN(myr)) setMyrAmount(myr.toFixed(2));
-  }, [foreignAmount, paymentType, trip, currency, myrManual]);
+  }, [foreignAmount, paymentType, trip, currency]);
 
   // Auto-suggest a category from the notes after the user stops typing.
   // Only runs if they haven't manually chosen a category yet.
@@ -623,7 +625,6 @@ export default function AddExpensePage() {
                           // Clear stale amounts so user re-enters in the right currency.
                           setForeignAmount("");
                           setMyrAmount("");
-                          setMyrManual(false);
                         }
                       }
                     }
@@ -652,7 +653,7 @@ export default function AddExpensePage() {
                 <div><label className="text-xs text-slate-400 mb-1 block">
                   Currency{walletId && <span className="text-slate-500 ml-1">(locked to wallet)</span>}
                 </label>
-                  <select value={currency} onChange={(e) => { setCurrency(e.target.value); setForeignAmount(""); setMyrAmount(""); setMyrManual(false); }}
+                  <select value={currency} onChange={(e) => { setCurrency(e.target.value); setForeignAmount(""); setMyrAmount(""); }}
                     disabled={!!walletId}
                     title={walletId ? "Currency is locked to the selected wallet" : ""}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed">
@@ -666,33 +667,8 @@ export default function AddExpensePage() {
                     placeholder="e.g. 1200" step={currency === "MYR" ? "0.01" : "1"}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               </div>
-              {currency !== "MYR" && (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                    MYR charged *
-                    {paymentType === "Wise" && <span className="text-[10px] text-amber-400">Wise rate varies — type the exact MYR</span>}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" value={myrAmount} step="0.01"
-                      onChange={(e) => { setMyrAmount(e.target.value); setMyrManual(true); }}
-                      placeholder={foreignAmount ? "auto from rate" : "0.00"}
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-                    {myrManual && foreignAmount && (
-                      <button type="button" onClick={() => setMyrManual(false)}
-                        title="Recompute from the trip's stored rate"
-                        className="px-2.5 py-2 text-xs text-slate-400 border border-slate-700 rounded-lg hover:text-white hover:border-slate-500 transition-colors">
-                        auto
-                      </button>
-                    )}
-                  </div>
-                  {foreignAmount && myrAmount && parseFloat(myrAmount) > 0 && (
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      {myrManual
-                        ? `Effective rate: ${(parseFloat(foreignAmount) / parseFloat(myrAmount)).toFixed(2)} ${currency}/RM (this transaction)`
-                        : `Auto at trip ${paymentType === "Wise" ? "Wise" : "cash"} rate — overtype if your charge differs.`}
-                    </p>
-                  )}
-                </div>
+              {currency !== "MYR" && myrAmount && (
+                <p className="text-xs text-slate-500">≈ RM {myrAmount}</p>
               )}
               {splitType === "even" && myrAmount && (
                 <p className="text-xs text-slate-500">Each person pays RM {evenSplitAmount(parseFloat(myrAmount)).toFixed(2)}</p>
@@ -1063,6 +1039,9 @@ export default function AddExpensePage() {
                   const t = realTravelers.find((x) => x.id === row.traveler_id);
                   const myWallets = walletOptions.filter((w) => w.traveler_id === row.traveler_id);
                   const myr = sepRowMyr(row);
+                  const rowWallet = walletOptions.find((w) => w.id === row.walletId);
+                  const rowIsRyt = (rowWallet?.name ?? "").toLowerCase().includes("ryt");
+                  const rowCashback = rowIsRyt ? myr * (cashbackRate / 100) : 0;
                   return (
                     <div key={row.traveler_id}
                       className={`border rounded-xl p-2.5 transition-colors ${row.enabled ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-800/20 border-slate-800 opacity-60"}`}>
@@ -1072,6 +1051,11 @@ export default function AddExpensePage() {
                           className="accent-emerald-500 w-4 h-4" />
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
                         <span className="text-sm text-white flex-1 truncate">{t?.name}</span>
+                        {row.enabled && rowIsRyt && myr > 0 && (
+                          <span className="text-[10px] text-emerald-400/90 flex items-center gap-0.5 bg-emerald-500/10 px-1.5 py-0.5 rounded-full" title={`Ryt cashback ${cashbackRate}%`}>
+                            <Coins size={9} /> {rowCashback.toFixed(2)}
+                          </span>
+                        )}
                         {row.enabled && row.amount && parseFloat(row.amount) > 0 && (
                           <span className="text-sm font-semibold text-emerald-400">RM {myr.toFixed(2)}</span>
                         )}
