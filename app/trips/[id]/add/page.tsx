@@ -71,7 +71,7 @@ export default function AddExpensePage() {
   const [sepCategory, setSepCategory] = useState("Lunch");
   const [sepNotes, setSepNotes] = useState("");
   const [sepRows, setSepRows] = useState<
-    { traveler_id: string; enabled: boolean; currency: string; amount: string; walletId: string }[]
+    { traveler_id: string; enabled: boolean; currency: string; amount: string; walletId: string; cashback: string }[]
   >([]);
 
   // ── Receipt OCR tab ──────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ export default function AddExpensePage() {
       const real = all.filter((t) => !t.is_pool && !t.archived);
       setSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
       setAiSplits(real.map((t) => ({ traveler_id: t.id, amount: "", foreignAmount: "" })));
-      setSepRows(real.map((t) => ({ traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "" })));
+      setSepRows(real.map((t) => ({ traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "", cashback: "" })));
       setWalletOptions(walletRes.wallets ?? []);
     }
     load();
@@ -162,7 +162,7 @@ export default function AddExpensePage() {
     });
     setSepRows((prev) => {
       const existing = new Map(prev.map((r) => [r.traveler_id, r]));
-      return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "" });
+      return real.map((t) => existing.get(t.id) ?? { traveler_id: t.id, enabled: true, currency: "MYR", amount: "", walletId: "", cashback: "" });
     });
   }, [id]);
 
@@ -340,7 +340,7 @@ export default function AddExpensePage() {
       for (const row of active) {
         const myr = parseFloat(sepRowMyr(row).toFixed(2));
         const w = walletOptions.find((x) => x.id === row.walletId);
-        await fetch("/api/expenses", {
+        const res = await fetch("/api/expenses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -360,6 +360,18 @@ export default function AddExpensePage() {
             wallet_id: row.walletId || null,
           }),
         });
+        // Record this row's cashback (if any) against the created expense,
+        // credited to that person. Only the rows you filled in get one — so the
+        // Ryt users get a cashback record and the cash payers don't.
+        const created = await res.json().catch(() => null);
+        const cb = parseFloat(row.cashback);
+        if (res.ok && created?.id && cb && cb > 0) {
+          await fetch("/api/cashback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trip_id: id, expense_id: created.id, traveler_id: row.traveler_id, amount: cb }),
+          }).catch(() => {});
+        }
       }
       router.push(`/trips/${id}/expenses`);
     } catch (e) { setError((e as Error).message); setSaving(false); }
@@ -1099,6 +1111,15 @@ export default function AddExpensePage() {
                               {myWallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                             </select>
                           )}
+                        </div>
+                      )}
+                      {row.enabled && (
+                        <div className="flex items-center gap-1.5 mt-1.5 pl-6">
+                          <Coins size={12} className="text-emerald-400/70 flex-shrink-0" />
+                          <input type="number" step="0.01" value={row.cashback}
+                            placeholder="cashback (RM) — only for the Ryt users, optional"
+                            onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, cashback: e.target.value } : r))}
+                            className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                         </div>
                       )}
                     </div>
