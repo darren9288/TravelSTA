@@ -1,9 +1,18 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import type { Cashback, Traveler } from "@/lib/supabase";
-import { Coins, Check, Trash2, Clock, Eraser } from "lucide-react";
+import { Coins, Check, Trash2, Clock, Eraser, ArrowDownUp, ChevronRight } from "lucide-react";
+
+type SortMode = "date_desc" | "date_asc" | "person" | "amt_desc";
+const SORTS: { value: SortMode; label: string }[] = [
+  { value: "date_desc", label: "Date & time — newest" },
+  { value: "date_asc", label: "Date & time — oldest" },
+  { value: "person", label: "Person (A→Z)" },
+  { value: "amt_desc", label: "Amount — high → low" },
+];
 
 // Manual cashback ledger (Analytics) — view + tick only.
 //
@@ -21,6 +30,7 @@ function fmtDate(d?: string) {
 }
 
 export default function CashbackReport({ tripId }: { tripId: string }) {
+  const router = useRouter();
   const { data, mutate } = useSWR<{ cashbacks: Cashback[] }>(`/api/cashback?trip_id=${tripId}`, fetcher);
   const { data: travelersData } = useSWR<Traveler[]>(`/api/travelers?trip_id=${tripId}`, fetcher);
 
@@ -31,14 +41,31 @@ export default function CashbackReport({ tripId }: { tripId: string }) {
   );
 
   const [filter, setFilter] = useState<string>("");
+  const [sort, setSort] = useState<SortMode>("date_desc");
   const [busy, setBusy] = useState<string | null>(null);
 
   const rows = useMemo(
     () => (filter ? cashbacks.filter((c) => c.traveler_id === filter) : cashbacks),
     [cashbacks, filter]
   );
-  const pending = rows.filter((c) => !c.received);
-  const received = rows.filter((c) => c.received);
+  // Sort key uses the EXPENSE's date + time-of-day so entries order by when the
+  // spend happened (not when the cashback row was typed).
+  const tkey = (c: Cashback) => `${c.expense?.date ?? ""}T${c.expense?.time ?? "00:00"}`;
+  const sortCb = (arr: Cashback[]) => {
+    const a = [...arr];
+    a.sort((x, y) => {
+      switch (sort) {
+        case "date_desc": return tkey(y).localeCompare(tkey(x));
+        case "date_asc": return tkey(x).localeCompare(tkey(y));
+        case "person": return (x.traveler?.name ?? "").localeCompare(y.traveler?.name ?? "") || tkey(y).localeCompare(tkey(x));
+        case "amt_desc": return Number(y.amount) - Number(x.amount);
+      }
+      return 0;
+    });
+    return a;
+  };
+  const pending = sortCb(rows.filter((c) => !c.received));
+  const received = sortCb(rows.filter((c) => c.received));
   const pendingTotal = pending.reduce((s, c) => s + Number(c.amount), 0);
   const receivedTotal = received.reduce((s, c) => s + Number(c.amount), 0);
 
@@ -79,12 +106,17 @@ export default function CashbackReport({ tripId }: { tripId: string }) {
           {c.received && <Check size={12} className="text-white" />}
         </button>
         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-        <div className="flex-1 min-w-0">
-          <p className={`text-sm truncate ${c.received ? "text-slate-500 line-through" : "text-white"}`}>{name}</p>
-          <p className="text-[10px] text-slate-600 truncate">
-            {c.expense?.category ?? "expense"}{c.expense?.date ? ` · ${fmtDate(c.expense.date)}` : ""}{c.note ? ` · ${c.note}` : ""}
-          </p>
-        </div>
+        {/* Tap the body to jump to the source expense */}
+        <button onClick={() => router.push(`/trips/${tripId}/expenses?expense=${c.expense_id}`)}
+          className="flex-1 min-w-0 flex items-center gap-1 text-left group" title="Go to this expense">
+          <span className="flex-1 min-w-0">
+            <span className={`block text-sm truncate ${c.received ? "text-slate-500 line-through" : "text-white group-hover:text-emerald-300"}`}>{name}</span>
+            <span className="block text-[10px] text-slate-600 truncate">
+              {c.expense?.category ?? "expense"}{c.expense?.date ? ` · ${fmtDate(c.expense.date)}` : ""}{c.expense?.time ? ` ${c.expense.time}` : ""}{c.note ? ` · ${c.note}` : ""}
+            </span>
+          </span>
+          <ChevronRight size={12} className="text-slate-600 group-hover:text-emerald-400 flex-shrink-0" />
+        </button>
         <span className={`text-sm font-medium flex-shrink-0 ${c.received ? "text-slate-500" : "text-emerald-400"}`}>
           RM {Number(c.amount).toFixed(2)}
         </span>
@@ -111,8 +143,19 @@ export default function CashbackReport({ tripId }: { tripId: string }) {
         )}
       </div>
       <p className="text-xs text-slate-600 mb-3">
-        Cashback owed back to each payer. Add it per person by editing an expense; tick here once received.
+        Cashback owed back to each payer. Add it per person by editing an expense; tick here once received. Tap an entry to open its expense.
       </p>
+
+      {/* Sort */}
+      {cashbacks.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <ArrowDownUp size={13} className="text-slate-500 flex-shrink-0" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+            {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Traveller filter */}
       {people.length > 0 && (

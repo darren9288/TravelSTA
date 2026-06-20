@@ -81,7 +81,7 @@ export type Cashback = {
   note: string | null;
   created_at: string;
   // Joined for display in the ledger UI.
-  expense?: { category: string; date: string; myr_amount: number } | null;
+  expense?: { category: string; date: string; time?: string | null; myr_amount: number } | null;
   traveler?: { name: string; color: string } | null;
 };
 

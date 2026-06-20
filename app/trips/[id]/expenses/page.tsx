@@ -59,6 +59,22 @@ export default function ExpensesPage() {
 
   useEffect(() => { router.refresh(); }, [router]);
 
+  // Arriving from the cashback ledger with ?expense=<id> → scroll to it and
+  // briefly ring-highlight so the user sees which expense the rebate is for.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const list = Array.isArray(expensesData) ? expensesData : [];
+    if (list.length === 0) return;
+    const target = new URLSearchParams(window.location.search).get("expense");
+    if (!target) return;
+    setHighlightId(target);
+    const el = document.getElementById(`expense-${target}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setHighlightId(null), 3000);
+    return () => clearTimeout(t);
+  }, [expensesData]);
+
   async function handleDelete(expenseId: string) {
     await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
     mutateExpenses();
@@ -257,6 +273,7 @@ export default function ExpensesPage() {
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
                       wallets={wallets}
                       cashbacks={cashbacksByExpense[e.id]}
+                      highlighted={highlightId === e.id}
                       onDelete={trip?.my_role !== "viewer" ? handleDelete : undefined}
                       onEdit={trip?.my_role !== "viewer" ? openEdit : undefined} />
                   ))}

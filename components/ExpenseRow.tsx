@@ -22,6 +22,7 @@ type Props = {
   foreignCurrency: string;
   wallets?: WalletOption[];
   cashbacks?: Cashback[]; // Manual cashback entries recorded for this expense, if any.
+  highlighted?: boolean; // Briefly ring-highlight when jumped to from another page.
   onDelete?: (id: string) => void;
   onEdit?: (expense: Expense) => void;
 };
@@ -35,7 +36,7 @@ function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Travele
   return false;
 }
 
-export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashbacks = [], onDelete, onEdit }: Props) {
+export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashbacks = [], highlighted = false, onDelete, onEdit }: Props) {
   // Aggregate this expense's cashback entries for the badge.
   const cashbackTotal = cashbacks.reduce((s, c) => s + Number(c.amount), 0);
   const cashbackAllReceived = cashbacks.length > 0 && cashbacks.every((c) => c.received);
@@ -203,7 +204,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   }
 
   return (
-    <div className={`border rounded-xl overflow-hidden transition-colors ${hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
+    <div id={`expense-${expense.id}`} className={`border rounded-xl overflow-hidden transition-all ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
       <div className="flex items-center gap-3 px-3 py-3 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
         <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: hasUnsettled ? "#f59e0b" : color }} />
         <div className="flex-1 min-w-0">

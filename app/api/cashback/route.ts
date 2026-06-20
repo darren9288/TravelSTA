@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!trip_id) return NextResponse.json({ error: "trip_id required" }, { status: 400 });
   const { data, error } = await serverDb()
     .from("cashbacks")
-    .select("*, expense:expenses!expense_id(category, date, myr_amount), traveler:travelers!traveler_id(name, color)")
+    .select("*, expense:expenses!expense_id(category, date, time, myr_amount), traveler:travelers!traveler_id(name, color)")
     .eq("trip_id", trip_id)
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
