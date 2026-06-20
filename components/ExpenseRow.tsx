@@ -21,7 +21,7 @@ type Props = {
   travelers: Traveler[];
   foreignCurrency: string;
   wallets?: WalletOption[];
-  cashback?: Cashback | null; // Manual cashback recorded for this expense, if any.
+  cashbacks?: Cashback[]; // Manual cashback entries recorded for this expense, if any.
   onDelete?: (id: string) => void;
   onEdit?: (expense: Expense) => void;
 };
@@ -35,7 +35,10 @@ function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Travele
   return false;
 }
 
-export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashback, onDelete, onEdit }: Props) {
+export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashbacks = [], onDelete, onEdit }: Props) {
+  // Aggregate this expense's cashback entries for the badge.
+  const cashbackTotal = cashbacks.reduce((s, c) => s + Number(c.amount), 0);
+  const cashbackAllReceived = cashbacks.length > 0 && cashbacks.every((c) => c.received);
   const [expanded, setExpanded] = useState(false);
   const [splits, setSplits] = useState<ExpenseSplit[]>(expense.splits ?? []);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -215,14 +218,14 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
             {paidBy && <TravelerBadge traveler={paidBy} />}
             {expense.time && <span className="text-[10px] text-slate-600 font-mono">{expense.time}</span>}
             <span className="text-xs text-slate-500">{expense.payment_type}</span>
-            {cashback && (
+            {cashbackTotal > 0 && (
               <span
                 className={`text-xs flex-shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
-                  cashback.received ? "text-slate-400 bg-slate-600/20" : "text-emerald-400 bg-emerald-500/10"
+                  cashbackAllReceived ? "text-slate-400 bg-slate-600/20" : "text-emerald-400 bg-emerald-500/10"
                 }`}
-                title={`Cashback ${cashback.received ? "received" : "pending"}: RM ${Number(cashback.amount).toFixed(2)} to ${paidBy?.name ?? "payer"}`}
+                title={`Cashback ${cashbackAllReceived ? "received" : "pending"}: RM ${cashbackTotal.toFixed(2)}${cashbacks.length > 1 ? ` across ${cashbacks.length} people` : ""}`}
               >
-                <Coins size={10} /> RM {Number(cashback.amount).toFixed(2)}{cashback.received ? " ✓" : ""}
+                <Coins size={10} /> RM {cashbackTotal.toFixed(2)}{cashbackAllReceived ? " ✓" : ""}
               </span>
             )}
             {expense.split_type === "even" && <span className="text-xs text-slate-600">Even split</span>}

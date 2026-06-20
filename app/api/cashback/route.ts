@@ -69,10 +69,23 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const idParam = new URL(req.url).searchParams.get("id");
+  const url = new URL(req.url);
+  const db = serverDb();
+
+  // Revert switch: delete EVERY cashback for a trip. Safe — cashbacks are a
+  // standalone side-table, so this never affects expenses/splits/settlement.
+  const all = url.searchParams.get("all");
+  const tripIdParam = url.searchParams.get("trip_id");
+  if (all && tripIdParam) {
+    const denied = await requireEditor(tripIdParam); if (denied) return denied;
+    const { error } = await db.from("cashbacks").delete().eq("trip_id", tripIdParam);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  }
+
+  const idParam = url.searchParams.get("id");
   const id = idParam ?? (await req.json().catch(() => ({}))).id;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const db = serverDb();
   const { data: existing } = await db.from("cashbacks").select("trip_id").eq("id", id).single();
   if (existing?.trip_id) { const denied = await requireEditor(existing.trip_id); if (denied) return denied; }
   const { error } = await db.from("cashbacks").delete().eq("id", id);

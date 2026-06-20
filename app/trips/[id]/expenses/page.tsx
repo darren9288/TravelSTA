@@ -22,10 +22,9 @@ type EditState = {
   split_type: string;
   wallet_id: string;
   splits: { traveler_id: string; amount: string; foreignAmount: string }[];
-  // Cashback for this expense (separate ledger). cashbackId = existing record, if any.
-  cashbackId: string | null;
-  cashbackAmount: string;
-  cashbackReceived: boolean;
+  // Per-person cashback for this expense (separate ledger). One row per real
+  // traveller; id = an existing record to update/delete, null = new if filled.
+  cashbacks: { traveler_id: string; amount: string; received: boolean; id: string | null }[];
 };
 
 export default function ExpensesPage() {
@@ -48,10 +47,11 @@ export default function ExpensesPage() {
   const travelers: Traveler[] = Array.isArray(travelersData) ? travelersData : [];
   const expenses: Expense[] = Array.isArray(expensesData) ? expensesData : [];
   const wallets = walletsData?.wallets ?? [];
-  // One cashback per expense (latest wins) for the row badge + edit modal.
-  const cashbackByExpense: Record<string, Cashback> = {};
+  // All cashback entries per expense (an expense can credit several people, e.g.
+  // a "paid-for-all" bill) — used for the row badge + the edit modal.
+  const cashbacksByExpense: Record<string, Cashback[]> = {};
   for (const c of cashbackData?.cashbacks ?? []) {
-    if (!cashbackByExpense[c.expense_id]) cashbackByExpense[c.expense_id] = c;
+    (cashbacksByExpense[c.expense_id] = cashbacksByExpense[c.expense_id] || []).push(c);
   }
   const loading = tripLoading || travelersLoading || expensesLoading || walletsLoading;
 
@@ -66,7 +66,7 @@ export default function ExpensesPage() {
 
   function openEdit(expense: Expense) {
     const realTravelers = travelers.filter((t) => !t.is_pool);
-    const cb = cashbackByExpense[expense.id];
+    const cbByTraveler = new Map((cashbacksByExpense[expense.id] ?? []).map((c) => [c.traveler_id, c]));
     setEditState({
       id: expense.id,
       date: expense.date,
@@ -83,9 +83,10 @@ export default function ExpensesPage() {
         const existing = expense.splits?.find((s) => s.traveler_id === t.id);
         return { traveler_id: t.id, amount: existing ? String(existing.amount) : "", foreignAmount: "" };
       }),
-      cashbackId: cb?.id ?? null,
-      cashbackAmount: cb ? String(cb.amount) : "",
-      cashbackReceived: cb?.received ?? false,
+      cashbacks: realTravelers.map((t) => {
+        const existing = cbByTraveler.get(t.id);
+        return { traveler_id: t.id, amount: existing ? String(existing.amount) : "", received: existing?.received ?? false, id: existing?.id ?? null };
+      }),
     });
     setEditError("");
   }
@@ -129,23 +130,25 @@ export default function ExpensesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Sync the cashback ledger entry for this expense (separate from the
-      // expense save). Always credited to the current payer. Best-effort.
-      const cbAmt = parseFloat(editState.cashbackAmount);
-      const hasCb = !!cbAmt && cbAmt > 0;
+      // Sync the per-person cashback ledger for this expense (separate table —
+      // never affects splits/settlement). Create / update / delete per traveller.
       try {
-        if (hasCb && editState.cashbackId) {
-          await fetch("/api/cashback", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: editState.cashbackId, amount: cbAmt, received: editState.cashbackReceived }),
-          });
-        } else if (hasCb && !editState.cashbackId) {
-          await fetch("/api/cashback", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ trip_id: id, expense_id: editState.id, traveler_id: editState.paid_by_id, amount: cbAmt }),
-          });
-        } else if (!hasCb && editState.cashbackId) {
-          await fetch(`/api/cashback?id=${editState.cashbackId}`, { method: "DELETE" });
+        for (const cb of editState.cashbacks) {
+          const amt = parseFloat(cb.amount);
+          const has = !!amt && amt > 0;
+          if (has && cb.id) {
+            await fetch("/api/cashback", {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: cb.id, amount: amt, received: cb.received }),
+            });
+          } else if (has && !cb.id) {
+            await fetch("/api/cashback", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ trip_id: id, expense_id: editState.id, traveler_id: cb.traveler_id, amount: amt }),
+            });
+          } else if (!has && cb.id) {
+            await fetch(`/api/cashback?id=${cb.id}`, { method: "DELETE" });
+          }
         }
       } catch { /* cashback sync is best-effort — never block the expense edit */ }
 
@@ -253,7 +256,7 @@ export default function ExpensesPage() {
                   {groups[date].map((e) => (
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
                       wallets={wallets}
-                      cashback={cashbackByExpense[e.id]}
+                      cashbacks={cashbacksByExpense[e.id]}
                       onDelete={trip?.my_role !== "viewer" ? handleDelete : undefined}
                       onEdit={trip?.my_role !== "viewer" ? openEdit : undefined} />
                   ))}
@@ -459,26 +462,33 @@ export default function ExpensesPage() {
               <input value={editState.notes} onChange={(e) => setEditState({ ...editState, notes: e.target.value })} placeholder="Optional"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
 
-            {/* Cashback for this expense — credited to the payer, tracked separately */}
+            {/* Per-person cashback for this expense — separate ledger, never changes splits */}
             <div className="border-t border-slate-700/50 pt-3">
-              <label className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                <Coins size={12} className="text-emerald-400" /> Cashback (RM) — optional
+              <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                <Coins size={12} className="text-emerald-400" /> Cashback (RM) — per person, optional
               </label>
-              <div className="flex items-center gap-2">
-                <input type="number" step="0.01" value={editState.cashbackAmount}
-                  onChange={(e) => setEditState({ ...editState, cashbackAmount: e.target.value })}
-                  placeholder={`back to ${travelers.find((t) => t.id === editState.paid_by_id)?.name ?? "payer"}`}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-                {editState.cashbackId && (
-                  <label className="flex items-center gap-1.5 text-xs text-slate-400 whitespace-nowrap cursor-pointer">
-                    <input type="checkbox" checked={editState.cashbackReceived}
-                      onChange={(e) => setEditState({ ...editState, cashbackReceived: e.target.checked })}
-                      className="accent-emerald-500 w-4 h-4" />
-                    received
-                  </label>
-                )}
+              <div className="flex flex-col gap-1.5">
+                {editState.cashbacks.map((cb, i) => {
+                  const t = travelers.find((x) => x.id === cb.traveler_id);
+                  return (
+                    <div key={cb.traveler_id} className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t?.color }} />
+                      <span className="text-sm text-slate-300 flex-1 truncate">{t?.name}</span>
+                      {cb.id && (
+                        <label className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer whitespace-nowrap">
+                          <input type="checkbox" checked={cb.received}
+                            onChange={(e) => setEditState({ ...editState, cashbacks: editState.cashbacks.map((x, idx) => idx === i ? { ...x, received: e.target.checked } : x) })}
+                            className="accent-emerald-500 w-3.5 h-3.5" /> rcvd
+                        </label>
+                      )}
+                      <input type="number" step="0.01" value={cb.amount} placeholder="0.00"
+                        onChange={(e) => setEditState({ ...editState, cashbacks: editState.cashbacks.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x) })}
+                        className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right focus:outline-none focus:border-emerald-500" />
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-[11px] text-slate-600 mt-1">Records cashback for the payer. On an existing expense the split isn&apos;t auto-adjusted — edit the split amounts yourself if you want to share it.</p>
+              <p className="text-[11px] text-slate-600 mt-1">Tracking only — never changes the split. Clear an amount to remove it. For &quot;paid-for-all&quot; bills, fill each Ryt user.</p>
             </div>
 
             {editError && <p className="text-sm text-red-400">{editError}</p>}
