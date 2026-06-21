@@ -91,7 +91,7 @@ export default function NotificationAutoPrompt() {
       await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(existing.toJSON()),
+        body: JSON.stringify({ subscription: existing.toJSON() }),
       });
       return;
     }
@@ -105,7 +105,7 @@ export default function NotificationAutoPrompt() {
     await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sub.toJSON()),
+      body: JSON.stringify({ subscription: sub.toJSON() }),
     });
   }
 
