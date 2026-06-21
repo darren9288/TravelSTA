@@ -110,11 +110,16 @@ export default function PoolPage() {
     }
   }
 
-  // Personal use: a member spent pool money on themselves. Since the pool is
-  // everyone's, the member must make the others whole — so this records BOTH a
-  // pool expense (the spend, tagged 100% to that member, drops the pool) AND a
-  // top-up by that member of the same amount (the repayment, restores the pool).
-  // Net pool change = 0, so the other members' contributions stay intact.
+  // Personal use: a member spent pool money on themselves. The pool is everyone's,
+  // so they must compensate the others — and the user wants that to land in
+  // Settle All. So this:
+  //   1. Drains the pool by the amount (recorded against the pool itself — money
+  //      really left the pool; shows in pool history).
+  //   2. Makes the member OWE each OTHER member their per-head share (amount / N)
+  //      via small "Transfer Out" expenses. Those enter the settlement, so the
+  //      member goes negative and the others positive in Settle All.
+  // Net: member bears the amount (their own share via the lower pool balance +
+  // paying the others back); the others are made whole through settlement.
   const [personalPoolId, setPersonalPoolId] = useState<string | null>(null);
   const [personalMember, setPersonalMember] = useState("");
   const [personalAmount, setPersonalAmount] = useState("");
@@ -126,39 +131,46 @@ export default function PoolPage() {
     const amt = parseFloat(personalAmount);
     const member = personalMember || travelers[0]?.id;
     if (!amt || isNaN(amt) || amt <= 0 || !member) { setError("Pick a member and an amount."); return; }
+    const others = travelers.filter((t) => t.id !== member);
     setPersonalSaving(true); setError("");
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const isForeign = pool.pool_currency !== "MYR";
     const rate = rateForWallet({ name: pool.name, currency: pool.pool_currency ?? "MYR" });
-    const myr = parseFloat((isForeign ? amt / rate : amt).toFixed(2));
+    const myr = round2(isForeign ? amt / rate : amt);
     const foreign = isForeign ? amt : null;
     const today = new Date().toISOString().slice(0, 10);
     const memberName = travelers.find((t) => t.id === member)?.name ?? "member";
     const noteSuffix = personalNote.trim() ? ` — ${personalNote.trim()}` : "";
+    const N = travelers.length;
+    const shareMyr = round2(myr / N); // each other member's per-head share of the draw
     try {
-      // 1. The personal spend: a pool expense split 100% to the member.
-      const exRes = await fetch("/api/expenses", {
+      // 1. Drain the pool by the amount taken (attributed to the pool itself).
+      const drainRes = await fetch("/api/pool", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trip_id: id, date: today, category: personalCategory, split_type: "individual",
-          paid_by_id: pool.id, payment_type: "Cash",
-          currency: pool.pool_currency ?? "MYR", foreign_amount: foreign, myr_amount: myr,
-          notes: `Personal use (${memberName})${noteSuffix}`,
-          created_by_id: myId,
-          splits: [{ traveler_id: member, amount: myr }],
-          wallet_id: null,
+          trip_id: id, pool_id: pool.id, contributed_by_id: pool.id,
+          myr_amount: -myr, foreign_amount: foreign != null ? -foreign : null,
+          date: today, notes: `Personal use (${personalCategory}) by ${memberName}${noteSuffix}`,
+          from_wallet_id: null,
         }),
       });
-      if (!exRes.ok) { const d = await exRes.json().catch(() => ({})); throw new Error(d.error || "Failed to record the pool spend."); }
-      // 2. The repayment: a top-up by the member, restoring the pool.
-      const tuRes = await fetch("/api/pool", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trip_id: id, pool_id: pool.id, contributed_by_id: member,
-          myr_amount: myr, foreign_amount: foreign, date: today,
-          notes: `Repayment: personal use${noteSuffix}`, from_wallet_id: null,
-        }),
-      });
-      if (!tuRes.ok) { const d = await tuRes.json().catch(() => ({})); throw new Error(d.error || `Spend recorded, but the repayment failed — add a top-up by ${memberName} manually.`); }
+      if (!drainRes.ok) { const d = await drainRes.json().catch(() => ({})); throw new Error(d.error || "Failed to drain the pool."); }
+      // 2. Member owes each OTHER member their per-head share → shows in Settle All.
+      for (const o of others) {
+        const exRes = await fetch("/api/expenses", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trip_id: id, date: today, category: "Transfer Out", split_type: "individual",
+            paid_by_id: o.id, payment_type: "Cash", currency: "MYR",
+            foreign_amount: null, myr_amount: shareMyr,
+            notes: `Pool personal use (${personalCategory}) by ${memberName}${noteSuffix}`,
+            created_by_id: myId,
+            splits: [{ traveler_id: member, amount: shareMyr }],
+            wallet_id: null,
+          }),
+        });
+        if (!exRes.ok) { const d = await exRes.json().catch(() => ({})); throw new Error(d.error || `Pool drained, but a reimbursement entry failed — check ${memberName}'s expenses.`); }
+      }
       setPersonalPoolId(null); setPersonalMember(""); setPersonalAmount(""); setPersonalNote("");
       mutatePool();
     } catch (e) {
@@ -783,7 +795,7 @@ export default function PoolPage() {
                     {personalPoolId === p.id && (
                       <div className="mt-3 pt-3 border-t border-slate-700/50 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
                         <p className="text-xs text-slate-400">
-                          A member spent <span className="text-white font-medium">{p.pool_currency}</span> pool money on themselves. They repay the pool, so everyone else stays whole.
+                          A member spent <span className="text-white font-medium">{p.pool_currency}</span> pool money on themselves. The pool drops, and they&apos;ll owe the other members their share back in Settle All.
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <select value={personalMember || travelers[0]?.id || ""}
@@ -807,14 +819,20 @@ export default function PoolPage() {
                             placeholder="Note (optional)"
                             className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                         </div>
-                        {personalAmount && !isNaN(parseFloat(personalAmount)) && parseFloat(personalAmount) > 0 && (
-                          <p className="text-[11px] text-slate-500">
-                            {travelers.find((t) => t.id === (personalMember || travelers[0]?.id))?.name ?? "Member"} bears{" "}
-                            {p.pool_currency !== "MYR"
-                              ? `${p.pool_currency} ${parseFloat(personalAmount).toLocaleString()} (≈ RM ${(parseFloat(personalAmount) / rate).toFixed(2)})`
-                              : `RM ${parseFloat(personalAmount).toFixed(2)}`}; pool balance unchanged.
-                          </p>
-                        )}
+                        {personalAmount && !isNaN(parseFloat(personalAmount)) && parseFloat(personalAmount) > 0 && (() => {
+                          const amtNum = parseFloat(personalAmount);
+                          const myrEq = p.pool_currency !== "MYR" ? amtNum / rate : amtNum;
+                          const N = travelers.length;
+                          const share = N > 0 ? myrEq / N : 0;
+                          const othersCount = Math.max(0, N - 1);
+                          const who = travelers.find((t) => t.id === (personalMember || travelers[0]?.id))?.name ?? "They";
+                          return (
+                            <p className="text-[11px] text-slate-500">
+                              Pool drops by {p.pool_currency !== "MYR" ? `${p.pool_currency} ${amtNum.toLocaleString()} (≈ RM ${myrEq.toFixed(2)})` : `RM ${myrEq.toFixed(2)}`}.
+                              {othersCount > 0 ? ` ${who} owes the other ${othersCount} member${othersCount === 1 ? "" : "s"} RM ${share.toFixed(2)} each in Settle All.` : ""}
+                            </p>
+                          );
+                        })()}
                         <div className="flex gap-2">
                           <button onClick={() => setPersonalPoolId(null)}
                             className="flex-1 py-1.5 border border-slate-600 text-slate-400 hover:text-white text-xs rounded-lg transition-colors">
