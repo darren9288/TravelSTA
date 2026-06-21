@@ -195,6 +195,18 @@ export default function ExpensesPage() {
     if (!groups[e.date]) groups[e.date] = [];
     groups[e.date].push(e);
   }
+  // Within each day, order by the expense's time-of-day (latest first), keeping
+  // the page's newest-first feel. Expenses with no time fall back to entry order.
+  for (const d of Object.keys(groups)) {
+    groups[d].sort((a, b) => {
+      const ta = a.time && /^\d/.test(a.time) ? a.time : "";
+      const tb = b.time && /^\d/.test(b.time) ? b.time : "";
+      if (ta && tb) return tb.localeCompare(ta);
+      if (ta) return -1;        // timed entries before untimed
+      if (tb) return 1;
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    });
+  }
   const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
   const total = filtered.reduce((s, e) => s + Number(e.myr_amount), 0);
   const realTravelers = travelers.filter((t) => !t.is_pool);
