@@ -2,11 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
-import { Trip, Traveler, PoolTopup, Expense } from "@/lib/supabase";
+import { Trip, Traveler, PoolTopup, Expense, CATEGORIES } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useTripRealtime } from "@/lib/use-realtime";
-import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Archive, RotateCcw } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Archive, RotateCcw, ShoppingBag } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type SortKey = "date-asc" | "date-desc" | "amount-desc" | "amount-asc";
@@ -107,6 +107,64 @@ export default function PoolPage() {
       }
     } finally {
       setAdjusting(false);
+    }
+  }
+
+  // Personal use: a member spent pool money on themselves. Since the pool is
+  // everyone's, the member must make the others whole — so this records BOTH a
+  // pool expense (the spend, tagged 100% to that member, drops the pool) AND a
+  // top-up by that member of the same amount (the repayment, restores the pool).
+  // Net pool change = 0, so the other members' contributions stay intact.
+  const [personalPoolId, setPersonalPoolId] = useState<string | null>(null);
+  const [personalMember, setPersonalMember] = useState("");
+  const [personalAmount, setPersonalAmount] = useState("");
+  const [personalCategory, setPersonalCategory] = useState("Others");
+  const [personalNote, setPersonalNote] = useState("");
+  const [personalSaving, setPersonalSaving] = useState(false);
+
+  async function handlePersonalUse(pool: Traveler) {
+    const amt = parseFloat(personalAmount);
+    const member = personalMember || travelers[0]?.id;
+    if (!amt || isNaN(amt) || amt <= 0 || !member) { setError("Pick a member and an amount."); return; }
+    setPersonalSaving(true); setError("");
+    const isForeign = pool.pool_currency !== "MYR";
+    const rate = rateForWallet({ name: pool.name, currency: pool.pool_currency ?? "MYR" });
+    const myr = parseFloat((isForeign ? amt / rate : amt).toFixed(2));
+    const foreign = isForeign ? amt : null;
+    const today = new Date().toISOString().slice(0, 10);
+    const memberName = travelers.find((t) => t.id === member)?.name ?? "member";
+    const noteSuffix = personalNote.trim() ? ` — ${personalNote.trim()}` : "";
+    try {
+      // 1. The personal spend: a pool expense split 100% to the member.
+      const exRes = await fetch("/api/expenses", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: id, date: today, category: personalCategory, split_type: "individual",
+          paid_by_id: pool.id, payment_type: "Cash",
+          currency: pool.pool_currency ?? "MYR", foreign_amount: foreign, myr_amount: myr,
+          notes: `Personal use (${memberName})${noteSuffix}`,
+          created_by_id: myId,
+          splits: [{ traveler_id: member, amount: myr }],
+          wallet_id: null,
+        }),
+      });
+      if (!exRes.ok) { const d = await exRes.json().catch(() => ({})); throw new Error(d.error || "Failed to record the pool spend."); }
+      // 2. The repayment: a top-up by the member, restoring the pool.
+      const tuRes = await fetch("/api/pool", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: id, pool_id: pool.id, contributed_by_id: member,
+          myr_amount: myr, foreign_amount: foreign, date: today,
+          notes: `Repayment: personal use${noteSuffix}`, from_wallet_id: null,
+        }),
+      });
+      if (!tuRes.ok) { const d = await tuRes.json().catch(() => ({})); throw new Error(d.error || `Spend recorded, but the repayment failed — add a top-up by ${memberName} manually.`); }
+      setPersonalPoolId(null); setPersonalMember(""); setPersonalAmount(""); setPersonalNote("");
+      mutatePool();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPersonalSaving(false);
     }
   }
 
@@ -644,8 +702,22 @@ export default function PoolPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            setPersonalPoolId(personalPoolId === p.id ? null : p.id);
+                            setPersonalMember(""); setPersonalAmount(""); setPersonalNote(""); setPersonalCategory("Others");
+                            setAdjustPoolId(null);
+                          }}
+                          className="p-1.5 text-slate-600 hover:text-emerald-400 transition-colors flex-shrink-0"
+                          title="A member used pool money for themselves"
+                        >
+                          <ShoppingBag size={13} />
+                        </button>
+                      )}
+                      {trip?.my_role !== "viewer" && !p.archived && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setAdjustPoolId(adjustPoolId === p.id ? null : p.id);
-                            setAdjustAmount(""); setAdjustNote("");
+                            setAdjustAmount(""); setAdjustNote(""); setPersonalPoolId(null);
                           }}
                           className="p-1.5 text-slate-600 hover:text-emerald-400 transition-colors flex-shrink-0"
                           title={`Adjust balance (in ${p.pool_currency})`}
@@ -707,7 +779,56 @@ export default function PoolPage() {
                       </div>
                     )}
 
-                    {!selectedPool && adjustPoolId !== p.id && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}
+                    {/* Personal use — a member spent pool money on themselves; they repay the pool */}
+                    {personalPoolId === p.id && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs text-slate-400">
+                          A member spent <span className="text-white font-medium">{p.pool_currency}</span> pool money on themselves. They repay the pool, so everyone else stays whole.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select value={personalMember || travelers[0]?.id || ""}
+                            onChange={(e) => setPersonalMember(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            {travelers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                          <input type="number" value={personalAmount} step="0.01" autoFocus min="0"
+                            onChange={(e) => setPersonalAmount(e.target.value)}
+                            placeholder={`Amount (${p.pool_currency})`}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select value={personalCategory}
+                            onChange={(e) => setPersonalCategory(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500">
+                            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                          </select>
+                          <input type="text" value={personalNote}
+                            onChange={(e) => setPersonalNote(e.target.value)}
+                            placeholder="Note (optional)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                        </div>
+                        {personalAmount && !isNaN(parseFloat(personalAmount)) && parseFloat(personalAmount) > 0 && (
+                          <p className="text-[11px] text-slate-500">
+                            {travelers.find((t) => t.id === (personalMember || travelers[0]?.id))?.name ?? "Member"} bears{" "}
+                            {p.pool_currency !== "MYR"
+                              ? `${p.pool_currency} ${parseFloat(personalAmount).toLocaleString()} (≈ RM ${(parseFloat(personalAmount) / rate).toFixed(2)})`
+                              : `RM ${parseFloat(personalAmount).toFixed(2)}`}; pool balance unchanged.
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <button onClick={() => setPersonalPoolId(null)}
+                            className="flex-1 py-1.5 border border-slate-600 text-slate-400 hover:text-white text-xs rounded-lg transition-colors">
+                            Cancel
+                          </button>
+                          <button onClick={() => handlePersonalUse(p)} disabled={personalSaving || !personalAmount}
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                            {personalSaving ? "Saving…" : "Record personal use"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!selectedPool && adjustPoolId !== p.id && personalPoolId !== p.id && <p className="text-xs text-emerald-500 mt-2">Tap for history →</p>}
                   </div>
                 );
               })}
