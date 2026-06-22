@@ -68,6 +68,7 @@ export default function AddExpensePage() {
   // expenses in one save — each paid by that person and split only to themselves
   // (so settlement nets to zero; it's pure per-person record-keeping).
   const [sepDate, setSepDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sepTime, setSepTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [sepCategory, setSepCategory] = useState("Lunch");
   const [sepNotes, setSepNotes] = useState("");
   const [sepRows, setSepRows] = useState<
@@ -346,6 +347,7 @@ export default function AddExpensePage() {
           body: JSON.stringify({
             trip_id: id,
             date: sepDate,
+            time: sepTime || null,
             category: sepCategory,
             split_type: "individual",
             paid_by_id: row.traveler_id,
@@ -1052,9 +1054,13 @@ export default function AddExpensePage() {
 
               {/* Shared fields */}
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Date</label>
-                  <input type="date" value={sepDate} onChange={(e) => setSepDate(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Date &amp; Time</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={sepDate} onChange={(e) => setSepDate(e.target.value)}
+                      className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                    <input type="time" value={sepTime} onChange={(e) => setSepTime(e.target.value)} title="Optional — defaults to now"
+                      className="w-[88px] bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500" />
+                  </div></div>
                 <div><label className="text-xs text-slate-400 mb-1 block">Category</label>
                   <select value={sepCategory} onChange={(e) => setSepCategory(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
