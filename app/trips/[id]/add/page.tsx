@@ -698,9 +698,10 @@ export default function AddExpensePage() {
                   onClick={() => {
                     const gross = parseFloat(myrAmount);
                     if (!gross || isNaN(gross)) { setError("Type the amount first."); return; }
-                    // Cashback rounded DOWN to 2dp (1e-6 guards float under-representation).
+                    // Amount = gross − 1.2%, rounded to 2dp. Cashback = 1.2%, floored to 2dp.
+                    const net = Math.round(gross * 0.988 * 100) / 100;
                     const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
-                    setMyrAmount((Math.round((gross - cb) * 100) / 100).toFixed(2));
+                    setMyrAmount(net.toFixed(2));
                     setCashback(cb.toFixed(2));
                   }}
                   className="self-start flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded-lg px-2.5 py-1.5 transition-colors"
@@ -1146,9 +1147,9 @@ export default function AddExpensePage() {
                               onClick={() => {
                                 const gross = parseFloat(row.amount);
                                 if (!gross || isNaN(gross)) return;
-                                // Cashback rounded DOWN to 2dp.
+                                // Amount = gross − 1.2% (rounded 2dp); cashback = 1.2% (floored 2dp).
+                                const net = Math.round(gross * 0.988 * 100) / 100;
                                 const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
-                                const net = Math.round((gross - cb) * 100) / 100;
                                 setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: net.toFixed(2), cashback: cb.toFixed(2) } : r));
                               }}
                               className="flex-shrink-0 p-1 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded transition-colors"
