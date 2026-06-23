@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
-import { Sparkles, ClipboardList, Camera, Loader2, X, Users, Coins } from "lucide-react";
+import { Sparkles, ClipboardList, Camera, Loader2, X, Users, Coins, Calculator } from "lucide-react";
 import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { enqueue } from "@/lib/offline-queue";
@@ -693,6 +693,20 @@ export default function AddExpensePage() {
                     placeholder="e.g. 1200" step={currency === "MYR" ? "0.01" : "1"}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" /></div>
               </div>
+              {currency === "MYR" && (
+                <button type="button"
+                  onClick={() => {
+                    const gross = parseFloat(myrAmount);
+                    if (!gross || isNaN(gross)) { setError("Type the amount first."); return; }
+                    const cb = Math.round(gross * 0.012 * 100) / 100;
+                    setMyrAmount(String(Math.round((gross - cb) * 100) / 100));
+                    setCashback(String(cb));
+                  }}
+                  className="self-start flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded-lg px-2.5 py-1.5 transition-colors"
+                  title="Treat the amount as the gross, deduct 1.2%, and fill the cashback">
+                  <Calculator size={13} /> Ryt &minus;1.2% &rarr; fills amount + cashback
+                </button>
+              )}
               {currency !== "MYR" && myrAmount && (
                 <p className="text-xs text-slate-500">≈ RM {myrAmount}</p>
               )}
@@ -1126,6 +1140,20 @@ export default function AddExpensePage() {
                             placeholder="cashback (RM) — only for the Ryt users, optional"
                             onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, cashback: e.target.value } : r))}
                             className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+                          {row.currency === "MYR" && (
+                            <button type="button"
+                              onClick={() => {
+                                const gross = parseFloat(row.amount);
+                                if (!gross || isNaN(gross)) return;
+                                const cb = Math.round(gross * 0.012 * 100) / 100;
+                                const net = Math.round((gross - cb) * 100) / 100;
+                                setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: String(net), cashback: String(cb) } : r));
+                              }}
+                              className="flex-shrink-0 p-1 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded transition-colors"
+                              title="Ryt −1.2%: deduct from amount, fill cashback">
+                              <Calculator size={13} />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
