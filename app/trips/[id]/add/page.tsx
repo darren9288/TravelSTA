@@ -699,8 +699,8 @@ export default function AddExpensePage() {
                     const gross = parseFloat(myrAmount);
                     if (!gross || isNaN(gross)) { setError("Type the amount first."); return; }
                     const cb = Math.round(gross * 0.012 * 100) / 100;
-                    setMyrAmount(String(Math.round((gross - cb) * 100) / 100));
-                    setCashback(String(cb));
+                    setMyrAmount((Math.round((gross - cb) * 100) / 100).toFixed(2));
+                    setCashback(cb.toFixed(2));
                   }}
                   className="self-start flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded-lg px-2.5 py-1.5 transition-colors"
                   title="Treat the amount as the gross, deduct 1.2%, and fill the cashback">
@@ -1147,7 +1147,7 @@ export default function AddExpensePage() {
                                 if (!gross || isNaN(gross)) return;
                                 const cb = Math.round(gross * 0.012 * 100) / 100;
                                 const net = Math.round((gross - cb) * 100) / 100;
-                                setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: String(net), cashback: String(cb) } : r));
+                                setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: net.toFixed(2), cashback: cb.toFixed(2) } : r));
                               }}
                               className="flex-shrink-0 p-1 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded transition-colors"
                               title="Ryt −1.2%: deduct from amount, fill cashback">
