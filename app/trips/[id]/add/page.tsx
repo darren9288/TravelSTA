@@ -698,7 +698,8 @@ export default function AddExpensePage() {
                   onClick={() => {
                     const gross = parseFloat(myrAmount);
                     if (!gross || isNaN(gross)) { setError("Type the amount first."); return; }
-                    const cb = Math.round(gross * 0.012 * 100) / 100;
+                    // Cashback rounded DOWN to 2dp (1e-6 guards float under-representation).
+                    const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
                     setMyrAmount((Math.round((gross - cb) * 100) / 100).toFixed(2));
                     setCashback(cb.toFixed(2));
                   }}
@@ -1145,7 +1146,8 @@ export default function AddExpensePage() {
                               onClick={() => {
                                 const gross = parseFloat(row.amount);
                                 if (!gross || isNaN(gross)) return;
-                                const cb = Math.round(gross * 0.012 * 100) / 100;
+                                // Cashback rounded DOWN to 2dp.
+                                const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
                                 const net = Math.round((gross - cb) * 100) / 100;
                                 setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: net.toFixed(2), cashback: cb.toFixed(2) } : r));
                               }}
