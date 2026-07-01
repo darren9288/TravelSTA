@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
+import { Trip, Traveler, Expense, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
+import { mutate } from "swr";
 import { Sparkles, ClipboardList, Camera, Loader2, X, Users, Coins, Calculator } from "lucide-react";
 import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -264,47 +265,57 @@ export default function AddExpensePage() {
       return;
     }
 
-    try {
-      const res = await fetch("/api/expenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      // Record manual cashback (if any) against the new expense, credited to the
-      // payer. Best-effort — a cashback failure shouldn't block the expense save.
-      const cb = parseFloat(cashback);
-      if (cb && cb > 0 && data?.id) {
-        await fetch("/api/cashback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ trip_id: id, expense_id: data.id, traveler_id: paidById, amount: cb }),
-        }).catch(() => {});
-      }
-      router.push(`/trips/${id}/expenses`);
-    } catch (e) {
-      // Network error while we *thought* we were online — fall back to
-      // queueing rather than discarding the user's input.
-      const msg = (e as Error).message;
-      if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
-        enqueue({
-          method: "POST",
-          url: "/api/expenses",
-          body,
-          description: `${category} · RM ${total.toFixed(2)}`,
+    // ONLINE: optimistic — show the new expense and navigate INSTANTLY, then sync
+    // in the background. The DB write is the SAME POST as before; this only changes
+    // WHEN the UI updates (SWR in-memory cache), never what is stored.
+    const tempId = `temp-${Date.now()}`;
+    const payer = travelers.find((t) => t.id === paidById);
+    const optimistic: Expense = {
+      id: tempId, trip_id: id as string, date, time: time || null, category,
+      split_type: splitType, paid_by_id: paidById, payment_type: paymentType,
+      currency, foreign_amount: currency !== "MYR" ? parseFloat(foreignAmount) || null : null,
+      myr_amount: total, notes: notes || null, created_by_id: myId, wallet_id: walletId || null,
+      created_at: new Date().toISOString(), paid_by: payer,
+      splits: splitData.map((s, i) => ({
+        id: `${tempId}-s${i}`, expense_id: tempId, traveler_id: s.traveler_id, amount: s.amount,
+        // Pre-mark the payer's own share / RM0 shares settled so the row doesn't
+        // fire an auto-settle PUT against the temporary (non-existent) split id.
+        is_settled: s.traveler_id === paidById || s.amount === 0,
+      })),
+    };
+    const key = `/api/expenses?trip_id=${id}`;
+    mutate(key, (cur?: Expense[]) => [optimistic, ...(Array.isArray(cur) ? cur : [])], { revalidate: false });
+    router.push(`/trips/${id}/expenses`);
+
+    // Background sync — nothing here blocks the navigation above.
+    void (async () => {
+      try {
+        const res = await fetch("/api/expenses", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         });
-        toast({
-          kind: "info",
-          title: "Saved offline",
-          body: "Network glitch — we'll sync when it's back.",
-        });
-        router.push(`/trips/${id}/expenses`);
-        return;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        const cb = parseFloat(cashback);
+        if (cb && cb > 0 && data?.id) {
+          await fetch("/api/cashback", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trip_id: id, expense_id: data.id, traveler_id: paidById, amount: cb }),
+          }).catch(() => {});
+          mutate(`/api/cashback?trip_id=${id}`);
+        }
+        mutate(key); // revalidate → the real saved row replaces the optimistic one
+      } catch (e) {
+        const msg = ((e as Error).message || "").toLowerCase();
+        if (msg.includes("failed to fetch") || msg.includes("network")) {
+          // Real network drop — hand to the offline queue; keep the optimistic row.
+          enqueue({ method: "POST", url: "/api/expenses", body, description: `${category} · RM ${total.toFixed(2)}` });
+          toast({ kind: "info", title: "Saved offline", body: "Network glitch — we'll sync when it's back." });
+        } else {
+          mutate(key); // drop the optimistic row (server never stored it)
+          toast({ kind: "error", title: "Save failed", body: (e as Error).message || "Could not save the expense." });
+        }
       }
-      setError(msg);
-      setSaving(false);
-    }
+    })();
   }
 
   // Map a wallet name to a payment type — same heuristic the Form/AI tabs use.
