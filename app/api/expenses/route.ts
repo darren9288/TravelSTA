@@ -114,23 +114,7 @@ export async function POST(req: NextRequest) {
 
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
 
-  // Audit log for super-admin review.
-  {
-    const me = await getSessionUser();
-    void logActivity({
-      action: "expense_add",
-      userId: me?.id ?? null,
-      tripId: body.trip_id,
-      details: {
-        expense_id: expense.id,
-        category: body.category,
-        myr_amount: body.myr_amount,
-        paid_by_id: body.paid_by_id,
-      },
-      req,
-    });
-  }
-
+  // Splits — critical: a failure here must surface, so we return on error.
   if (body.splits?.length) {
     const { error: splitErr } = await supabase.from("expense_splits").insert(
       body.splits.map((s: { traveler_id: string; amount: number }) => ({
@@ -143,17 +127,29 @@ export async function POST(req: NextRequest) {
     if (splitErr) return NextResponse.json({ error: splitErr.message }, { status: 500 });
   }
 
-  // Push: "{payer} added an expense — RM {amount} · {category}"
+  // The expense is now saved. Everything below is best-effort SIDE WORK (audit
+  // log, push, anomaly detection) — wrapped so it can never break the save. We
+  // fetch its shared context (acting user, trip, payer) ONCE here instead of the
+  // previous 4+ separate sequential round-trips, to keep the save response fast.
   try {
     const me = await getSessionUser();
-    const [{ data: payer }, { data: trip }] = await Promise.all([
-      supabase.from("travelers").select("name").eq("id", body.paid_by_id).single(),
-      supabase.from("trips").select("name, foreign_currency").eq("id", body.trip_id).single(),
+    const [{ data: tripFull }, { data: payerRow }] = await Promise.all([
+      supabase.from("trips").select("*").eq("id", body.trip_id).single(),
+      supabase.from("travelers").select("name, is_pool").eq("id", body.paid_by_id).single(),
     ]);
-    const payerName = payer?.name ?? "Someone";
-    const tripName = trip?.name ?? "your trip";
+
+    void logActivity({
+      action: "expense_add",
+      userId: me?.id ?? null,
+      tripId: body.trip_id,
+      details: { expense_id: expense.id, category: body.category, myr_amount: body.myr_amount, paid_by_id: body.paid_by_id },
+      req,
+    });
+
+    // Push: "{payer} added an expense — RM {amount} · {category}"
+    const trip = tripFull as { name?: string; foreign_currency?: string } | null;
+    const payerName = payerRow?.name ?? "Someone";
     const myr = Number(body.myr_amount ?? 0).toFixed(0);
-    const fc = trip?.foreign_currency;
     const foreignAmt = body.foreign_amount ? ` (${trip?.foreign_currency ?? ""}${Math.round(body.foreign_amount)})` : "";
     const desc = body.notes ? ` — ${String(body.notes).slice(0, 40)}` : "";
     void sendPushToTripMembers(
@@ -167,29 +163,11 @@ export async function POST(req: NextRequest) {
       me?.id,
       { category: "expense_add" }
     ).catch((e: unknown) => console.error("[push.expense]", (e as Error).message));
-    void fc;
-  } catch (e) {
-    console.error("[push.expense] setup failed:", (e as Error).message);
-  }
 
-  // Anomaly detection: run all 9 detectors and fire one push per anomaly.
-  // Wrapped so detector failures never break the create flow.
-  try {
-    const { data: tripFull } = await supabase
-      .from("trips")
-      .select("*")
-      .eq("id", body.trip_id)
-      .single();
+    // Anomaly detection (rule-based). Pool overdraft only when a pool paid.
     if (tripFull) {
       const anomalies = await detectExpenseAnomalies(expense, tripFull as Trip);
-      // Pool overdraft is trip-scoped, not expense-scoped — only check when
-      // the expense is paid by a pool (likely changes the balance).
-      const { data: payerInfo } = await supabase
-        .from("travelers")
-        .select("is_pool")
-        .eq("id", body.paid_by_id)
-        .single();
-      if ((payerInfo as { is_pool?: boolean } | null)?.is_pool) {
+      if (payerRow?.is_pool) {
         const overdrafts = await detectPoolOverdraft(body.trip_id, (tripFull as Trip).name);
         anomalies.push(...overdrafts);
       }
@@ -203,7 +181,7 @@ export async function POST(req: NextRequest) {
       }
     }
   } catch (e) {
-    console.error("[push.anomaly] setup failed:", (e as Error).message);
+    console.error("[expense.sidework] failed:", (e as Error).message);
   }
 
   return NextResponse.json(expense, { status: 201 });
