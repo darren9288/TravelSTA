@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip } from "@/lib/supabase";
 import { NetBalance, PaymentInstruction } from "@/lib/settlement";
@@ -16,7 +16,6 @@ type WalletSelection = {
 
 export default function SettlementPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [balances, setBalances] = useState<NetBalance[]>([]);
   const [instructions, setInstructions] = useState<PaymentInstruction[]>([]);
@@ -57,12 +56,11 @@ export default function SettlementPage() {
   }, [id]);
 
   useEffect(() => {
-    router.refresh();
     load();
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load, router]);
+  }, [load]);
 
   useTripRealtime(id, load);
 

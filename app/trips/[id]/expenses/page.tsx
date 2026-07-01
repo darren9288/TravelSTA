@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import ExpenseRow from "@/components/ExpenseRow";
 import { Trip, Traveler, Expense, Cashback, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
@@ -29,7 +29,6 @@ type EditState = {
 
 export default function ExpensesPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPaidBy, setFilterPaidBy] = useState("");
   const [filterDate, setFilterDate] = useState("");
@@ -56,8 +55,6 @@ export default function ExpensesPage() {
   const loading = tripLoading || travelersLoading || expensesLoading || walletsLoading;
 
   useTripRealtime(id);
-
-  useEffect(() => { router.refresh(); }, [router]);
 
   // Arriving from the cashback ledger with ?expense=<id> → scroll to it and
   // briefly ring-highlight so the user sees which expense the rebate is for.
