@@ -349,7 +349,8 @@ export default function AddExpensePage() {
     if (!sepCategory) { setError("Pick a category."); return; }
     setSaving(true); setError("");
     try {
-      for (const row of active) {
+      // Fire all rows CONCURRENTLY (was serial — 4 people = 4 sequential waits).
+      await Promise.all(active.map(async (row) => {
         const myr = parseFloat(sepRowMyr(row).toFixed(2));
         const w = walletOptions.find((x) => x.id === row.walletId);
         const res = await fetch("/api/expenses", {
@@ -385,7 +386,7 @@ export default function AddExpensePage() {
             body: JSON.stringify({ trip_id: id, expense_id: created.id, traveler_id: row.traveler_id, amount: cb }),
           }).catch(() => {});
         }
-      }
+      }));
       router.push(`/trips/${id}/expenses`);
     } catch (e) { setError((e as Error).message); setSaving(false); }
   }
@@ -539,7 +540,8 @@ export default function AddExpensePage() {
     }
     setSaving(true); setError("");
     try {
-      for (const entry of aiParsed) {
+      // Save all parsed entries CONCURRENTLY (was serial — N lines = N waits).
+      await Promise.all(aiParsed.map(async (entry) => {
         const myr = calcMyr(entry);
         let splitData;
         if (aiSplitType === "even") {
@@ -573,7 +575,7 @@ export default function AddExpensePage() {
             wallet_id: aiWalletId || null,
           }),
         });
-      }
+      }));
       router.push(`/trips/${id}/expenses`);
     } catch (e) { setError((e as Error).message); setSaving(false); }
   }
