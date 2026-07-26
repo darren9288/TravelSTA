@@ -54,24 +54,31 @@ export async function DELETE(req: NextRequest) {
 
   const db = serverDb();
 
-  // Before delete: check for activity that would block the FK cascade. We do this
-  // explicitly so the user gets a friendly message instead of a raw Postgres
-  // "violates foreign key constraint" 500. expense_splits cascades on traveler
-  // delete, so we don't check that — but expenses.paid_by_id, expenses.created_by_id,
-  // pool_topups.pool_id and pool_topups.contributed_by_id all use NO ACTION.
+  // Before delete: check for activity that would block the FK cascade OR silently
+  // lose money. expenses.paid_by_id, expenses.created_by_id, pool_topups.pool_id
+  // and pool_topups.contributed_by_id use NO ACTION (raw FK 500 → friendly msg).
+  // expense_splits CASCADES on traveler delete — so a passive participant who
+  // never fronted money but still OWES an unsettled share would have that share
+  // deleted, under-reimbursing the payer with no warning. Block on unsettled
+  // splits too. (Settled splits are already reconciled, so they don't block.)
   const [
     { count: expensesAsPayer },
     { count: expensesAsCreator },
     { count: poolTopupsAsPool },
     { count: poolTopupsAsContributor },
+    { count: unsettledSplits },
   ] = await Promise.all([
     db.from("expenses").select("id", { count: "exact", head: true }).eq("paid_by_id", id),
     db.from("expenses").select("id", { count: "exact", head: true }).eq("created_by_id", id),
     db.from("pool_topups").select("id", { count: "exact", head: true }).eq("pool_id", id),
     db.from("pool_topups").select("id", { count: "exact", head: true }).eq("contributed_by_id", id),
+    db.from("expense_splits").select("id", { count: "exact", head: true }).eq("traveler_id", id).eq("is_settled", false),
   ]);
 
   const blockers: string[] = [];
+  if (unsettledSplits && unsettledSplits > 0) {
+    blockers.push(`${unsettledSplits} unsettled expense share${unsettledSplits === 1 ? "" : "s"} still owed`);
+  }
   if (expensesAsPayer && expensesAsPayer > 0) {
     blockers.push(`${expensesAsPayer} expense${expensesAsPayer === 1 ? "" : "s"} paid by them`);
   }
