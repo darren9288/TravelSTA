@@ -111,10 +111,10 @@ export default function Nav({ tripId, tripName }: NavProps) {
     // if they hit /add directly. Show for non-viewers and for unresolved roles
     // (avoids flicker before role data arrives).
     ...(!isViewer ? [{ href: `/trips/${tripId}/add`, icon: PlusCircle, label: "Add" }] : []),
-    { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
     { href: `/trips/${tripId}/analytics`, icon: BarChart2, label: "Analytics" },
     { href: `/trips/${tripId}/pool`, icon: Banknote, label: "Pool" },
     { href: `/trips/${tripId}/wallets`, icon: Wallet, label: "Wallets" },
+    { href: `/trips/${tripId}/settlement`, icon: Banknote, label: "Settle" },
     { href: `/trips/${tripId}/import-export`, icon: ArrowLeftRight, label: "Import/Export" },
     { href: `/trips/${tripId}/settings`, icon: Settings2, label: "Settings" },
     // Dev tab is owner-only — appended below when isSuperAdmin is true.
