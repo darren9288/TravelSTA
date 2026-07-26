@@ -9,6 +9,7 @@ import Link from "next/link";
 import useSWR, { preload, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
+import CountUp from "@/components/CountUp";
 import { useTripRealtime } from "@/lib/use-realtime";
 
 type StatsData = { byTraveler: { id: string; amount: number }[]; total: number };
@@ -142,11 +143,11 @@ export default function TripDashboard() {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Total Spent</p>
-              <p className="text-lg font-bold text-white">RM {totalSpent.toFixed(0)}</p>
+              <p className="text-lg font-bold text-white">RM <CountUp value={totalSpent} decimals={0} /></p>
             </div>
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-3 text-center">
               <p className="text-xs text-slate-500 mb-1">My Share</p>
-              <p className="text-lg font-bold text-emerald-400">RM {myShare.toFixed(0)}</p>
+              <p className="text-lg font-bold text-emerald-400">RM <CountUp value={myShare} decimals={0} /></p>
             </div>
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Travelers</p>

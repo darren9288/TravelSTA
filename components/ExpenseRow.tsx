@@ -3,6 +3,7 @@ import { Expense, Traveler, ExpenseSplit, Cashback } from "@/lib/supabase";
 import TravelerBadge from "./TravelerBadge";
 import { Trash2, Pencil, ChevronDown, ChevronUp, Lock, Camera, X, Image, Coins } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { haptic, HAPTIC_SUCCESS } from "@/lib/haptics";
 
 const CAT_COLORS: Record<string, string> = {
   "Breakfast": "#f97316", "Lunch": "#f97316", "Dinner": "#f97316", "Small Eat": "#f97316",
@@ -23,6 +24,7 @@ type Props = {
   wallets?: WalletOption[];
   cashbacks?: Cashback[]; // Manual cashback entries recorded for this expense, if any.
   highlighted?: boolean; // Briefly ring-highlight when jumped to from another page.
+  index?: number; // Position in the list — used for a staggered fade-in.
   onDelete?: (id: string) => void;
   onEdit?: (expense: Expense) => void;
 };
@@ -36,7 +38,9 @@ function isAutoSettled(split: ExpenseSplit, expense: Expense, travelers: Travele
   return false;
 }
 
-export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashbacks = [], highlighted = false, onDelete, onEdit }: Props) {
+export default function ExpenseRow({ expense, travelers, foreignCurrency, wallets = [], cashbacks = [], highlighted = false, index = 0, onDelete, onEdit }: Props) {
+  // The split id we just settled by tap — pops its checkmark in (not on load).
+  const [poppedId, setPoppedId] = useState<string | null>(null);
   // Aggregate this expense's cashback entries for the badge.
   const cashbackTotal = cashbacks.reduce((s, c) => s + Number(c.amount), 0);
   const cashbackAllReceived = cashbacks.length > 0 && cashbacks.every((c) => c.received);
@@ -97,6 +101,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
     setToggleError("");
     const newVal = !split.is_settled;
     setSplits((prev) => prev.map((s) => s.id === split.id ? { ...s, is_settled: newVal } : s));
+    if (newVal) { setPoppedId(split.id); haptic(HAPTIC_SUCCESS); }
     try {
       const res = await fetch("/api/splits", {
         method: "PUT",
@@ -204,7 +209,9 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   }
 
   return (
-    <div id={`expense-${expense.id}`} className={`border rounded-xl overflow-hidden transition-all ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
+    <div id={`expense-${expense.id}`}
+      style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
+      className={`border rounded-xl overflow-hidden transition-all animate-fade-in-up ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
       <div className="flex items-center gap-3 px-3 py-3 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
         <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: hasUnsettled ? "#f59e0b" : color }} />
         <div className="flex-1 min-w-0">
@@ -360,7 +367,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                     {(s.is_settled || locked) && (
                       locked
                         ? <Lock size={8} className="text-slate-300" />
-                        : <span className="text-white text-xs leading-none">✓</span>
+                        : <span className={`text-white text-xs leading-none inline-block ${poppedId === s.id ? "animate-pop-in" : ""}`}>✓</span>
                     )}
                   </button>
                   <div className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />

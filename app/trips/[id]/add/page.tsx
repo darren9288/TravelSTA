@@ -785,7 +785,7 @@ export default function AddExpensePage() {
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                 <p className="text-[11px] text-slate-600 mt-1">Tracked for the payer — doesn&apos;t change the split. Tick it received later in Analytics. (Add per-person cashback by editing the expense.)</p>
               </div>
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p key={error} className="text-sm text-red-400 animate-shake">{error}</p>}
               <button onClick={handleSave} disabled={saving}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
                 {saving ? "Saving..." : "Save Expense"}
@@ -941,7 +941,7 @@ export default function AddExpensePage() {
                     <p className="text-xs text-slate-500">Each of {realTravelers.length} travelers pays RM {evenSplitAmount(aiTotal).toFixed(2)} per entry</p>
                   )}
 
-                  {error && <p className="text-sm text-red-400">{error}</p>}
+                  {error && <p key={error} className="text-sm text-red-400 animate-shake">{error}</p>}
                   <button onClick={handleAiSave} disabled={saving || !aiPaidBy}
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
                     {saving ? "Saving..." : `Save ${aiParsed.length} Expense${aiParsed.length > 1 ? "s" : ""}`}
@@ -1170,7 +1170,7 @@ export default function AddExpensePage() {
                   </div>
                 );
               })()}
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p key={error} className="text-sm text-red-400 animate-shake">{error}</p>}
               <button onClick={handleSepSave} disabled={saving}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
                 {saving ? "Saving..." : (() => {

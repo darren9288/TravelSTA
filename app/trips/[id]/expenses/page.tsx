@@ -278,11 +278,12 @@ export default function ExpensesPage() {
                   </span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {groups[date].map((e) => (
+                  {groups[date].map((e, i) => (
                     <ExpenseRow key={e.id} expense={e} travelers={travelers} foreignCurrency={trip?.foreign_currency ?? ""}
                       wallets={wallets}
                       cashbacks={cashbacksByExpense[e.id]}
                       highlighted={highlightId === e.id}
+                      index={i}
                       onDelete={trip?.my_role !== "viewer" ? handleDelete : undefined}
                       onEdit={trip?.my_role !== "viewer" ? openEdit : undefined} />
                   ))}

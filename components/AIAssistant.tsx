@@ -53,10 +53,10 @@ export default function AIAssistant() {
         onClick={() => setOpen(true)}
         title="AI Assistant"
         aria-label="Open AI Assistant"
-        className="fixed bottom-24 md:bottom-6 right-4 z-[150] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-2xl flex items-center justify-center transition-transform active:scale-95"
+        className="group fixed bottom-24 md:bottom-6 right-4 z-[150] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-2xl hover:shadow-emerald-500/30 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0) + 6rem)" }}
       >
-        <Sparkles size={22} />
+        <Sparkles size={22} className="transition-transform duration-300 group-hover:rotate-[20deg] group-hover:scale-110" />
       </button>
 
       {open && (
