@@ -8,6 +8,9 @@ import { ArrowRight, RefreshCw, CheckCircle2, Wallet, History } from "lucide-rea
 import Link from "next/link";
 import { SettlementPayment, Traveler } from "@/lib/supabase";
 import { useTripRealtime } from "@/lib/use-realtime";
+import Confetti from "@/components/Confetti";
+import CountUp from "@/components/CountUp";
+import { haptic, HAPTIC_SUCCESS } from "@/lib/haptics";
 
 type WalletSelection = {
   from_wallet_id: string | null;
@@ -26,6 +29,7 @@ export default function SettlementPage() {
   const [settling, setSettling] = useState(false);
   const [apiError, setApiError] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   // Keyed by `${from.id}|${to.id}` (NOT array index) so a wallet choice always
   // travels with its specific payer→payee pair. The server recomputes
   // instructions at confirm time; if they reordered/changed, an index-based
@@ -68,6 +72,7 @@ export default function SettlementPage() {
     setConfirm(false);
     setSettling(true);
     setApiError("");
+    const hadInstructions = instructions.length > 0;
     const res = await fetch(`/api/trips/${id}/settle-all`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -76,6 +81,10 @@ export default function SettlementPage() {
     if (!res.ok) {
       const d = await res.json();
       setApiError(d.error ?? "Failed to settle");
+    } else if (hadInstructions) {
+      // Celebrate: everyone's squared up.
+      haptic(HAPTIC_SUCCESS);
+      setShowConfetti(true);
     }
     await load();
     setSettling(false);
@@ -95,6 +104,7 @@ export default function SettlementPage() {
 
   return (
     <>
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
       <Nav tripId={id} tripName={trip?.name} />
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
@@ -113,7 +123,7 @@ export default function SettlementPage() {
           </div>
 
           {apiError && (
-            <div className="bg-red-900/30 border border-red-800/50 rounded-xl px-4 py-3">
+            <div key={apiError} className="bg-red-900/30 border border-red-800/50 rounded-xl px-4 py-3 animate-shake">
               <p className="text-sm text-red-400">{apiError}</p>
             </div>
           )}
@@ -151,7 +161,7 @@ export default function SettlementPage() {
                               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
                               <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
                             </div>
-                            <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM {inst.amount.toFixed(2)}</span>
+                            <span className="text-sm font-bold text-amber-400 flex-shrink-0">RM <CountUp value={inst.amount} /></span>
                           </div>
 
                           {/* Wallet selection */}
