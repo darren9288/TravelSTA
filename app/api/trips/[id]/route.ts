@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/supabase-server";
+import { requireEditor, requireAdmin } from "@/lib/role";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const db = serverDb();
@@ -26,6 +27,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = await requireEditor(params.id);
+  if (denied) return denied;
   const body = await req.json();
   const { id, ...updates } = body;
   void id;
@@ -49,6 +52,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  const denied = await requireAdmin(params.id);
+  if (denied) return denied;
   const db = serverDb();
 
   // Delete trip background from storage

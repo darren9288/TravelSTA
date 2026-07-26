@@ -1,6 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor } from "@/lib/role";
+
+// Gate a photo op behind the trip's editor role (the expense's owning trip).
+async function guardExpense(db: ReturnType<typeof serverDb>, expenseId: string) {
+  const { data: exp } = await db.from("expenses").select("trip_id").eq("id", expenseId).single();
+  return requireEditor((exp as { trip_id?: string } | null)?.trip_id ?? "");
+}
 
 // Requires DB migration: ALTER TABLE expenses ADD COLUMN photo_url text;
 
@@ -13,6 +20,7 @@ export async function POST(req: NextRequest) {
   if (!file || !expenseId) {
     return NextResponse.json({ error: "Missing file or expense_id" }, { status: 400 });
   }
+  const denied = await guardExpense(db, expenseId); if (denied) return denied;
 
   const ext = file.name.split(".").pop() ?? "jpg";
   const path = `${expenseId}/receipt.${ext}`;
@@ -59,6 +67,7 @@ export async function DELETE(req: NextRequest) {
   if (!expenseId) {
     return NextResponse.json({ error: "Missing expense_id" }, { status: 400 });
   }
+  const denied = await guardExpense(db, expenseId); if (denied) return denied;
 
   // List files for this expense
   const { data: files } = await db.storage.from("expense-receipts").list(expenseId);

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { serverDb } from "@/lib/supabase";
+import { requireEditor } from "@/lib/role";
 
 interface ImportTransaction {
   date: string;
@@ -24,6 +25,8 @@ interface ValidationError {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = await requireEditor(params.id);
+  if (denied) return denied;
   const db = serverDb();
   const body = await req.json();
   const { format, data: importData } = body;

@@ -29,6 +29,22 @@ export async function requireEditor(tripId: string): Promise<NextResponse | null
   return null;
 }
 
+/** Convenience: returns a 403 for anyone who isn't the trip's admin (destructive ops). */
+export async function requireAdmin(tripId: string): Promise<NextResponse | null> {
+  const role = await getUserRole(tripId);
+  if (role !== "admin") {
+    return NextResponse.json({ error: "Only a trip admin can do this" }, { status: 403 });
+  }
+  return null;
+}
+
+/** Convenience: returns a 401 if nobody is logged in (gates cost/abuse on shared endpoints). */
+export async function requireUser(): Promise<NextResponse | null> {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  return null;
+}
+
 // ── Trip-ID lookup helpers ────────────────────────────────────────────────────
 
 /** Look up trip_id from a row in any table that has a trip_id column directly. */

@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai-config";
 import { mapUpstreamError } from "@/lib/ai-errors";
 import { logAIUsage } from "@/lib/ai-usage";
+import { requireUser } from "@/lib/role";
 
 // POST /api/ai/categorize
 // Body: { description: string }
 // Returns: { category: string }
 // Tiny one-shot prompt — picks the best category for a free-text description.
 export async function POST(req: NextRequest) {
+  const denied = await requireUser(); if (denied) return denied;
   const { description } = await req.json();
   if (!description || typeof description !== "string" || description.trim().length < 3) {
     return NextResponse.json({ error: "description required" }, { status: 400 });
