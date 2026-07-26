@@ -24,14 +24,14 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
 
   if (iOwe.length === 0 && owedToMe.length === 0) {
     return (
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-emerald-400">
+      <div className="glass-card rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-emerald-400">
         <CheckCircle2 size={16} /> You&apos;re all settled up.
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+    <div className="glass-card rounded-2xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-400">Your balance</h2>
         <span className={`text-base font-bold ${net >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
@@ -47,7 +47,7 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
               <span className="text-slate-300 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: i.from.color }} />{i.from.name}
               </span>
-              <span className="text-emerald-400 font-medium">RM {i.amount.toFixed(2)}</span>
+              <span className="text-emerald-400 font-medium tabular-nums">RM {i.amount.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -61,7 +61,7 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
               <span className="text-slate-300 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: i.to.color }} />{i.to.name}
               </span>
-              <span className="text-amber-400 font-medium">RM {i.amount.toFixed(2)}</span>
+              <span className="text-amber-400 font-medium tabular-nums">RM {i.amount.toFixed(2)}</span>
             </div>
           ))}
         </div>

@@ -157,7 +157,8 @@ export default function SettlementPage() {
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.from.color }} />
                               <span className="text-sm text-white font-medium truncate">{inst.from.name}</span>
-                              <ArrowRight size={14} className="text-amber-500 flex-shrink-0" />
+                              <span className="flow-wire text-amber-400" aria-hidden="true" />
+                              <ArrowRight size={12} className="text-amber-500 flex-shrink-0 -ml-1" />
                               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inst.to.color }} />
                               <span className="text-sm text-white font-medium truncate">{inst.to.name}</span>
                             </div>
@@ -211,7 +212,7 @@ export default function SettlementPage() {
                     {trip?.my_role !== "viewer" && !confirm ? (
                       <button
                         onClick={() => setConfirm(true)}
-                        className="mt-1 w-full py-3 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                        className="cta-glow ripple mt-1 w-full py-3 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition-colors"
                       >
                         <CheckCircle2 size={16} /> Settle All — Everyone Pays Now
                       </button>
@@ -225,7 +226,7 @@ export default function SettlementPage() {
                           <button
                             onClick={settleAll}
                             disabled={settling}
-                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+                            className="ripple flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
                           >
                             {settling ? "Settling…" : "Yes, confirm"}
                           </button>
@@ -246,18 +247,35 @@ export default function SettlementPage() {
               <div>
                 <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-medium">Net Balance (unsettled)</h2>
                 <div className="flex flex-col gap-2">
-                  {balances.map((b) => (
-                    <div key={b.traveler.id} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: b.traveler.color }} />
-                      <span className="text-sm text-white flex-1">{b.traveler.name}</span>
-                      <div className="text-right">
-                        <p className={`text-sm font-bold ${b.net > 0.005 ? "text-emerald-400" : b.net < -0.005 ? "text-red-400" : "text-slate-400"}`}>
-                          {b.net > 0.005 ? "+" : ""}RM {b.net.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-slate-600">paid RM {b.paid.toFixed(2)} · owes RM {b.owed.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    // Scale every meter against the single largest |net| so the
+                    // longest bar fills its half and the rest read proportionally.
+                    const maxAbs = Math.max(1, ...balances.map((x) => Math.abs(x.net)));
+                    return balances.map((b) => {
+                      const pos = b.net > 0.005;
+                      const neg = b.net < -0.005;
+                      const pct = Math.min(Math.abs(b.net) / maxAbs, 1) * 50;
+                      return (
+                        <div key={b.traveler.id} className={`rounded-xl px-4 py-3 flex flex-col gap-2 bg-slate-800/60 border border-slate-700/50 ${pos ? "bal-credit" : neg ? "bal-debit" : ""}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: b.traveler.color }} />
+                            <span className="text-sm text-white flex-1">{b.traveler.name}</span>
+                            <div className="text-right">
+                              <p className={`text-sm font-bold tabular-nums ${pos ? "text-emerald-400" : neg ? "text-red-400" : "text-slate-400"}`}>
+                                {pos ? "+" : ""}RM {b.net.toFixed(2)}
+                              </p>
+                              <p className="text-xs text-slate-600 tabular-nums">paid RM {b.paid.toFixed(2)} · owes RM {b.owed.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          {(pos || neg) && (
+                            <div className="meter-track">
+                              <div className={`meter-fill ${pos ? "pos" : "neg"}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -284,7 +302,7 @@ export default function SettlementPage() {
                                   <span className="text-xs text-slate-400 truncate">{tName(p.to_traveler_id)}</span>
                                   {toWallet && <span className="text-xs text-slate-600">({toWallet})</span>}
                                 </div>
-                                <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">RM {Number(p.amount).toFixed(2)}</span>
+                                <span className="text-xs font-semibold text-emerald-500 flex-shrink-0 tabular-nums">RM {Number(p.amount).toFixed(2)}</span>
                               </div>
                             );
                           })}

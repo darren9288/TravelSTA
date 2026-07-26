@@ -56,23 +56,23 @@ export default function AnalyticsPage() {
             <>
               <SuperlativesCard tripId={id} />
 
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">By Category</h2>
                 <CategoryPie data={stats.byCategory} />
               </div>
 
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">Daily Spending</h2>
                 <DailyBar data={stats.byDay} />
               </div>
 
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-1">Cumulative Spend</h2>
                 <p className="text-xs text-slate-600 mb-3">Solid line = running total · dashed = daily</p>
                 <CumulativeLine data={stats.byDay} />
               </div>
 
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">Per Traveler (share paid)</h2>
                 <TravelerBar data={stats.byTraveler} />
               </div>
@@ -84,7 +84,7 @@ export default function AnalyticsPage() {
               {/* Ryt cashback tracker — read-only, computed live, never writes */}
               <CashbackReport tripId={id} />
 
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4">
+              <div className="glass-card rounded-2xl p-4">
                 <h2 className="text-sm font-semibold text-slate-400 mb-3">Category Breakdown</h2>
                 <div className="flex flex-col gap-2">
                   {[...stats.byCategory].sort((a, b) => b.amount - a.amount).map((c) => (

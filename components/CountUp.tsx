@@ -49,7 +49,7 @@ export default function CountUp({
   }, [value, duration]);
 
   return (
-    <span className={className}>
+    <span className={`tabular-nums ${className ?? ""}`}>
       {prefix}
       {display.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
       {suffix}

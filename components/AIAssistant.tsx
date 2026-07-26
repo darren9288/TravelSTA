@@ -53,7 +53,7 @@ export default function AIAssistant() {
         onClick={() => setOpen(true)}
         title="AI Assistant"
         aria-label="Open AI Assistant"
-        className="group fixed bottom-24 md:bottom-6 right-4 z-[150] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-2xl hover:shadow-emerald-500/30 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+        className="fab-aura group fixed bottom-24 md:bottom-6 right-4 z-[150] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-2xl hover:shadow-emerald-500/30 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0) + 6rem)" }}
       >
         <Sparkles size={22} className="transition-transform duration-300 group-hover:rotate-[20deg] group-hover:scale-110" />
@@ -756,7 +756,7 @@ function ParseExpenseView({ tripId, onDone }: { tripId: string; onDone: () => vo
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
-          <button onClick={save} disabled={saving} className="py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
+          <button onClick={save} disabled={saving} className="ripple py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
             {saving ? "Saving…" : `Save ${entries.length} expense${entries.length === 1 ? "" : "s"}`}
           </button>
         </>
@@ -867,7 +867,7 @@ function ParseItineraryView({ tripId, onDone }: { tripId: string; onDone: () => 
             ))}
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
-          <button onClick={save} disabled={saving} className="py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
+          <button onClick={save} disabled={saving} className="ripple py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
             {saving ? "Saving…" : `Save ${items.length} item${items.length === 1 ? "" : "s"}`}
           </button>
         </>

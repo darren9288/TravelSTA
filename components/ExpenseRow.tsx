@@ -240,9 +240,9 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
           </div>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-white">RM {Number(expense.myr_amount).toFixed(2)}</p>
+          <p className="text-sm font-bold text-white tabular-nums">RM {Number(expense.myr_amount).toFixed(2)}</p>
           {expense.foreign_amount && (
-            <p className="text-xs text-slate-500">{foreignCurrency} {Number(expense.foreign_amount).toLocaleString()}</p>
+            <p className="text-xs text-slate-500 tabular-nums">{foreignCurrency} {Number(expense.foreign_amount).toLocaleString()}</p>
           )}
           {photoUrl && <Camera size={10} className="text-slate-500 ml-auto mt-0.5" />}
         </div>
@@ -252,7 +252,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
       </div>
 
       {expanded && (
-        <div className="border-t border-slate-700/50 px-4 py-3 bg-slate-900/30">
+        <div className="border-t border-slate-700/50 px-4 py-3 bg-slate-900/30 animate-fade-in">
           {toggleError && <p className="text-xs text-red-400 mb-2">⚠ {toggleError}</p>}
 
           {/* Wallet picker */}
@@ -367,7 +367,9 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                     {(s.is_settled || locked) && (
                       locked
                         ? <Lock size={8} className="text-slate-300" />
-                        : <span className={`text-white text-xs leading-none inline-block ${poppedId === s.id ? "animate-pop-in" : ""}`}>✓</span>
+                        : <svg viewBox="0 0 16 16" fill="none" className={`w-3 h-3 text-white ${poppedId === s.id ? "tick-draw" : ""}`}>
+                            <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                     )}
                   </button>
                   <div className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
@@ -389,7 +391,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
                     })()}
                     {locked && <p className="text-xs text-slate-600 italic mt-0.5">{lockReason}</p>}
                   </div>
-                  <span className={`text-xs font-medium flex-shrink-0 ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
+                  <span className={`text-xs font-medium flex-shrink-0 tabular-nums ${(s.is_settled || locked) ? "text-slate-500" : "text-white"}`}>
                     RM {Number(s.amount).toFixed(2)}
                   </span>
                 </div>

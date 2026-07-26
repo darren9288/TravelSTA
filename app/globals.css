@@ -219,3 +219,185 @@ body {
 [data-theme="cyan"] .border-emerald-500\/60               { border-color: rgb(6 182 212 / 0.6); }
 [data-theme="cyan"] .border-emerald-800\/40               { border-color: rgb(21 94 117 / 0.4); }
 [data-theme="cyan"] .stroke-emerald-500                   { stroke: #06b6d4; }
+
+/* ─────────────────────────────────────────────────────
+   Visual effects pack
+   - Accent variables are the single source of truth for every glow,
+     gradient and meter, so they follow the data-theme swap automatically.
+   - Static styling (glass, glow shadows, gradient text, tabular figures)
+     applies always; all MOTION is gated on prefers-reduced-motion.
+   ───────────────────────────────────────────────────── */
+:root                 { --accent-rgb: 16 185 129; --accent: rgb(16 185 129); --accent-hi: #6ee7b7; }
+[data-theme="indigo"] { --accent-rgb: 99 102 241; --accent: rgb(99 102 241); --accent-hi: #a5b4fc; }
+[data-theme="purple"] { --accent-rgb: 168 85 247; --accent: rgb(168 85 247); --accent-hi: #d8b4fe; }
+[data-theme="rose"]   { --accent-rgb: 244 63 94;  --accent: rgb(244 63 94);  --accent-hi: #fda4af; }
+[data-theme="amber"]  { --accent-rgb: 245 158 11; --accent: rgb(245 158 11); --accent-hi: #fcd34d; }
+[data-theme="cyan"]   { --accent-rgb: 6 182 212;  --accent: rgb(6 182 212);  --accent-hi: #67e8f9; }
+
+/* Ledger-aligned numerals — decimals + digits line up, no jitter. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Theme-aware gradient text for hero money figures. */
+.text-accent-gradient {
+  color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .text-accent-gradient { -webkit-text-fill-color: currentColor; background: none; }
+}
+
+/* Frosted glass — for elevated/hero cards only, never long scrolling lists.
+   Keep the element's own rounded-* class; this sets bg + border + depth. */
+.glass-card {
+  background: rgb(30 41 59 / 0.55);
+  backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid rgb(148 163 184 / 0.12);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card { background: rgb(30 41 59 / 0.92); }
+}
+
+/* Directional credit / debit glow on net-balance rows (inset ring = no shift). */
+.bal-credit { box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 0.30), 0 0 14px -4px rgb(var(--accent-rgb) / 0.38); }
+.bal-debit  { box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.30), 0 0 14px -4px rgb(245 158 11 / 0.40); }
+
+/* Consistent accent focus ring (keyboard / switch only) + input focus glow. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+.focus\:border-emerald-500 { transition: box-shadow .18s ease, border-color .18s ease; }
+.focus\:border-emerald-500:focus { box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.15), 0 0 14px rgb(var(--accent-rgb) / 0.22); }
+
+/* Marching money-flow wire (static dashes; the march is gated below). */
+.flow-wire {
+  width: 26px; height: 2px; border-radius: 1px; flex-shrink: 0;
+  background-image: linear-gradient(90deg, currentColor 45%, transparent 45%);
+  background-size: 8px 2px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+
+/* Breathing accent halo on the hero CTA — static glow is the reduce-motion fallback. */
+.cta-glow { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.45), 0 4px 22px -2px rgb(var(--accent-rgb) / 0.45); }
+
+/* Checkmark that strokes itself in on settle (drawn state; motion gated). */
+.tick-draw path { stroke-dasharray: 16; stroke-dashoffset: 0; }
+
+/* Ink ripple on primary CTAs. */
+.ripple { position: relative; overflow: hidden; }
+.ripple::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: rgb(255 255 255 / 0.4);
+  transform: translate(-50%, -50%) scale(0); opacity: 0; pointer-events: none;
+}
+
+/* Diverging net-balance meter (owe ← 0 → owed). Fill grows in below. */
+.meter-track { position: relative; height: 6px; border-radius: 9999px; background: rgb(71 85 105 / 0.5); overflow: hidden; }
+.meter-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgb(148 163 184 / 0.6); }
+.meter-fill { position: absolute; top: 0; bottom: 0; }
+.meter-fill.pos { left: 50%; border-radius: 0 9999px 9999px 0; transform-origin: left; background: var(--accent); }
+.meter-fill.neg { right: 50%; border-radius: 9999px 0 0 9999px; transform-origin: right; background: #ef4444; }
+
+/* Rotating conic aura behind the AI FAB — static radial is the reduce-motion
+   fallback. No position on the class itself: the FAB is already position:fixed. */
+.fab-aura::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 9999px; z-index: -1;
+  pointer-events: none; filter: blur(9px); will-change: transform;
+  background: radial-gradient(circle, rgb(var(--accent-rgb) / 0.45), transparent 70%);
+}
+
+/* Ambient aurora backdrop (photo-less trips) — reads --accent-rgb, follows theme. */
+.ambient-bg {
+  position: fixed; inset: 0; z-index: -10; pointer-events: none; overflow: hidden; opacity: 0.12;
+  background:
+    radial-gradient(55% 50% at 12% -5%, rgb(var(--accent-rgb)), transparent 60%),
+    radial-gradient(50% 45% at 92% 12%, rgb(var(--accent-rgb)), transparent 62%),
+    radial-gradient(60% 60% at 50% 108%, rgb(var(--accent-rgb)), transparent 60%);
+}
+.ambient-bg::before, .ambient-bg::after {
+  content: ""; position: absolute; border-radius: 9999px; background: rgb(var(--accent-rgb));
+  filter: blur(70px); opacity: 0.5; will-change: transform;
+}
+.ambient-bg::before { width: 42vw; height: 42vw; left: -8vw; top: -6vw; }
+.ambient-bg::after  { width: 34vw; height: 34vw; right: -6vw; bottom: -8vw; }
+
+/* Sparse sakura petal drift (mounted by TripBackground). */
+.sakura { position: fixed; inset: 0; z-index: -5; pointer-events: none; overflow: hidden; }
+.sakura .petal {
+  position: absolute; top: -8vh; width: 11px; height: 11px; border-radius: 100% 0 100% 0;
+  background: radial-gradient(circle at 30% 30%, #fecdd3, #fb7185); opacity: 0;
+}
+
+/* Cinematic vignette + film grain over the cover photo. */
+.vignette-grain { pointer-events: none; background: radial-gradient(120% 100% at 50% 45%, transparent 52%, rgb(2 6 23 / 0.6) 100%); }
+.vignette-grain::after {
+  content: ""; position: absolute; inset: 0; opacity: 0.05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Cover-photo base zoom; ken-burns pans it when motion is allowed. */
+.kenburns { transform: scale(1.05); }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes accent-breathe {
+    0%,100% { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.35), 0 4px 18px -2px rgb(var(--accent-rgb) / 0.35); }
+    50%     { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.55), 0 6px 30px 2px rgb(var(--accent-rgb) / 0.60); }
+  }
+  .cta-glow { animation: accent-breathe 2.6s ease-in-out infinite; }
+  .cta-glow:hover { animation-duration: 1.3s; }
+
+  @keyframes wire-flow { to { background-position: 8px 0; } }
+  .flow-wire { animation: wire-flow .6s linear infinite; }
+
+  @keyframes tick-draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+  .tick-draw path { animation: tick-draw 260ms cubic-bezier(.65,0,.35,1) forwards; }
+
+  @keyframes fade-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-rise { animation: fade-rise 360ms cubic-bezier(.22,1,.36,1) both; }
+
+  @keyframes meter-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .meter-fill { animation: meter-grow .5s cubic-bezier(.22,1,.36,1) both; }
+
+  @keyframes fab-aura-spin { to { transform: rotate(1turn); } }
+  .fab-aura::before {
+    background: conic-gradient(from 0deg, rgb(var(--accent-rgb) / 0), rgb(var(--accent-rgb) / 0.65), rgb(var(--accent-rgb) / 0) 55%);
+    animation: fab-aura-spin 6s linear infinite;
+  }
+
+  @keyframes ripple-out { 0% { transform: translate(-50%, -50%) scale(0); opacity: .5; } 100% { transform: translate(-50%, -50%) scale(40); opacity: 0; } }
+  .ripple:active::after { animation: ripple-out 500ms ease-out; }
+
+  @keyframes orb-a { 50% { transform: translate3d(6vw, 4vh, 0) scale(1.15); } }
+  @keyframes orb-b { 50% { transform: translate3d(-5vw, -4vh, 0) scale(1.1); } }
+  .ambient-bg::before { animation: orb-a 26s ease-in-out infinite; }
+  .ambient-bg::after  { animation: orb-b 32s ease-in-out infinite; }
+
+  @keyframes petal-fall {
+    0%   { opacity: 0; transform: translate3d(0, -10vh, 0) rotate(0); }
+    12%  { opacity: .55; }
+    88%  { opacity: .4; }
+    100% { opacity: 0; transform: translate3d(16vw, 112vh, 0) rotate(300deg); }
+  }
+  .sakura .petal { animation: petal-fall linear infinite; will-change: transform; }
+  .sakura .petal:nth-child(1) { left: 6%;  animation-duration: 15s; animation-delay: -2s; }
+  .sakura .petal:nth-child(2) { left: 20%; animation-duration: 19s; animation-delay: -9s; width: 8px; height: 8px; }
+  .sakura .petal:nth-child(3) { left: 37%; animation-duration: 13s; animation-delay: -5s; }
+  .sakura .petal:nth-child(4) { left: 52%; animation-duration: 21s; animation-delay: -12s; }
+  .sakura .petal:nth-child(5) { left: 68%; animation-duration: 16s; animation-delay: -1s; }
+  .sakura .petal:nth-child(6) { left: 81%; animation-duration: 18s; animation-delay: -7s; }
+  .sakura .petal:nth-child(7) { left: 93%; animation-duration: 14s; animation-delay: -11s; }
+
+  @keyframes kenburns {
+    0%   { transform: scale(1.05) translate3d(0, 0, 0); }
+    50%  { transform: scale(1.14) translate3d(-1.5%, -1%, 0); }
+    100% { transform: scale(1.05) translate3d(0, 0, 0); }
+  }
+  .kenburns { animation: kenburns 40s ease-in-out infinite; }
+}
+
+/* Petals are purely decorative — hide entirely when motion is reduced. */
+@media (prefers-reduced-motion: reduce) {
+  .sakura { display: none; }
+}

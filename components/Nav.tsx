@@ -83,7 +83,7 @@ export default function Nav({ tripId, tripName }: NavProps) {
             </button>
           </div>
         </nav>
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-50 safe-bottom-pad">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/70 backdrop-blur-xl border-t border-white/10 flex z-50 safe-bottom-pad shadow-[0_-1px_0_0_rgb(255_255_255/0.05)_inset,0_-8px_24px_-12px_rgb(0_0_0/0.7)]">
           <Link href="/" className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium text-emerald-400">
             <Home size={20} /> Trips
           </Link>
@@ -164,13 +164,13 @@ export default function Nav({ tripId, tripName }: NavProps) {
           </button>
         </div>
       </nav>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 safe-bottom-pad">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/70 backdrop-blur-xl border-t border-white/10 z-50 safe-bottom-pad shadow-[0_-1px_0_0_rgb(255_255_255/0.05)_inset,0_-8px_24px_-12px_rgb(0_0_0/0.7)]">
         <div className="flex overflow-x-auto scrollbar-none">
           {links.map(({ href, icon: Icon, label }) => {
             const active = path === href;
             return (
               <Link key={href} href={href}
-                className={`flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium transition-colors min-w-[64px] ${active ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}>
+                className={`flex-shrink-0 flex flex-col items-center py-2 px-3 gap-0.5 text-xs font-medium transition-colors min-w-[64px] ${active ? "text-emerald-400 [text-shadow:0_0_12px_currentColor]" : "text-slate-500 hover:text-slate-300"}`}>
                 <Icon size={20} /> {label}
               </Link>
             );
