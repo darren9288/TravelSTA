@@ -87,6 +87,14 @@ body {
    own transform (e.g. -translate-y-1/2 centering) and a press
    scale would fight it and make them jump.
    ───────────────────────────────────────────────────── */
+/* Shimmer skeleton — a richer loading placeholder than a flat pulse. Static
+   diagonal gradient by default so reduce-motion users still see a placeholder;
+   the sweep animation is added only inside the no-preference block below. */
+.shimmer {
+  background: linear-gradient(100deg, rgb(30 41 59 / 0.55) 30%, rgb(51 65 85 / 0.85) 50%, rgb(30 41 59 / 0.55) 70%);
+  background-size: 200% 100%;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   button:not([class*="translate"]):not([class*="rotate"]),
   [role="button"]:not([class*="translate"]):not([class*="rotate"]) {
@@ -103,7 +111,9 @@ body {
   @keyframes pop-in       { 0% { transform: scale(0.6); opacity: 0 } 60% { transform: scale(1.1) } 100% { transform: scale(1); opacity: 1 } }
   @keyframes pulse-once   { 0%,100% { transform: scale(1) } 45% { transform: scale(1.18) } }
   @keyframes shake        { 0%,100% { transform: translateX(0) } 20%,60% { transform: translateX(-4px) } 40%,80% { transform: translateX(4px) } }
+  @keyframes shimmer      { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 
+  .shimmer             { animation: shimmer 1.4s ease-in-out infinite; }
   .animate-fade-in     { animation: fade-in 0.25s ease both; }
   .animate-fade-in-up  { animation: fade-in-up 0.3s cubic-bezier(0.2,0,0,1) both; }
   .animate-pop-in      { animation: pop-in 0.32s cubic-bezier(0.2,0,0,1) both; }

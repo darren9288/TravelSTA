@@ -8,6 +8,7 @@ import TravelerBar from "@/components/charts/TravelerBar";
 import CumulativeLine from "@/components/charts/CumulativeLine";
 import PerPersonSpending from "@/components/PerPersonSpending";
 import CashbackReport from "@/components/CashbackReport";
+import CountUp from "@/components/CountUp";
 import SuperlativesCard from "@/components/SuperlativesCard";
 import { RefreshCw } from "lucide-react";
 import useSWR from "swr";
@@ -37,7 +38,7 @@ export default function AnalyticsPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Analytics</h1>
             <div className="flex items-center gap-3">
-              {stats && <span className="text-sm text-slate-400">Total: RM {stats.total.toFixed(2)}</span>}
+              {stats && <span className="text-sm text-slate-400">Total: RM <CountUp value={stats.total} /></span>}
               <button onClick={() => mutate()} disabled={loading}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
@@ -47,7 +48,7 @@ export default function AnalyticsPage() {
 
           {loading ? (
             <div className="flex flex-col gap-4">
-              {[1, 2, 3].map((i) => <div key={i} className="h-52 bg-slate-800 rounded-xl animate-pulse" />)}
+              {[1, 2, 3].map((i) => <div key={i} className="h-52 rounded-xl shimmer" />)}
             </div>
           ) : !stats ? (
             <div className="text-center py-12 text-slate-500 text-sm">No data yet</div>

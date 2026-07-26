@@ -6,6 +6,7 @@ import { Trip, Traveler, PoolTopup, Expense, CATEGORIES } from "@/lib/supabase";
 import { rateForWallet as computeRate } from "@/lib/rates";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import CountUp from "@/components/CountUp";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, RefreshCw, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Pencil, Check, X, Archive, RotateCcw, ShoppingBag } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -686,13 +687,13 @@ export default function PoolPage() {
                         {isForeign ? (
                           <>
                             <p className={`text-lg font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
-                              {p.pool_currency} {Math.round(balForeign).toLocaleString()}
+                              {p.pool_currency} <CountUp value={balForeign} decimals={0} />
                             </p>
                             <p className="text-xs text-slate-500">RM {balMyr.toFixed(2)}</p>
                           </>
                         ) : (
                           <p className={`text-lg font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
-                            RM {balMyr.toFixed(2)}
+                            RM <CountUp value={balMyr} />
                           </p>
                         )}
                         <p className="text-xs text-slate-600">remaining</p>

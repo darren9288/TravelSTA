@@ -65,21 +65,21 @@ export default function TripDashboard() {
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
           {/* Skeleton — mimics the real layout so the user perceives the page
               loading rather than staring at empty space. */}
-          <div className="h-7 bg-slate-800 rounded animate-pulse w-2/3" />
-          <div className="h-4 bg-slate-800 rounded animate-pulse w-1/2 -mt-2" />
+          <div className="h-7 rounded shimmer w-2/3" />
+          <div className="h-4 rounded shimmer w-1/2 -mt-2" />
           <div className="grid grid-cols-3 gap-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+              <div key={i} className="h-20 border border-slate-700/50 rounded-xl shimmer" />
             ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[1, 2].map((i) => (
-              <div key={i} className="h-12 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+              <div key={i} className="h-12 border border-slate-700/50 rounded-xl shimmer" />
             ))}
           </div>
-          <div className="h-5 bg-slate-800 rounded animate-pulse w-1/3 mt-2" />
+          <div className="h-5 rounded shimmer w-1/3 mt-2" />
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-slate-800/60 border border-slate-700/50 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 border border-slate-700/50 rounded-xl shimmer" />
           ))}
         </div>
       </main>

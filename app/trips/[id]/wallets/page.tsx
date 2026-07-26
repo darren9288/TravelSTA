@@ -5,6 +5,7 @@ import Nav from "@/components/Nav";
 import { Trip, Traveler } from "@/lib/supabase";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import CountUp from "@/components/CountUp";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, ChevronDown, ChevronUp, Wallet, Pencil, Check, X } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -355,7 +356,7 @@ export default function WalletsPage() {
                             <div className="flex items-center gap-2">
                               <div className="text-right">
                                 <p className={`text-lg font-bold ${bal >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                                  {w.currency} {w.currency === "MYR" ? bal.toFixed(2) : Math.round(bal).toLocaleString()}
+                                  {w.currency} <CountUp value={bal} decimals={w.currency === "MYR" ? 2 : 0} />
                                 </p>
                                 <p className="text-xs text-slate-600">remaining</p>
                               </div>

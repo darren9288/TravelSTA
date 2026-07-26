@@ -13,7 +13,7 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
   const { data } = useSWR<{ instructions: PaymentInstruction[] }>(`/api/settlement?trip_id=${tripId}`, fetcher);
 
   if (!myTravelerId) return null;
-  if (!data) return <div className="h-20 bg-slate-800/60 rounded-2xl animate-pulse" />;
+  if (!data) return <div className="h-20 rounded-2xl shimmer" />;
 
   const instructions = Array.isArray(data.instructions) ? data.instructions : [];
   const iOwe = instructions.filter((i) => i.from?.id === myTravelerId);
