@@ -10,6 +10,7 @@ import useSWR, { preload, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
 import CountUp from "@/components/CountUp";
+import MyBalanceCard from "@/components/MyBalanceCard";
 import { useTripRealtime } from "@/lib/use-realtime";
 
 type StatsData = { byTraveler: { id: string; amount: number }[]; total: number };
@@ -154,6 +155,9 @@ export default function TripDashboard() {
               <p className="text-lg font-bold text-white">{realTravelers.length}</p>
             </div>
           </div>
+
+          {/* Personal "who owes me / I owe" summary */}
+          <MyBalanceCard tripId={id} myTravelerId={trip?.my_traveler_id ?? null} />
 
           {/* Budget Tracker */}
           <BudgetTracker tripId={id} trip={trip} travelers={realTravelers} totalSpent={totalSpent} spentByTraveler={spentByTraveler} readOnly onSaved={() => mutateTrip()} />
