@@ -83,39 +83,43 @@ export default function WalletsPage() {
   async function createWallet() {
     if (!newName.trim() || !newTravelerId) return;
     setCreating(true); setError("");
-    const res = await fetch("/api/wallets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip_id: id, traveler_id: newTravelerId, name: newName.trim(), currency: newCurrency }),
-    });
-    if (res.ok) {
-      const wallet = await res.json();
-      if (newInitialAmount && parseFloat(newInitialAmount) > 0) {
-        await fetch("/api/wallet-topups", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wallet_id: wallet.id, trip_id: id, amount: parseFloat(newInitialAmount), date: newInitialDate, notes: null }),
-        });
-      }
-      setNewName(""); setNewInitialAmount(""); setShowCreate(false); mutateWallets();
-    } else { const d = await res.json(); setError(d.error); }
-    setCreating(false);
+    try {
+      const res = await fetch("/api/wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trip_id: id, traveler_id: newTravelerId, name: newName.trim(), currency: newCurrency }),
+      });
+      if (res.ok) {
+        const wallet = await res.json();
+        if (newInitialAmount && parseFloat(newInitialAmount) > 0) {
+          await fetch("/api/wallet-topups", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_id: wallet.id, trip_id: id, amount: parseFloat(newInitialAmount), date: newInitialDate, notes: null }),
+          });
+        }
+        setNewName(""); setNewInitialAmount(""); setShowCreate(false); mutateWallets();
+      } else { const d = await res.json(); setError(d.error); }
+    } catch { setError("Network error — please try again."); }
+    finally { setCreating(false); }
   }
 
   async function saveEditTopup() {
     if (!editTopup || !editTopup.amount) return;
     setSavingTopup(true);
-    const res = await fetch("/api/wallet-topups", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editTopup.id, amount: parseFloat(editTopup.amount), date: editTopup.date, notes: editTopup.notes || null }),
-    });
-    if (res.ok) {
-      setEditTopup(null);
-      mutateWallets();
-      if (selectedWallet) await loadHistory(selectedWallet);
-    }
-    setSavingTopup(false);
+    try {
+      const res = await fetch("/api/wallet-topups", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editTopup.id, amount: parseFloat(editTopup.amount), date: editTopup.date, notes: editTopup.notes || null }),
+      });
+      if (res.ok) {
+        setEditTopup(null);
+        mutateWallets();
+        if (selectedWallet) await loadHistory(selectedWallet);
+      }
+    } catch { /* leave the modal open so the user can retry */ }
+    finally { setSavingTopup(false); }
   }
 
   async function deleteWallet(walletId: string) {
@@ -133,29 +137,33 @@ export default function WalletsPage() {
   async function saveRenameWallet() {
     if (!renamingWalletId || !renamingWalletName.trim()) return;
     setSavingRename(true);
-    const res = await fetch("/api/wallets", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: renamingWalletId, name: renamingWalletName.trim() }),
-    });
-    if (res.ok) { setRenamingWalletId(null); mutateWallets(); }
-    setSavingRename(false);
+    try {
+      const res = await fetch("/api/wallets", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: renamingWalletId, name: renamingWalletName.trim() }),
+      });
+      if (res.ok) { setRenamingWalletId(null); mutateWallets(); }
+    } catch { /* keep the rename field open to retry */ }
+    finally { setSavingRename(false); }
   }
 
   async function addTopup() {
     if (!topupWalletId || !topupAmount) return;
     setTopping(true); setError("");
-    const res = await fetch("/api/wallet-topups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_id: topupWalletId, trip_id: id, amount: parseFloat(topupAmount), date: topupDate, notes: topupNotes || null }),
-    });
-    if (res.ok) {
-      setTopupWalletId(null); setTopupAmount(""); setTopupNotes("");
-      mutateWallets();
-      if (selectedWallet === topupWalletId) await loadHistory(topupWalletId);
-    } else { const d = await res.json(); setError(d.error); }
-    setTopping(false);
+    try {
+      const res = await fetch("/api/wallet-topups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_id: topupWalletId, trip_id: id, amount: parseFloat(topupAmount), date: topupDate, notes: topupNotes || null }),
+      });
+      if (res.ok) {
+        setTopupWalletId(null); setTopupAmount(""); setTopupNotes("");
+        mutateWallets();
+        if (selectedWallet === topupWalletId) await loadHistory(topupWalletId);
+      } else { const d = await res.json(); setError(d.error); }
+    } catch { setError("Network error — please try again."); }
+    finally { setTopping(false); }
   }
 
   function buildChartData(events: WalletEvent[]) {

@@ -73,7 +73,13 @@ export default function ExpensesPage() {
   }, [expensesData]);
 
   async function handleDelete(expenseId: string) {
-    await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
+    if (!window.confirm("Delete this expense? This can't be undone.")) return;
+    const res = await fetch(`/api/expenses?id=${expenseId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      window.alert(d.error ?? "Couldn't delete this expense.");
+      return;
+    }
     mutateExpenses();
   }
 

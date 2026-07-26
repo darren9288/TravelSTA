@@ -299,28 +299,32 @@ export default function PoolPage() {
   async function saveRenamePool() {
     if (!renamingPoolId || !renamingPoolName.trim()) return;
     setSavingPoolRename(true);
-    const res = await fetch("/api/travelers", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: renamingPoolId, name: renamingPoolName.trim() }),
-    });
-    if (res.ok) { setRenamingPoolId(null); mutatePool(); }
-    setSavingPoolRename(false);
+    try {
+      const res = await fetch("/api/travelers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: renamingPoolId, name: renamingPoolName.trim() }),
+      });
+      if (res.ok) { setRenamingPoolId(null); mutatePool(); }
+    } catch { /* keep the field open to retry */ }
+    finally { setSavingPoolRename(false); }
   }
 
   async function createPool() {
     if (!newPoolName.trim()) return;
     setCreatingPool(true); setError("");
-    const res = await fetch("/api/travelers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip_id: id, name: newPoolName.trim(), color: "#10b981", is_pool: true, pool_currency: newPoolCurrency }),
-    });
-    if (res.ok) {
-      setNewPoolName(""); setShowCreatePool(false);
-      mutatePool();
-    } else { const d = await res.json(); setError(d.error); }
-    setCreatingPool(false);
+    try {
+      const res = await fetch("/api/travelers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trip_id: id, name: newPoolName.trim(), color: "#10b981", is_pool: true, pool_currency: newPoolCurrency }),
+      });
+      if (res.ok) {
+        setNewPoolName(""); setShowCreatePool(false);
+        mutatePool();
+      } else { const d = await res.json(); setError(d.error); }
+    } catch { setError("Network error — please try again."); }
+    finally { setCreatingPool(false); }
   }
 
   // Build pool history events for a given pool

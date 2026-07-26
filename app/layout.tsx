@@ -10,6 +10,7 @@ import OfflineQueueWatcher from "@/components/OfflineQueueWatcher";
 import PushToastBridge from "@/components/PushToastBridge";
 import ActivityTracker from "@/components/ActivityTracker";
 import TapHaptics from "@/components/TapHaptics";
+import NumericKeyboard from "@/components/NumericKeyboard";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PushToastBridge />
             <ActivityTracker />
             <TapHaptics />
+            <NumericKeyboard />
             {children}
           </Toaster>
           </SWRProvider>
