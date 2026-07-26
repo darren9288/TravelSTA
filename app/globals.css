@@ -79,6 +79,43 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────
+   Global interaction feedback + animation utilities.
+   All gated on prefers-reduced-motion so users who ask the
+   OS to reduce motion get a calm, static UI.
+   The button press-scale deliberately EXCLUDES elements whose
+   Tailwind classes use translate/rotate/scale — those set their
+   own transform (e.g. -translate-y-1/2 centering) and a press
+   scale would fight it and make them jump.
+   ───────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  button:not([class*="translate"]):not([class*="rotate"]),
+  [role="button"]:not([class*="translate"]):not([class*="rotate"]) {
+    transition: transform 130ms cubic-bezier(0.2, 0, 0, 1), background-color 150ms ease, opacity 150ms ease, border-color 150ms ease;
+  }
+  /* Tactile press-in on tap for the vast majority of buttons. */
+  button:not(:disabled):not([class*="translate"]):not([class*="rotate"]):not([class*="scale"]):active,
+  [role="button"]:not([aria-disabled="true"]):not([class*="translate"]):not([class*="rotate"]):not([class*="scale"]):active {
+    transform: scale(0.95);
+  }
+
+  @keyframes fade-in      { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes fade-in-up   { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+  @keyframes pop-in       { 0% { transform: scale(0.6); opacity: 0 } 60% { transform: scale(1.1) } 100% { transform: scale(1); opacity: 1 } }
+  @keyframes pulse-once   { 0%,100% { transform: scale(1) } 45% { transform: scale(1.18) } }
+  @keyframes shake        { 0%,100% { transform: translateX(0) } 20%,60% { transform: translateX(-4px) } 40%,80% { transform: translateX(4px) } }
+
+  .animate-fade-in     { animation: fade-in 0.25s ease both; }
+  .animate-fade-in-up  { animation: fade-in-up 0.3s cubic-bezier(0.2,0,0,1) both; }
+  .animate-pop-in      { animation: pop-in 0.32s cubic-bezier(0.2,0,0,1) both; }
+  .animate-pulse-once  { animation: pulse-once 0.4s ease; }
+  .animate-shake       { animation: shake 0.35s ease; }
+
+  /* Subtle lift for tappable cards on hover (desktop) — opt-in via the class. */
+  .hover-lift { transition: transform 160ms ease, box-shadow 160ms ease; }
+  .hover-lift:hover { transform: translateY(-2px); }
+}
+
+/* ─────────────────────────────────────────────────────
    Color Themes — override emerald accent classes
    ───────────────────────────────────────────────────── */
 

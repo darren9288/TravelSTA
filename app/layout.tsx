@@ -9,6 +9,7 @@ import SWRProvider from "@/components/SWRProvider";
 import OfflineQueueWatcher from "@/components/OfflineQueueWatcher";
 import PushToastBridge from "@/components/PushToastBridge";
 import ActivityTracker from "@/components/ActivityTracker";
+import TapHaptics from "@/components/TapHaptics";
 
 export const metadata: Metadata = {
   title: "TravelSTA",
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <NavigationProgress />
             <PushToastBridge />
             <ActivityTracker />
+            <TapHaptics />
             {children}
           </Toaster>
           </SWRProvider>
