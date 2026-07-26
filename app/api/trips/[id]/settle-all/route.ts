@@ -48,11 +48,43 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 2. Calculate instructions so we can record them as history
   const { instructions } = calculateSettlement(travelers as Traveler[], expenses as Expense[]);
 
-  // 3. Record each instruction as a settlement_payment (history) with wallet selections.
-  // We also freeze each side's foreign-currency equivalent so a later rate change
-  // in trip settings doesn't retroactively alter the displayed JPY in wallet history.
+  // 3. CLAIM the outstanding splits FIRST (mark settled) and capture which rows we
+  //    actually flipped. Only the request that flips rows goes on to record the
+  //    payments — so a concurrent double-tap or an offline replay can't
+  //    double-insert settlement_payments (which the wallet-balance route sums,
+  //    i.e. it would double-debit). lock_source (migration 025) may be absent on
+  //    an un-migrated DB, so fall back to the minimal update. Return on error
+  //    instead of silently succeeding.
+  let settledIds: string[] = [];
+  if (expenseIds.length > 0) {
+    let upd = await db
+      .from("expense_splits")
+      .update({ is_settled: true, locked: true, lock_source: "settle_all" })
+      .in("expense_id", expenseIds)
+      .eq("is_settled", false)
+      .select("id");
+    if (upd.error) {
+      upd = await db
+        .from("expense_splits")
+        .update({ is_settled: true })
+        .in("expense_id", expenseIds)
+        .eq("is_settled", false)
+        .select("id");
+    }
+    if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 500 });
+    settledIds = ((upd.data as { id: string }[] | null) ?? []).map((r) => r.id);
+  }
+
+  // Nothing was outstanding (already settled, or a concurrent run beat us to it)
+  // → idempotent no-op; do NOT record duplicate payments.
+  if (settledIds.length === 0) {
+    return NextResponse.json({ success: true, already_settled: true, instruction_count: 0 });
+  }
+
+  // 4. Record each instruction as a settlement_payment (history) with the chosen
+  //    wallets, freezing each side's foreign-currency equivalent so a later rate
+  //    change can't retroactively alter the displayed JPY in wallet history.
   if (instructions.length > 0) {
-    // Look up wallet metadata for all the wallets referenced in this batch.
     const walletIds = Array.from(
       new Set(
         Object.values(walletSelections)
@@ -62,19 +94,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
     let walletMap: Record<string, { currency: string; name: string }> = {};
     if (walletIds.length) {
-      const { data: wallets } = await db
-        .from("wallets")
-        .select("id, currency, name")
-        .in("id", walletIds);
+      const { data: wallets } = await db.from("wallets").select("id, currency, name").in("id", walletIds);
       walletMap = Object.fromEntries(
-        (wallets ?? []).map((w: { id: string; currency: string; name: string }) => [
-          w.id,
-          { currency: w.currency, name: w.name },
-        ])
+        (wallets ?? []).map((w: { id: string; currency: string; name: string }) => [w.id, { currency: w.currency, name: w.name }])
       );
     }
 
-    // Fetch trip rates once for the conversion (both foreign-currency pairs).
     const { data: trip } = await db
       .from("trips")
       .select("cash_rate, wise_rate, foreign_currency_2, cash_rate_2, wise_rate_2")
@@ -86,9 +111,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const wiseRate2 = Number(trip?.wise_rate_2 ?? 1);
     const foreignCurrency2 = trip?.foreign_currency_2 ?? null;
 
-    // Foreign equivalent for a wallet: amount × wallet's rate. Returns null if
-    // the wallet is MYR or unknown (no conversion needed). Uses the second
-    // currency's rate pair when the wallet is in foreign_currency_2.
     function foreignFor(walletId: string | null, amountMyr: number): number | null {
       if (!walletId) return null;
       const w = walletMap[walletId];
@@ -100,9 +122,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return parseFloat((amountMyr * rate).toFixed(2));
     }
 
-    await db.from("settlement_payments").insert(
+    const { error: payErr } = await db.from("settlement_payments").insert(
       instructions.map((inst) => {
-        // Look up the wallet choice by the transfer's identity, not its index.
         const sel = walletSelections[`${inst.from.id}|${inst.to.id}`];
         const fromWalletId = sel?.from_wallet_id ?? null;
         const toWalletId = sel?.to_wallet_id ?? null;
@@ -118,17 +139,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         };
       })
     );
-  }
-
-  // 4. Mark ALL unsettled splits as settled.
-  // Net transfers are already recorded in settlement_payments above.
-  // The per-split wallet tracking is not used for balance calculation — settlement_payments is.
-  if (expenseIds.length > 0) {
-    await db
-      .from("expense_splits")
-      .update({ is_settled: true, locked: true, lock_source: "settle_all" })
-      .in("expense_id", expenseIds)
-      .eq("is_settled", false);
+    if (payErr) {
+      // Compensate: un-settle exactly the rows we just claimed so splits ↔
+      // payments never desync, then surface the failure (no false success).
+      const rb = await db.from("expense_splits").update({ is_settled: false, locked: false, lock_source: null }).in("id", settledIds);
+      if (rb.error) await db.from("expense_splits").update({ is_settled: false }).in("id", settledIds);
+      return NextResponse.json({ error: payErr.message }, { status: 500 });
+    }
   }
 
   // Activity log for super-admin review.
