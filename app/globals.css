@@ -281,6 +281,12 @@ body {
 /* Breathing accent halo on the hero CTA — static glow is the reduce-motion fallback. */
 .cta-glow { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.45), 0 4px 22px -2px rgb(var(--accent-rgb) / 0.45); }
 
+/* Luminous figures. glow-text follows the element's own colour (green/amber
+   net balances); glow-accent glows in the theme accent (for gradient-clipped
+   numbers whose fill is transparent). */
+.glow-text   { text-shadow: 0 0 14px currentColor; }
+.glow-accent { text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.40); }
+
 /* Checkmark that strokes itself in on settle (drawn state; motion gated). */
 .tick-draw path { stroke-dasharray: 16; stroke-dashoffset: 0; }
 
@@ -347,6 +353,12 @@ body {
   }
   .cta-glow { animation: accent-breathe 2.6s ease-in-out infinite; }
   .cta-glow:hover { animation-duration: 1.3s; }
+
+  @keyframes glow-breathe {
+    0%,100% { text-shadow: 0 0 8px rgb(var(--accent-rgb) / 0.25); }
+    50%     { text-shadow: 0 0 20px rgb(var(--accent-rgb) / 0.55); }
+  }
+  .glow-breathe { animation: glow-breathe 2.8s ease-in-out infinite; }
 
   @keyframes wire-flow { to { background-position: 8px 0; } }
   .flow-wire { animation: wire-flow .6s linear infinite; }

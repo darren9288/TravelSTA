@@ -148,7 +148,7 @@ export default function TripDashboard() {
             </div>
             <div className="glass-card rounded-xl px-3 py-3 text-center">
               <p className="text-xs text-slate-500 mb-1">My Share</p>
-              <p className="text-lg font-bold text-accent-gradient tabular-nums">RM <CountUp value={myShare} decimals={0} /></p>
+              <p className="text-lg font-bold text-accent-gradient glow-accent tabular-nums">RM <CountUp value={myShare} decimals={0} /></p>
             </div>
             <div className="glass-card rounded-xl px-3 py-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Travelers</p>
@@ -165,7 +165,7 @@ export default function TripDashboard() {
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
             {myRole !== "viewer" && (
-              <Link href={`/trips/${id}/add`} className="ripple flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-colors">
+              <Link href={`/trips/${id}/add`} className="cta-glow ripple flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-colors">
                 <PlusCircle size={16} /> Add Expense
               </Link>
             )}

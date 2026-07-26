@@ -34,7 +34,7 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
     <div className="glass-card rounded-2xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-400">Your balance</h2>
-        <span className={`text-base font-bold ${net >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+        <span className={`text-base font-bold glow-text ${net >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
           {net >= 0 ? "+" : "−"}RM <CountUp value={Math.abs(net)} />
         </span>
       </div>
@@ -43,11 +43,12 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] text-emerald-500 flex items-center gap-1"><ArrowDownLeft size={11} /> Owed to you</p>
           {owedToMe.map((i, k) => (
-            <div key={k} className="flex items-center justify-between text-sm">
-              <span className="text-slate-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: i.from.color }} />{i.from.name}
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <span className="text-slate-300 flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: i.from.color }} /><span className="truncate">{i.from.name}</span>
               </span>
-              <span className="text-emerald-400 font-medium tabular-nums">RM {i.amount.toFixed(2)}</span>
+              <span className="flow-wire text-emerald-500 flex-1" aria-hidden="true" />
+              <span className="text-emerald-400 font-medium tabular-nums flex-shrink-0">RM {i.amount.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -57,11 +58,12 @@ export default function MyBalanceCard({ tripId, myTravelerId }: { tripId: string
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] text-amber-500 flex items-center gap-1"><ArrowUpRight size={11} /> You owe</p>
           {iOwe.map((i, k) => (
-            <div key={k} className="flex items-center justify-between text-sm">
-              <span className="text-slate-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: i.to.color }} />{i.to.name}
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <span className="text-slate-300 flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: i.to.color }} /><span className="truncate">{i.to.name}</span>
               </span>
-              <span className="text-amber-400 font-medium tabular-nums">RM {i.amount.toFixed(2)}</span>
+              <span className="flow-wire text-amber-500 flex-1" aria-hidden="true" />
+              <span className="text-amber-400 font-medium tabular-nums flex-shrink-0">RM {i.amount.toFixed(2)}</span>
             </div>
           ))}
         </div>

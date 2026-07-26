@@ -211,7 +211,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
   return (
     <div id={`expense-${expense.id}`}
       style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
-      className={`border rounded-xl overflow-hidden transition-all animate-fade-in-up ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40" : "bg-slate-800/60 border-slate-700/50"}`}>
+      className={`border rounded-xl overflow-hidden transition-all animate-fade-in-up ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40 bal-debit" : "bg-slate-800/60 border-slate-700/50"}`}>
       <div className="flex items-center gap-3 px-3 py-3 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
         <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: hasUnsettled ? "#f59e0b" : color }} />
         <div className="flex-1 min-w-0">

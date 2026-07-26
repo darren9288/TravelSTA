@@ -222,7 +222,7 @@ export default function ExpensesPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Expenses</h1>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400">RM {total.toFixed(2)}</span>
+              <span className="text-sm font-bold text-accent-gradient glow-breathe tabular-nums">RM {total.toFixed(2)}</span>
               <button onClick={() => mutateExpenses()} disabled={loading}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-400 text-xs rounded-lg transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? "animate-spin" : ""} /> Refresh
@@ -279,7 +279,7 @@ export default function ExpensesPage() {
                   <span className="text-xs text-slate-500 font-medium">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}
                   </span>
-                  <span className="text-xs text-slate-600">
+                  <span className="text-xs text-slate-600 tabular-nums">
                     RM {groups[date].reduce((s, e) => s + Number(e.myr_amount), 0).toFixed(2)}
                   </span>
                 </div>
