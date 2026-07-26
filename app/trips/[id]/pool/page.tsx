@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, PoolTopup, Expense, CATEGORIES } from "@/lib/supabase";
+import { rateForWallet as computeRate } from "@/lib/rates";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -190,25 +191,7 @@ export default function PoolPage() {
   // converted to MYR using cash_rate or wise_rate (or *_2 for the secondary
   // currency). Wise vs cash is decided by the wallet name containing "wise".
   const rateForWallet = useCallback(
-    (wallet: { name: string; currency: string } | undefined | null): number => {
-      if (!trip || !wallet || wallet.currency === "MYR") return 1;
-      const isWise = wallet.name.toLowerCase().includes("wise");
-      const t = trip as unknown as {
-        foreign_currency?: string;
-        cash_rate?: number;
-        wise_rate?: number;
-        foreign_currency_2?: string | null;
-        cash_rate_2?: number | null;
-        wise_rate_2?: number | null;
-      };
-      if (wallet.currency === t.foreign_currency) {
-        return isWise ? Number(t.wise_rate ?? 1) : Number(t.cash_rate ?? 1);
-      }
-      if (t.foreign_currency_2 && wallet.currency === t.foreign_currency_2) {
-        return isWise ? Number(t.wise_rate_2 ?? 1) : Number(t.cash_rate_2 ?? 1);
-      }
-      return 1;
-    },
+    (wallet: { name: string; currency: string } | undefined | null): number => computeRate(trip, wallet),
     [trip]
   );
 
@@ -345,7 +328,7 @@ export default function PoolPage() {
     type Event = { id: string; date: string; amount: number; sign: 1 | -1; label: string; sub: string; isForeign: boolean; isTopup: boolean };
     const pool = pools.find((p) => p.id === poolId);
     const isForeign = pool?.pool_currency !== "MYR";
-    const rate = pool?.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+    const rate = rateForWallet({ name: pool?.name ?? "", currency: pool?.pool_currency ?? "MYR" });
 
     const events: Event[] = [];
     for (const t of topups.filter((t) => t.pool_id === poolId)) {
@@ -646,7 +629,7 @@ export default function PoolPage() {
               ) : pools.map((p) => {
                 const balMyr = balances[p.id] ?? 0;
                 const isForeign = p.pool_currency !== "MYR";
-                const rate = p.name.toLowerCase().includes("wise") ? (trip?.wise_rate ?? 1) : (trip?.cash_rate ?? 1);
+                const rate = rateForWallet({ name: p.name, currency: p.pool_currency ?? "MYR" });
                 // Sum the actual foreign amounts of contributions and expenses
                 // so the JPY display reflects what users really paid in, not a
                 // round-trip MYR conversion at the pool's rate (which inflates
