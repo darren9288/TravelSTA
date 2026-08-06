@@ -9,8 +9,10 @@ import CumulativeLine from "@/components/charts/CumulativeLine";
 import PerPersonSpending from "@/components/PerPersonSpending";
 import CashbackReport from "@/components/CashbackReport";
 import CountUp from "@/components/CountUp";
+import TripWrapped from "@/components/TripWrapped";
 import SuperlativesCard from "@/components/SuperlativesCard";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Sparkles, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useTripRealtime } from "@/lib/use-realtime";
@@ -30,8 +32,13 @@ export default function AnalyticsPage() {
 
   useTripRealtime(id);
 
+  const [wrappedOpen, setWrappedOpen] = useState(false);
+
   return (
     <>
+      {wrappedOpen && trip && (
+        <TripWrapped tripId={id} trip={trip} onClose={() => setWrappedOpen(false)} />
+      )}
       <Nav tripId={id} tripName={trip?.name} />
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
@@ -54,6 +61,24 @@ export default function AnalyticsPage() {
             <div className="text-center py-12 text-slate-500 text-sm">No data yet</div>
           ) : (
             <>
+              {/* Trip Wrapped — the story recap. Hidden on near-empty trips
+                  where the cards would have nothing interesting to say. */}
+              {stats.total > 0 && (
+                <button
+                  onClick={() => setWrappedOpen(true)}
+                  className="cta-glow ripple w-full rounded-2xl px-5 py-4 flex items-center gap-3 text-left bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 transition-colors"
+                >
+                  <Sparkles size={22} className="text-white flex-shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-base font-bold text-white">Trip Wrapped</span>
+                    <span className="block text-xs text-emerald-100/80">
+                      Your trip as a story — tap through and share it
+                    </span>
+                  </span>
+                  <ChevronRight size={18} className="text-white/70 flex-shrink-0" />
+                </button>
+              )}
+
               <SuperlativesCard tripId={id} />
 
               <div className="glass-card rounded-2xl p-4">

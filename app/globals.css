@@ -362,6 +362,12 @@ body {
    Static on purpose; see the note in the reduced-motion block below. */
 .kenburns { transform: scale(1.05); }
 
+/* Trip Wrapped story progress. Defined OUTSIDE the reduced-motion gate on
+   purpose: this bar is functional feedback (how long until the next card),
+   not decoration, so it must run for everyone. */
+@keyframes story-fill { from { width: 0% } to { width: 100% } }
+.story-fill { animation: story-fill var(--story-dur, 4600ms) linear forwards; }
+
 @media (prefers-reduced-motion: no-preference) {
   @keyframes accent-breathe {
     0%,100% { box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.35), 0 4px 18px -2px rgb(var(--accent-rgb) / 0.35); }
@@ -387,6 +393,12 @@ body {
 
   @keyframes meter-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   .meter-fill { animation: meter-grow .5s cubic-bezier(.22,1,.36,1) both; }
+
+  /* Trip Wrapped card entrances — bars rising / filling into place. */
+  @keyframes grow-y { from { transform: scaleY(0); opacity: .3 } to { transform: scaleY(1); opacity: 1 } }
+  @keyframes grow-x { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+  .animate-grow-y { transform-origin: bottom; animation: grow-y .55s cubic-bezier(.22,1,.36,1) both; }
+  .animate-grow-x { transform-origin: left;   animation: grow-x .6s cubic-bezier(.22,1,.36,1) both; }
 
   @keyframes fab-aura-spin { to { transform: rotate(1turn); } }
   .fab-aura::before {
