@@ -17,6 +17,11 @@ import BudgetTracker from "@/components/BudgetTracker";
 import NotificationFrequencySelector from "@/components/NotificationFrequencySelector";
 import InviteLinkButton from "@/components/InviteLinkButton";
 
+// Kept in sync with supabase/migrations/029_cashback_rates.sql. Shown inline
+// when a save fails because the columns are missing, so the fix is one copy.
+const MIGRATION_029_SQL = `alter table trips add column if not exists cashback_rates jsonb;
+alter table trips add column if not exists cashback_active_id text;`;
+
 type Member = {
   user_id: string;
   role: "admin" | "editor" | "viewer";
@@ -63,6 +68,9 @@ export default function SettingsPage() {
   const [newRatePercent, setNewRatePercent] = useState("");
   const [ratesSaving, setRatesSaving] = useState(false);
   const [ratesMsg, setRatesMsg] = useState("");
+  // True once a save fails because migration 029 hasn't been run — shows the
+  // exact SQL inline so it can be copied straight into the Supabase editor.
+  const [needsMigration, setNeedsMigration] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -133,15 +141,19 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        // Migration 029 not applied yet → the columns don't exist. Say so
-        // plainly instead of a raw Postgres error.
+        // Migration 029 not applied yet → the columns don't exist. PostgREST
+        // phrases this as "Could not find the 'x' column of 'trips' in the
+        // schema cache" (not "column does not exist"), so match both, plus
+        // either column name. Otherwise the raw Postgres error leaks to the UI.
         const msg = String(data.error ?? "");
-        setRatesMsg(
-          /column .* does not exist|cashback_rates/i.test(msg)
-            ? "Run migration 029 in Supabase to save cashback rates."
-            : msg || "Couldn't save."
-        );
+        const missingColumn =
+          /cashback_rates|cashback_active_id/i.test(msg) ||
+          /schema cache/i.test(msg) ||
+          /column .* does not exist/i.test(msg);
+        setRatesMsg(missingColumn ? "Run migration 029 — see below" : msg || "Couldn't save.");
+        setNeedsMigration(missingColumn);
       } else {
+        setNeedsMigration(false);
         setTrip(data);
         setRatesMsg("Saved");
         setTimeout(() => setRatesMsg(""), 1500);
@@ -476,6 +488,25 @@ export default function SettingsPage() {
                   <Plus size={16} />
                 </button>
               </div>
+
+              {/* Migration not run yet — show the exact SQL to paste. */}
+              {needsMigration && (
+                <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-3 flex flex-col gap-2">
+                  <p className="text-[11px] text-amber-300 leading-snug">
+                    These columns don&apos;t exist yet. Paste this into Supabase → SQL Editor, then
+                    save again. It only adds two empty columns — existing data isn&apos;t touched.
+                  </p>
+                  <code className="block bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-[10px] font-mono text-emerald-300 whitespace-pre-wrap break-all">
+                    {MIGRATION_029_SQL}
+                  </code>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(MIGRATION_029_SQL)}
+                    className="self-start flex items-center gap-1 text-[11px] text-amber-300 hover:text-amber-200 border border-amber-700/50 rounded-lg px-2 py-1 transition-colors"
+                  >
+                    <Copy size={11} /> Copy SQL
+                  </button>
+                </div>
+              )}
 
               {/* Live worked example so the rounding rule is visible */}
               {(() => {
