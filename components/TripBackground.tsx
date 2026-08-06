@@ -21,31 +21,65 @@ function Sakura() {
   );
 }
 
-// Mobile browsers refuse (or silently pause) autoplay far more often than
-// desktop — iOS Low Power Mode, Android data saver, and backgrounding all stop
-// a muted autoplay video, and it then stays paused on return. Re-assert muted
-// (the attribute alone isn't always enough once JS takes over) and retry play
-// on mount, on tab re-focus, and after the first touch, which counts as the
-// user gesture some browsers hold out for.
+// Keep the background video actually showing a picture on phones.
+//
+// Two separate problems, both mobile-only:
+//  1. Muted autoplay is refused or silently paused (iOS Low Power Mode,
+//     Android data saver, backgrounding) — and once paused it stays paused.
+//  2. A paused <video> renders whichever frame it is parked on, and these
+//     clips typically fade in from black, so frame 0 is literally #000. That
+//     is indistinguishable from "no background at all" — which is exactly
+//     what a blocked autoplay looks like to the user.
+//
+// So: re-assert muted and retry play on mount / metadata / focus / every
+// gesture, and if it is still paused shortly after load, seek onto a frame
+// that actually has picture so the wallpaper is visible even when playback
+// never starts.
 function useKeepPlaying(ref: React.RefObject<HTMLVideoElement | null>, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const v = ref.current;
     if (!v) return;
-    const tryPlay = () => {
-      v.muted = true;
-      const p = v.play();
-      if (p && typeof p.catch === "function") p.catch(() => { /* blocked — the frame still shows */ });
+
+    // Park a stalled video on a frame with real picture instead of the black
+    // first frame. Guarded so it never fights actual playback.
+    const parkOnVisibleFrame = () => {
+      if (!v.paused) return;
+      const d = v.duration;
+      if (!d || !isFinite(d) || v.currentTime > 0.3) return;
+      try { v.currentTime = Math.min(2, d * 0.15); } catch { /* seek unsupported */ }
     };
+
+    const tryPlay = () => {
+      v.muted = true; // the attribute alone isn't always honoured once JS runs
+      const p = v.play();
+      if (p && typeof p.catch === "function") p.catch(parkOnVisibleFrame);
+    };
+
     tryPlay();
+    // If autoplay was refused, make sure we're at least showing a real frame.
+    const fallbackTimer = setTimeout(parkOnVisibleFrame, 1500);
+
     const onVisible = () => { if (document.visibilityState === "visible") tryPlay(); };
+    // Retry on EVERY gesture (not once): the first tap may land before the
+    // media is ready, and some browsers only release autoplay after a gesture.
+    const onGesture = () => { if (v.paused) tryPlay(); };
+
+    v.addEventListener("loadedmetadata", tryPlay);
+    v.addEventListener("canplay", tryPlay);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("pageshow", tryPlay);
-    document.addEventListener("touchstart", tryPlay, { once: true, passive: true });
+    document.addEventListener("touchstart", onGesture, { passive: true });
+    document.addEventListener("click", onGesture);
+
     return () => {
+      clearTimeout(fallbackTimer);
+      v.removeEventListener("loadedmetadata", tryPlay);
+      v.removeEventListener("canplay", tryPlay);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", tryPlay);
-      document.removeEventListener("touchstart", tryPlay);
+      document.removeEventListener("touchstart", onGesture);
+      document.removeEventListener("click", onGesture);
     };
   }, [ref, enabled]);
 }
@@ -76,6 +110,11 @@ export default function TripBackground({
 
   return (
     <>
+      {/* Painted BELOW the media (earlier in DOM, same -z-10). If the photo or
+          video never loads — data saver, flaky mobile connection — the element
+          above stays transparent and this shows through, so the user gets the
+          themed aurora instead of a black void. */}
+      <div className="ambient-bg" aria-hidden="true" />
       {isVideo ? (
         <video
           ref={videoRef}
