@@ -1,9 +1,16 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, CATEGORIES, PAYMENT_TYPES } from "@/lib/supabase";
 import { Sparkles, ClipboardList, Camera, Loader2, X, Users, Coins, Calculator } from "lucide-react";
+import CashbackRatePicker from "@/components/CashbackRatePicker";
+import {
+  CashbackRate,
+  parseCashbackRates,
+  activeCashbackRate,
+  applyCashbackRate,
+} from "@/lib/cashback-rates";
 import { compressImage, blobToBase64 } from "@/lib/image-compress";
 import { useTripRealtime } from "@/lib/use-realtime";
 import { enqueue } from "@/lib/offline-queue";
@@ -32,6 +39,52 @@ export default function AddExpensePage() {
   // Optional manual cashback for this expense, credited to the payer. Recorded in
   // a separate ledger — never affects the split or settlement.
   const [cashback, setCashback] = useState("");
+
+  // ── Cashback auto-fill rate ────────────────────────────────────────────
+  // Presets live on the trip (migration 029) so the list and the active
+  // choice are shared. Tap an auto-fill button to apply the active rate;
+  // long-press any of them to switch which rate every button uses.
+  const rates: CashbackRate[] = parseCashbackRates(trip?.cashback_rates);
+  const activeRate = activeCashbackRate(rates, trip?.cashback_active_id);
+  const [ratePickerOpen, setRatePickerOpen] = useState(false);
+  const [rateSaving, setRateSaving] = useState(false);
+  // Long-press detection shared by every auto-fill button on the page.
+  const ratePressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rateLongPressed = useRef(false);
+
+  function startRatePress() {
+    rateLongPressed.current = false;
+    ratePressTimer.current = setTimeout(() => {
+      rateLongPressed.current = true;
+      setRatePickerOpen(true);
+    }, 500);
+  }
+  function cancelRatePress() {
+    if (ratePressTimer.current) { clearTimeout(ratePressTimer.current); ratePressTimer.current = null; }
+  }
+
+  async function pickRate(rate: CashbackRate) {
+    setRateSaving(true);
+    // Optimistic so every button relabels immediately.
+    setTrip((t) => (t ? { ...t, cashback_active_id: rate.id } : t));
+    try {
+      const res = await fetch(`/api/trips/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cashback_active_id: rate.id }),
+      });
+      if (res.ok) setTrip(await res.json());
+      // A failure (e.g. migration 029 not run) leaves the optimistic choice in
+      // place for this session rather than snapping the label back mid-entry.
+    } catch { /* keep the local choice */ }
+    setRateSaving(false);
+    setRatePickerOpen(false);
+  }
+
+  /** Apply the active rate to a gross amount. Shared by both tabs. */
+  function calcWithActiveRate(gross: number) {
+    return applyCashbackRate(gross, activeRate.percent);
+  }
   const [splitType, setSplitType] = useState<"even" | "individual">("even");
   const [paidById, setPaidById] = useState("");
   const [paymentType, setPaymentType] = useState("Cash");
@@ -569,6 +622,16 @@ export default function AddExpensePage() {
 
   return (
     <>
+      {ratePickerOpen && (
+        <CashbackRatePicker
+          rates={rates}
+          activeId={trip?.cashback_active_id ?? activeRate.id}
+          tripId={id}
+          saving={rateSaving}
+          onPick={pickRate}
+          onClose={() => setRatePickerOpen(false)}
+        />
+      )}
       <Nav tripId={id} tripName={trip.name} />
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
         <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-4">
@@ -691,17 +754,22 @@ export default function AddExpensePage() {
               {currency === "MYR" && (
                 <button type="button"
                   onClick={() => {
+                    // A completed long-press opened the picker — don't also calculate.
+                    if (rateLongPressed.current) { rateLongPressed.current = false; return; }
                     const gross = parseFloat(myrAmount);
                     if (!gross || isNaN(gross)) { setError("Type the amount first."); return; }
-                    // Amount = gross − 1.2%, rounded to 2dp. Cashback = 1.2%, floored to 2dp.
-                    const net = Math.round(gross * 0.988 * 100) / 100;
-                    const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
+                    const { net, cashback: cb } = calcWithActiveRate(gross);
                     setMyrAmount(net.toFixed(2));
                     setCashback(cb.toFixed(2));
                   }}
+                  onPointerDown={startRatePress}
+                  onPointerUp={cancelRatePress}
+                  onPointerLeave={cancelRatePress}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{ touchAction: "manipulation", WebkitUserSelect: "none", userSelect: "none" }}
                   className="self-start flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded-lg px-2.5 py-1.5 transition-colors"
-                  title="Treat the amount as the gross, deduct 1.2%, and fill the cashback">
-                  <Calculator size={13} /> Ryt &minus;1.2% &rarr; fills amount + cashback
+                  title={`Treat the amount as the gross, deduct ${activeRate.percent}%, and fill the cashback. Long-press to change rate.`}>
+                  <Calculator size={13} /> {activeRate.name} &minus;{activeRate.percent}% &rarr; fills amount + cashback
                 </button>
               )}
               {currency !== "MYR" && myrAmount && (
@@ -1134,22 +1202,27 @@ export default function AddExpensePage() {
                         <div className="flex items-center gap-1.5 mt-1.5 pl-6">
                           <Coins size={12} className="text-emerald-400/70 flex-shrink-0" />
                           <input type="number" step="0.01" value={row.cashback}
-                            placeholder="cashback (RM) — only for the Ryt users, optional"
+                            placeholder={`cashback (RM) — only for the ${activeRate.name} users, optional`}
                             onChange={(e) => setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, cashback: e.target.value } : r))}
                             className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
                           {row.currency === "MYR" && (
                             <button type="button"
+                              onPointerDown={startRatePress}
+                              onPointerUp={cancelRatePress}
+                              onPointerLeave={cancelRatePress}
+                              onContextMenu={(e) => e.preventDefault()}
+                              style={{ touchAction: "manipulation", WebkitUserSelect: "none", userSelect: "none" }}
                               onClick={() => {
+                                if (rateLongPressed.current) { rateLongPressed.current = false; return; }
                                 const gross = parseFloat(row.amount);
                                 if (!gross || isNaN(gross)) return;
-                                // Amount = gross − 1.2% (rounded 2dp); cashback = 1.2% (floored 2dp).
-                                const net = Math.round(gross * 0.988 * 100) / 100;
-                                const cb = Math.floor(gross * 0.012 * 100 + 1e-6) / 100;
+                                const { net, cashback: cb } = calcWithActiveRate(gross);
                                 setSepRows(sepRows.map((r, idx) => idx === i ? { ...r, amount: net.toFixed(2), cashback: cb.toFixed(2) } : r));
                               }}
-                              className="flex-shrink-0 p-1 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded transition-colors"
-                              title="Ryt −1.2%: deduct from amount, fill cashback">
+                              className="flex-shrink-0 flex items-center gap-1 px-1.5 py-1 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded transition-colors"
+                              title={`${activeRate.name} −${activeRate.percent}%: deduct from amount, fill cashback. Long-press to change rate.`}>
                               <Calculator size={13} />
+                              <span className="text-[10px] font-medium tabular-nums">{activeRate.percent}%</span>
                             </button>
                           )}
                         </div>

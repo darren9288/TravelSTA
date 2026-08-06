@@ -3,7 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { Trip, Traveler, TRAVELER_COLORS } from "@/lib/supabase";
-import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy, Archive, RotateCcw } from "lucide-react";
+import { Trash2, Plus, Shield, UserX, ArrowLeftRight, Palette, ImageIcon, Upload, Link, Copy, Archive, RotateCcw, Coins, Check } from "lucide-react";
+import {
+  CashbackRate,
+  DEFAULT_CASHBACK_RATES,
+  parseCashbackRates,
+  applyCashbackRate,
+  slugifyRateId,
+} from "@/lib/cashback-rates";
 import { useTheme, THEMES } from "@/components/ThemeProvider";
 import { useTripRealtime } from "@/lib/use-realtime";
 import BudgetTracker from "@/components/BudgetTracker";
@@ -48,6 +55,14 @@ export default function SettingsPage() {
   // Appearance
   const { theme, setTheme } = useTheme();
   const [backgroundImageUrl, setBackgroundImageUrl] = useState("");
+
+  // Cashback presets that drive the Add Expense auto-fill buttons.
+  const [rates, setRates] = useState<CashbackRate[]>(DEFAULT_CASHBACK_RATES);
+  const [activeRateId, setActiveRateId] = useState<string | null>(null);
+  const [newRateName, setNewRateName] = useState("");
+  const [newRatePercent, setNewRatePercent] = useState("");
+  const [ratesSaving, setRatesSaving] = useState(false);
+  const [ratesMsg, setRatesMsg] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -68,6 +83,8 @@ export default function SettingsPage() {
     setCashRate(String(tripRes.cash_rate));
     setWiseRate(String(tripRes.wise_rate));
     setBackgroundImageUrl(tripRes.background_image_url ?? "");
+    setRates(parseCashbackRates(tripRes.cashback_rates));
+    setActiveRateId(tripRes.cashback_active_id ?? null);
     setTravelers(Array.isArray(travelerRes) ? travelerRes : []);
     if (!membersRes.error) {
       setMembers(membersRes.members ?? []);
@@ -98,6 +115,63 @@ export default function SettingsPage() {
     const data = await res.json();
     if (!res.ok) { setError(data.error); } else { setSuccess("Saved!"); setTrip(data); }
     setSaving(false);
+  }
+
+  // Persist the cashback presets + which one is active. Kept separate from
+  // saveTrip() so editing a rate doesn't also push half-typed Trip Details.
+  async function saveRates(nextRates: CashbackRate[], nextActiveId: string | null) {
+    setRatesSaving(true);
+    setRatesMsg("");
+    // Optimistic: the list is local state anyway, and a failure re-reads below.
+    setRates(nextRates);
+    setActiveRateId(nextActiveId);
+    try {
+      const res = await fetch(`/api/trips/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cashback_rates: nextRates, cashback_active_id: nextActiveId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // Migration 029 not applied yet → the columns don't exist. Say so
+        // plainly instead of a raw Postgres error.
+        const msg = String(data.error ?? "");
+        setRatesMsg(
+          /column .* does not exist|cashback_rates/i.test(msg)
+            ? "Run migration 029 in Supabase to save cashback rates."
+            : msg || "Couldn't save."
+        );
+      } else {
+        setTrip(data);
+        setRatesMsg("Saved");
+        setTimeout(() => setRatesMsg(""), 1500);
+      }
+    } catch {
+      setRatesMsg("Network error — not saved.");
+    } finally {
+      setRatesSaving(false);
+    }
+  }
+
+  function updateRate(idx: number, patch: Partial<CashbackRate>) {
+    setRates((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function addRate() {
+    const name = newRateName.trim();
+    const percent = parseFloat(newRatePercent);
+    if (!name || !Number.isFinite(percent) || percent < 0) return;
+    const next = [...rates, { id: slugifyRateId(name, rates), name, percent }];
+    setNewRateName("");
+    setNewRatePercent("");
+    saveRates(next, activeRateId);
+  }
+
+  function removeRate(idx: number) {
+    const gone = rates[idx];
+    const next = rates.filter((_, i) => i !== idx);
+    if (next.length === 0) return; // always keep at least one preset
+    saveRates(next, gone.id === activeRateId ? next[0].id : activeRateId);
   }
 
   // Toggle archived state on a traveler. Archived travelers are hidden from
@@ -304,6 +378,119 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+
+          {/* Cashback rates — drives the Add Expense auto-fill buttons */}
+          {myRole !== "viewer" && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Coins size={14} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-white">Cashback rates</h2>
+                {ratesMsg && (
+                  <span className={`text-[11px] ml-auto ${ratesMsg === "Saved" ? "text-emerald-400" : "text-amber-400"}`}>
+                    {ratesMsg}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 -mt-1">
+                The auto-fill button on Add Expense uses the one marked active. Tap a row to make it
+                active; long-press the button on the Add page to switch there too.
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-[1fr_74px_28px] gap-2 px-1">
+                  <span className="text-[11px] text-slate-500">Name</span>
+                  <span className="text-[11px] text-slate-500 text-right">%</span>
+                  <span />
+                </div>
+                {rates.map((r, i) => {
+                  const active = r.id === activeRateId || (!activeRateId && i === 0);
+                  return (
+                    <div
+                      key={r.id}
+                      className={`grid grid-cols-[1fr_74px_28px] gap-2 items-center rounded-lg px-1.5 py-1 border transition-colors ${
+                        active ? "bg-emerald-600/15 border-emerald-500/50" : "border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <button
+                          onClick={() => saveRates(rates, r.id)}
+                          disabled={ratesSaving}
+                          title={active ? "Active" : "Make this the active rate"}
+                          className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
+                            active ? "bg-emerald-500 border-emerald-500" : "border-slate-500 hover:border-emerald-400"
+                          }`}
+                        >
+                          {active && <Check size={10} className="text-white" />}
+                        </button>
+                        <input
+                          value={r.name}
+                          onChange={(e) => updateRate(i, { name: e.target.value })}
+                          onBlur={() => saveRates(rates, activeRateId)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={r.percent}
+                        onChange={(e) => updateRate(i, { percent: parseFloat(e.target.value) || 0 })}
+                        onBlur={() => saveRates(rates, activeRateId)}
+                        className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right tabular-nums focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        onClick={() => removeRate(i)}
+                        disabled={ratesSaving || rates.length <= 1}
+                        title={rates.length <= 1 ? "Keep at least one rate" : "Remove"}
+                        className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-30 disabled:hover:text-slate-600"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add a new preset */}
+              <div className="grid grid-cols-[1fr_74px_28px] gap-2 items-center pt-1 border-t border-slate-700/50">
+                <input
+                  value={newRateName}
+                  onChange={(e) => setNewRateName(e.target.value)}
+                  placeholder="e.g. Maybank"
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newRatePercent}
+                  onChange={(e) => setNewRatePercent(e.target.value)}
+                  placeholder="%"
+                  onKeyDown={(e) => { if (e.key === "Enter") addRate(); }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white text-right tabular-nums placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  onClick={addRate}
+                  disabled={ratesSaving || !newRateName.trim() || !newRatePercent}
+                  className="flex items-center justify-center text-emerald-400 hover:text-emerald-300 disabled:opacity-30 transition-colors"
+                  title="Add rate"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              {/* Live worked example so the rounding rule is visible */}
+              {(() => {
+                const active = rates.find((r) => r.id === activeRateId) ?? rates[0];
+                if (!active) return null;
+                const { net, cashback } = applyCashbackRate(100, active.percent);
+                return (
+                  <p className="text-[11px] text-slate-600 tabular-nums">
+                    Example at {active.name}: RM 100.00 → amount RM {net.toFixed(2)} + cashback RM{" "}
+                    {cashback.toFixed(2)}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Background Image — editor/admin only */}
           {myRole !== "viewer" && (

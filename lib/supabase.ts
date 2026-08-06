@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { CashbackRate } from "./cashback-rates";
 
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,6 +38,10 @@ export type Trip = {
   my_traveler_id?: string | null;
   my_role?: string | null; // "admin" | "editor" | "viewer" | null
   background_image_url?: string | null;
+  // Cashback presets for the Add Expense auto-fill button (migration 029).
+  // Null until the trip is configured — the app falls back to defaults.
+  cashback_rates?: CashbackRate[] | null;
+  cashback_active_id?: string | null;
 };
 
 export type Traveler = {
