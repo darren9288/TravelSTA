@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mov"];
 
@@ -20,6 +21,35 @@ function Sakura() {
   );
 }
 
+// Mobile browsers refuse (or silently pause) autoplay far more often than
+// desktop — iOS Low Power Mode, Android data saver, and backgrounding all stop
+// a muted autoplay video, and it then stays paused on return. Re-assert muted
+// (the attribute alone isn't always enough once JS takes over) and retry play
+// on mount, on tab re-focus, and after the first touch, which counts as the
+// user gesture some browsers hold out for.
+function useKeepPlaying(ref: React.RefObject<HTMLVideoElement | null>, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const v = ref.current;
+    if (!v) return;
+    const tryPlay = () => {
+      v.muted = true;
+      const p = v.play();
+      if (p && typeof p.catch === "function") p.catch(() => { /* blocked — the frame still shows */ });
+    };
+    tryPlay();
+    const onVisible = () => { if (document.visibilityState === "visible") tryPlay(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", tryPlay);
+    document.addEventListener("touchstart", tryPlay, { once: true, passive: true });
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", tryPlay);
+      document.removeEventListener("touchstart", tryPlay);
+    };
+  }, [ref, enabled]);
+}
+
 export default function TripBackground({
   imageUrl,
   children,
@@ -27,6 +57,11 @@ export default function TripBackground({
   imageUrl: string | null;
   children: React.ReactNode;
 }) {
+  const isVideo = !!imageUrl && isVideoUrl(imageUrl);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // Hook runs before any early return so the order stays stable.
+  useKeepPlaying(videoRef, isVideo);
+
   // No cover photo → an animated accent aurora fills the void instead of a
   // flat slate canvas. Both layers read --accent-rgb, so they follow the theme.
   if (!imageUrl) {
@@ -39,17 +74,18 @@ export default function TripBackground({
     );
   }
 
-  const isVideo = isVideoUrl(imageUrl);
-
   return (
     <>
       {isVideo ? (
         <video
+          ref={videoRef}
           src={imageUrl}
           autoPlay
           muted
           loop
           playsInline
+          preload="auto"
+          disablePictureInPicture
           className="fixed inset-0 -z-10 w-full h-full object-cover kenburns"
           style={{ filter: "blur(2px)" }}
         />
@@ -62,8 +98,10 @@ export default function TripBackground({
           }}
         />
       )}
-      {/* Dark overlay for readability */}
-      <div className="fixed inset-0 -z-10 bg-slate-950/70" />
+      {/* Dark overlay for readability. Lighter on phones: there the cards span
+          ~90% of the width and supply their own contrast, so a 70% wash on top
+          of them left no wallpaper visible at all. */}
+      <div className="fixed inset-0 -z-10 bg-slate-950/50 md:bg-slate-950/70" />
       {/* Cinematic vignette + faint film grain — grades busy photos and lifts
           text legibility. Static, so effectively free. */}
       <div className="fixed inset-0 -z-10 vignette-grain" aria-hidden="true" />
