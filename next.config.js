@@ -101,6 +101,13 @@ const withPWA = require("next-pwa")({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Vercel injects the project's real production hostname at build time.
+  // Exposing it lets the client tell whether it is running on the live site
+  // or on a frozen per-deployment URL (see components/StaleOriginBanner.tsx).
+  // Empty string outside Vercel (local dev) — the banner then stays off.
+  env: {
+    NEXT_PUBLIC_PROD_HOST: process.env.VERCEL_PROJECT_PRODUCTION_URL || "",
+  },
   experimental: {
     // Keep visited dynamic pages in the Next.js Router Cache for 30 seconds
     // so back/forward + tab navigation feels instant. The data inside each

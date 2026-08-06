@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ServiceWorkerUpdater from "@/components/ServiceWorkerUpdater";
+import StaleOriginBanner from "@/components/StaleOriginBanner";
 import OfflineBanner from "@/components/OfflineBanner";
 import NavigationProgress from "@/components/NavigationProgress";
 import { Toaster } from "@/components/Toaster";
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SWRProvider>
           <Toaster>
             <ServiceWorkerUpdater />
+            <StaleOriginBanner />
             <OfflineBanner />
             <OfflineQueueWatcher />
             <NavigationProgress />
