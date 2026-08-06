@@ -1,7 +1,21 @@
 const withPWA = require("next-pwa")({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
-  register: true,
+  // NOTE: this is INERT on the App Router. next-pwa 5.6 injects its
+  // registration shim into `entries['main.js']` (index.js:96), which only
+  // exists for the Pages Router — this app has no pages/ directory, so every
+  // route loads main-app-*.js and the shim is never executed. Verified in the
+  // build: main-app-*.js contains zero workbox references.
+  //
+  // Consequence: no service worker is registered automatically. The ONLY
+  // registration is the manual recovery button in NotificationToggle.tsx
+  // (needed because Web Push requires a service worker). sw.js is still
+  // generated on purpose so that button has something to register.
+  //
+  // Left false rather than true so the config doesn't claim behaviour the
+  // app doesn't have. Turning caching on is a deliberate, separately-tested
+  // change — see the audit notes in the commit history.
+  register: false,
   skipWaiting: true,
   clientsClaim: true,
   // Pull in our custom push-notification event listeners. The next-pwa
@@ -83,8 +97,13 @@ const withPWA = require("next-pwa")({
       },
     },
     // HTML pages — try network first, fall back to cached page if offline.
-    // precacheFallback hands off to /offline when both network and cache miss,
-    // so users see our friendly offline page instead of Chrome's default error.
+    //
+    // The old `precacheFallback: { fallbackURL: "/offline" }` was removed: it
+    // resolves through matchPrecache("/offline"), but next-pwa precaches only
+    // JS/CSS assets for the App Router — the manifest holds
+    // /_next/static/chunks/app/offline/page-*.js and no "/offline" HTML entry.
+    // So the fallback never resolved and the browser's own error page showed
+    // anyway. Keeping it would just be a claim the code can't honour.
     {
       urlPattern: ({ request }) => request.mode === "navigate",
       handler: "NetworkFirst",
@@ -92,7 +111,6 @@ const withPWA = require("next-pwa")({
         cacheName: "pages",
         networkTimeoutSeconds: 5,
         expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
-        precacheFallback: { fallbackURL: "/offline" },
       },
     },
   ],

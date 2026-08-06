@@ -38,7 +38,11 @@ export default function OfflineBanner() {
       <div className="fixed safe-top left-0 right-0 z-[100] bg-amber-600 text-white text-xs font-medium px-3 py-1.5 flex items-center justify-center gap-2 shadow-md">
         <WifiOff size={13} />
         <span>
-          You&apos;re offline — viewing cached data.
+          {/* Deliberately does NOT promise "viewing cached data": no service
+              worker is registered (see next.config.js), so nothing is cached
+              for offline reads. The write queue below is real — it runs on
+              localStorage and needs no service worker. */}
+          You&apos;re offline.
           {pending > 0
             ? ` ${pending} change${pending === 1 ? "" : "s"} queued, will sync when you reconnect.`
             : " Changes will be queued and synced when you reconnect."}
