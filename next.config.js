@@ -111,6 +111,21 @@ const nextConfig = {
       dynamic: 30,
     },
   },
+  // The service worker script itself must never be served from the browser's
+  // HTTP cache. If it is, registration.update() re-reads the *cached* bytes,
+  // sees no change, and the device keeps running the old precached build —
+  // which is exactly how a bookmark ends up pinned to a stale version of the
+  // app while a fresh link loads the current one.
+  async headers() {
+    const noStore = [
+      { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+    ];
+    return [
+      { source: "/sw.js", headers: noStore },
+      { source: "/push-sw.js", headers: noStore },
+      { source: "/workbox-:hash.js", headers: noStore },
+    ];
+  },
 };
 
 module.exports = withPWA(nextConfig);
