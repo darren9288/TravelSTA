@@ -358,7 +358,8 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Cover-photo base zoom; ken-burns pans it when motion is allowed. */
+/* Cover-photo base zoom — slightly oversized so the blur has no bare edge.
+   Static on purpose; see the note in the reduced-motion block below. */
 .kenburns { transform: scale(1.05); }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -416,12 +417,13 @@ body {
   .sakura .petal:nth-child(6) { left: 81%; animation-duration: 18s; animation-delay: -7s; }
   .sakura .petal:nth-child(7) { left: 93%; animation-duration: 14s; animation-delay: -11s; }
 
-  @keyframes kenburns {
-    0%   { transform: scale(1.05) translate3d(0, 0, 0); }
-    50%  { transform: scale(1.14) translate3d(-1.5%, -1%, 0); }
-    100% { transform: scale(1.05) translate3d(0, 0, 0); }
-  }
-  .kenburns { animation: kenburns 40s ease-in-out infinite; }
+  /* The ken-burns pan was removed: the cover photo/video sits under a
+     filter: blur(), and blur is a resampling filter. Creeping the image by
+     sub-pixel amounts (roughly 1px/sec at these values) meant it was
+     permanently mid-resample, so the blurred detail shimmered — it read as
+     the whole background vibrating. Smooth gradients (the aurora orbs below)
+     can be animated under blur safely because they have no fine detail to
+     alias; a photo cannot. The static scale in .kenburns above stays. */
 }
 
 /* Petals are purely decorative — hide entirely when motion is reduced. */
