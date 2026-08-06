@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mov"];
 
@@ -84,6 +84,61 @@ function useKeepPlaying(ref: React.RefObject<HTMLVideoElement | null>, enabled: 
   }, [ref, enabled]);
 }
 
+// Temporary on-device diagnostic. Add ?bgdebug=1 to any trip URL to see what
+// the background <video> is actually doing on that specific phone — desktop
+// devtools can't tell us why iOS refuses to paint or load it.
+function BgDebug({ videoRef, url }: { videoRef: React.RefObject<HTMLVideoElement | null>; url: string }) {
+  const [on, setOn] = useState(false);
+  const [info, setInfo] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).has("bgdebug")) return;
+    setOn(true);
+    const READY = ["0 NOTHING", "1 METADATA", "2 CURRENT", "3 FUTURE", "4 ENOUGH"];
+    const NET = ["0 EMPTY", "1 IDLE", "2 LOADING", "3 NO_SOURCE"];
+    const tick = () => {
+      const v = videoRef.current;
+      const nav = navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } };
+      setInfo({
+        element: v ? "found" : "MISSING",
+        readyState: v ? READY[v.readyState] ?? v.readyState : "-",
+        networkState: v ? NET[v.networkState] ?? v.networkState : "-",
+        paused: v ? String(v.paused) : "-",
+        currentTime: v ? v.currentTime.toFixed(2) : "-",
+        duration: v && isFinite(v.duration) ? v.duration.toFixed(1) : "-",
+        videoSize: v ? `${v.videoWidth}x${v.videoHeight}` : "-",
+        error: v?.error ? `code ${v.error.code}` : "none",
+        buffered: v && v.buffered.length ? `${v.buffered.end(0).toFixed(1)}s` : "0",
+        rectOnScreen: v ? (() => { const r = v.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; })() : "-",
+        netType: nav.connection?.effectiveType ?? "?",
+        saveData: String(nav.connection?.saveData ?? "?"),
+        reducedMotion: String(window.matchMedia("(prefers-reduced-motion: reduce)").matches),
+      });
+    };
+    tick();
+    const t = setInterval(tick, 500);
+    return () => clearInterval(t);
+  }, [videoRef]);
+
+  if (!on) return null;
+  return (
+    <div className="fixed top-2 left-2 right-2 z-[300] bg-black/90 border border-emerald-500/50 rounded-lg p-2 text-[10px] font-mono text-emerald-300 leading-tight">
+      <p className="text-white font-bold mb-1">BG DEBUG — screenshot this</p>
+      {Object.entries(info).map(([k, val]) => (
+        <div key={k}>{k}: <span className="text-white">{String(val)}</span></div>
+      ))}
+      <p className="mt-1 break-all text-slate-500">{url.slice(0, 90)}</p>
+      <button
+        onClick={() => { const v = videoRef.current; if (v) { v.muted = true; v.play().catch((e) => alert("play() rejected: " + e.name + " — " + e.message)); } }}
+        className="mt-1 px-2 py-1 bg-emerald-600 text-white rounded"
+      >
+        Tap to force play
+      </button>
+    </div>
+  );
+}
+
 export default function TripBackground({
   imageUrl,
   children,
@@ -116,18 +171,28 @@ export default function TripBackground({
           themed aurora instead of a black void. */}
       <div className="ambient-bg" aria-hidden="true" />
       {isVideo ? (
-        <video
-          ref={videoRef}
-          src={imageUrl}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          disablePictureInPicture
-          className="fixed inset-0 -z-10 w-full h-full object-cover kenburns"
-          style={{ filter: "blur(2px)" }}
-        />
+        // iOS composites <video> in its own hardware layer, and a `filter`
+        // applied directly to the video element is a known way to make that
+        // layer fail to paint (the video simply never appears, while ordinary
+        // DOM around it renders fine). Put the blur on a wrapper instead and
+        // let the video itself stay a plain, unfiltered layer.
+        <div
+          className="fixed inset-0 -z-10 overflow-hidden"
+          style={{ filter: "blur(2px)", WebkitTransform: "translateZ(0)", transform: "translateZ(0)" }}
+          aria-hidden="true"
+        >
+          <video
+            ref={videoRef}
+            src={imageUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            className="w-full h-full object-cover kenburns"
+          />
+        </div>
       ) : (
         <div
           className="fixed inset-0 -z-10 kenburns bg-cover bg-center bg-no-repeat"
@@ -145,6 +210,7 @@ export default function TripBackground({
           text legibility. Static, so effectively free. */}
       <div className="fixed inset-0 -z-10 vignette-grain" aria-hidden="true" />
       <Sakura />
+      {isVideo && <BgDebug videoRef={videoRef} url={imageUrl} />}
       {children}
     </>
   );
