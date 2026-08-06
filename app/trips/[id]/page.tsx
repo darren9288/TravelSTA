@@ -11,6 +11,7 @@ import { fetcher } from "@/lib/fetcher";
 import BudgetTracker from "@/components/BudgetTracker";
 import CountUp from "@/components/CountUp";
 import MyBalanceCard from "@/components/MyBalanceCard";
+import CoverHeader from "@/components/CoverHeader";
 import { useTripRealtime } from "@/lib/use-realtime";
 
 type StatsData = { byTraveler: { id: string; amount: number }[]; total: number };
@@ -100,6 +101,11 @@ export default function TripDashboard() {
   const realTravelers = travelers.filter((t) => !t.is_pool);
   const me = realTravelers.find((t) => t.id === myId);
 
+  // The cover doubles as the page backdrop; when one exists the collapsing
+  // header shows it unblurred and owns the trip title.
+  const coverUrl = trip.background_image_url?.trim() || null;
+  const hasCover = !!coverUrl;
+
   const dateStr = trip.start_date && trip.end_date
     ? `${new Date(trip.start_date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short" })} – ${new Date(trip.end_date + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}`
     : trip.start_date
@@ -110,30 +116,43 @@ export default function TripDashboard() {
     <>
       <Nav tripId={id} tripName={trip.name} />
       <main className="md:ml-56 pb-24 md:pb-8 min-h-screen">
+        {/* Cover header — only when the trip has one. Shows the trip name,
+            destination and dates itself, so the card below drops them to
+            avoid printing everything twice. */}
+        <CoverHeader
+          imageUrl={coverUrl}
+          name={trip.name}
+          destination={trip.destination}
+          dateLabel={dateStr}
+          joinCode={trip.join_code}
+          currency={trip.foreign_currency}
+        />
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
 
           {/* Header */}
           <div className="glass-card rounded-2xl px-5 py-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-bold text-white">{trip.name}</h1>
-                {trip.destination && <p className="text-slate-400 text-sm mt-0.5">📍 {trip.destination}</p>}
-                {dateStr && <p className="text-slate-500 text-xs mt-1">🗓 {dateStr}</p>}
+            {!hasCover && (
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold text-white">{trip.name}</h1>
+                  {trip.destination && <p className="text-slate-400 text-sm mt-0.5">📍 {trip.destination}</p>}
+                  {dateStr && <p className="text-slate-500 text-xs mt-1">🗓 {dateStr}</p>}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs text-slate-500 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg font-mono">{trip.join_code}</span>
+                  <span className="text-xs text-slate-600">{trip.foreign_currency} trip</span>
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-slate-500 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg font-mono">{trip.join_code}</span>
-                <span className="text-xs text-slate-600">{trip.foreign_currency} trip</span>
-              </div>
-            </div>
+            )}
             {!myId ? (
               <button
                 onClick={() => router.push(`/join/${trip.join_code}?pick=1`)}
-                className="mt-3 w-full py-2 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                className={`${hasCover ? "" : "mt-3"} w-full py-2 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors`}
               >
                 Join as traveler
               </button>
             ) : (
-              <div className="mt-3 flex items-center gap-2">
+              <div className={`${hasCover ? "" : "mt-3"} flex items-center gap-2`}>
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: me?.color ?? "#6366f1" }} />
                 <span className="text-xs text-slate-400">Joined as <span className="text-white font-medium">{me?.name ?? "Unknown"}</span></span>
               </div>
