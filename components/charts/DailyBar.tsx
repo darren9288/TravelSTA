@@ -1,9 +1,14 @@
 "use client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 type Entry = { date: string; amount: number };
 
 export default function DailyBar({ data }: { data: Entry[] }) {
+  // Charts draw themselves in. Skipped entirely under reduced motion, which
+  // also guarantees a fully-rendered chart if the animation never runs.
+  const reduce = useReducedMotion();
+
   if (!data.length) return <div className="flex items-center justify-center h-40 text-slate-600 text-sm">No data</div>;
   const formatted = data.map((d) => ({
     ...d,
@@ -17,7 +22,8 @@ export default function DailyBar({ data }: { data: Entry[] }) {
         <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8 }}
           formatter={(v) => [`RM ${Number(v).toFixed(2)}`, "Spent"]} />
-        <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]}
+          isAnimationActive={!reduce} animationDuration={700} animationEasing="ease-out" />
       </BarChart>
     </ResponsiveContainer>
   );

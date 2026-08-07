@@ -275,11 +275,15 @@ export default function ExpensesPage() {
           ) : (
             sortedDates.map((date) => (
               <div key={date}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-500 font-medium">
+                {/* Sticky so you always know which day you're scrolling through
+                    on a long trip. Negative margins let the blurred bar span
+                    the container's padding instead of leaving bare gutters. */}
+                <div className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-2 flex items-center justify-between
+                                bg-slate-950/80 backdrop-blur-md border-b border-slate-700/40">
+                  <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}
                   </span>
-                  <span className="text-xs text-slate-600 tabular-nums">
+                  <span className="text-xs text-emerald-400/90 font-semibold tabular-nums">
                     RM {groups[date].reduce((s, e) => s + Number(e.myr_amount), 0).toFixed(2)}
                   </span>
                 </div>

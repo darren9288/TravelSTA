@@ -1,9 +1,14 @@
 "use client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 type Entry = { date: string; amount: number };
 
 export default function CumulativeLine({ data }: { data: Entry[] }) {
+  // Charts draw themselves in. Skipped entirely under reduced motion, which
+  // also guarantees a fully-rendered chart if the animation never runs.
+  const reduce = useReducedMotion();
+
   if (!data.length) return <div className="flex items-center justify-center h-40 text-slate-600 text-sm">No data</div>;
 
   const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
@@ -33,8 +38,10 @@ export default function CumulativeLine({ data }: { data: Entry[] }) {
           ]}
         />
         <ReferenceLine y={max} stroke="#334155" strokeDasharray="4 4" label={{ value: `RM ${max.toFixed(0)}`, fill: "#64748b", fontSize: 10, position: "insideTopRight" }} />
-        <Line type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#10b981" }} />
-        <Line type="monotone" dataKey="daily" stroke="#334155" strokeWidth={1} dot={false} strokeDasharray="3 3" activeDot={{ r: 3, fill: "#94a3b8" }} />
+        <Line type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#10b981" }}
+          isAnimationActive={!reduce} animationDuration={1100} animationEasing="ease-out" />
+        <Line type="monotone" dataKey="daily" stroke="#334155" strokeWidth={1} dot={false} strokeDasharray="3 3" activeDot={{ r: 3, fill: "#94a3b8" }}
+          isAnimationActive={!reduce} animationDuration={1100} animationBegin={200} animationEasing="ease-out" />
       </LineChart>
     </ResponsiveContainer>
   );

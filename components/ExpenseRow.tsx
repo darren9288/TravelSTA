@@ -4,16 +4,10 @@ import TravelerBadge from "./TravelerBadge";
 import { Trash2, Pencil, ChevronDown, ChevronUp, Lock, Camera, X, Image, Coins } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { haptic, HAPTIC_SUCCESS } from "@/lib/haptics";
+import { categoryStyle } from "@/lib/categories";
 
-const CAT_COLORS: Record<string, string> = {
-  "Breakfast": "#f97316", "Lunch": "#f97316", "Dinner": "#f97316", "Small Eat": "#f97316",
-  "Hotel": "#6366f1", "Flight": "#3b82f6", "Transport": "#3b82f6", "Car Rental": "#3b82f6", "Fuel": "#3b82f6",
-  "Activity": "#ec4899", "Entertainment": "#ec4899",
-  "Souvenirs": "#a855f7", "Shopping": "#a855f7", "Supplies": "#a855f7",
-  "Laundry": "#14b8a6", "Travel Related": "#14b8a6",
-  "Top Up": "#22c55e", "Transfer In": "#22c55e", "Transfer Out": "#22c55e",
-  "Others": "#94a3b8",
-};
+// Category colours + icons now live in lib/categories so the expense list,
+// and anything else that shows a category, can't drift apart.
 
 type WalletOption = { id: string; name: string; currency: string; traveler_id: string };
 
@@ -80,7 +74,7 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
     );
   }, [expense.splits]);
 
-  const color = CAT_COLORS[expense.category] ?? "#94a3b8";
+  const { color, Icon: CategoryIcon } = categoryStyle(expense.category);
   const paidBy = expense.paid_by ?? travelers.find((t) => t.id === expense.paid_by_id);
   const paidByPool = travelers.find((t) => t.id === expense.paid_by_id)?.is_pool ?? false;
 
@@ -213,7 +207,19 @@ export default function ExpenseRow({ expense, travelers, foreignCurrency, wallet
       style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
       className={`border rounded-xl overflow-hidden transition-all animate-fade-in-up ${highlighted ? "ring-2 ring-emerald-400 border-emerald-500" : hasUnsettled ? "bg-amber-950/20 border-amber-800/40 bal-debit" : "bg-slate-800/60 border-slate-700/50"}`}>
       <div className="flex items-center gap-3 px-3 py-3 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
-        <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: hasUnsettled ? "#f59e0b" : color }} />
+        {/* Category icon — recognisable without reading the label. Turns amber
+            when the expense still has unsettled splits, which is the signal
+            the old colour bar carried. */}
+        <div
+          className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center"
+          style={{
+            backgroundColor: `${hasUnsettled ? "#f59e0b" : color}22`,
+            border: `1px solid ${hasUnsettled ? "#f59e0b" : color}55`,
+            color: hasUnsettled ? "#f59e0b" : color,
+          }}
+        >
+          <CategoryIcon size={17} />
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-white truncate">{expense.category}</span>
